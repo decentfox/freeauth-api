@@ -22,6 +22,13 @@ edgedb project init
 make install
 ```
 
+4. Add pre-commit hook
+
+```bash
+poetry run pre-commit install
+```
+If you need to skip hook you can run `git commit --no-verify
+
 ### DB Migrations
 
 1. Create a migration:
@@ -34,6 +41,12 @@ edgedb migration create
 
 ```bash
 edgedb migrate
+```
+
+### Run in dev mode
+
+```bash
+make dev
 ```
 
 ### Open the EdgeDB UI
