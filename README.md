@@ -36,6 +36,12 @@ edgedb migration create
 edgedb migrate
 ```
 
+### Open the EdgeDB UI
+
+```bash
+edgedb ui
+```
+
 ### Format and lint the code
 
 Execute the following command to apply formatting:
