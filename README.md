@@ -49,6 +49,12 @@ edgedb migrate
 make dev
 ```
 
+### Generate query APIs
+
+```bash
+make genqlapi
+```
+
 ### Open the EdgeDB UI
 
 ```bash
