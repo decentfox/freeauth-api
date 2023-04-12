@@ -1,25 +1,17 @@
+from __future__ import annotations
+
 import pytest
-from fastapi.testclient import TestClient
-
-from freeauth.app import get_app
-
-
-@pytest.fixture
-def app():
-    return get_app()
+from fastapi import FastAPI
+from httpx import AsyncClient
 
 
-@pytest.fixture
-def client(app):
-    return TestClient(app)
-
-
-async def test_app(app, client):
+@pytest.mark.asyncio
+async def test_app(app: FastAPI, test_client: AsyncClient):
     @app.get("/")
-    async def index():
+    async def index() -> dict[str, str]:
         return {"Hello": "World"}
 
-    resp = client.get("/")
+    resp = await test_client.get("/")
 
     assert resp.status_code == 200
     assert resp.json() == {"Hello": "World"}

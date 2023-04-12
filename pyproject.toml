@@ -22,6 +22,7 @@ pytest = "^7.3.0"
 pytest-cov = "^4.0.0"
 pytest-asyncio = "^0.21.0"
 pre-commit = "^3.2.2"
+pytest-mock = "^3.10.0"
 
 [build-system]
 requires = ["poetry-core"]
@@ -32,9 +33,12 @@ profile = "black"
 atomic = true
 line_length = 79
 
+[tool.black]
+line_length = 79
+
 [tool.mypy]
 pretty = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-addopts = "--cov-report=term:skip-covered --cov=src/freeauth"
+addopts = "-ra -x --ff -s --cov-report=term:skip-covered --cov=src/freeauth"

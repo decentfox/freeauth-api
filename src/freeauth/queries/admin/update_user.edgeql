@@ -1,7 +1,7 @@
 with
-    username := <str>$username,
-    email := <str>$email,
-    hashed_password := <str>$hashed_password
+    username := <optional str>$username,
+    email := <optional str>$email,
+    hashed_password := <optional str>$hashed_password
 select (
     update User filter .id = <uuid>$id
     set {
@@ -9,4 +9,4 @@ select (
         email := email,
         hashed_password := hashed_password
     }
-) {id, username, email};
+) {id, username, email, created_at};
