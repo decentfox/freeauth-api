@@ -8,7 +8,7 @@ lint:
 	poetry run mypy src
 
 test:
-	poetry run pytest src
+	poetry run pytest src --reset-db
 
 up:
 	edgedb migrate

@@ -4,7 +4,7 @@ from http import HTTPStatus
 
 import edgedb
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, root_validator
 from pydantic.dataclasses import dataclass
 
 from .. import get_edgedb_client
@@ -20,15 +20,22 @@ class BodyConfig:
 
 @dataclass(config=BodyConfig)
 class UserPostBody:
+    # TODO: localize error msg template
     name: str | None = Field(None, title="姓名", max_length=50)
     username: str | None = Field(None, title="用户名", max_length=50)
     email: EmailStr | None = Field(None, title="邮箱")
     mobile: str | None = Field(None, title="手机号", regex=r"^1[0-9]{10}$")
 
-
-################################
-# Create users
-################################
+    @root_validator(skip_on_failure=True)
+    def validate_username_or_email_or_mobile(cls, values):
+        username, email, mobile = (
+            values.get("username"),
+            values.get("email"),
+            values.get("mobile"),
+        )
+        if not (username or email or mobile):
+            raise ValueError("用户名、邮箱、手机号三个信息中请至少提供一项")
+        return values
 
 
 @router.post("/users", status_code=HTTPStatus.CREATED)
@@ -53,10 +60,6 @@ async def post_user(
         field = str(e).split(" ")[0]
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail={
-                "error": (
-                    f"{field.title()} '{getattr(user, field)}' already exists."
-                )
-            },
+            detail={"error": f'"{getattr(user, field)}" 已被使用'},
         )
     return created_user

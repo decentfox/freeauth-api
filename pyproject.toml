@@ -47,3 +47,4 @@ pretty = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 addopts = "-ra -x --ff -s --cov-report=term:skip-covered --cov=src/freeauth"
+testpaths = "src"
