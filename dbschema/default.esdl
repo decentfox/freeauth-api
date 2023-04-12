@@ -7,4 +7,11 @@ module default {
 
         index on (.created_at);
     }
+
+    abstract type SoftDeletable {
+        property deleted_at -> datetime;
+        property is_deleted := exists .deleted_at;
+
+        index on (.is_deleted);
+    }
 }

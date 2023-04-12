@@ -3,6 +3,8 @@ import functools
 import edgedb
 from fastapi import FastAPI
 
+from .admin import users
+
 
 async def setup_edgedb(app):
     client = app.state.edgedb = edgedb.create_async_client()
@@ -25,5 +27,7 @@ def get_app():
     @app.get("/ping", include_in_schema=False)
     async def health_check() -> dict[str, str]:
         return {"status": "Ok"}
+
+    app.include_router(users.router)
 
     return app

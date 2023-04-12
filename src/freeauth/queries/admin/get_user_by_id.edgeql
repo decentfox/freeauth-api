@@ -1,3 +1,6 @@
 select
-    User {id, username, email, created_at}
+    User {
+        id, name, username, email, mobile,
+        is_deleted, created_at, last_login_at
+    }
 filter .id = <uuid>$id;

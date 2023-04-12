@@ -29,9 +29,13 @@ class NoPydanticValidation:
 @dataclasses.dataclass
 class CreateUserResult(NoPydanticValidation):
     id: uuid.UUID
+    name: str | None
     username: str | None
     email: str | None
+    mobile: str | None
+    is_deleted: bool
     created_at: datetime.datetime
+    last_login_at: datetime.datetime | None
 
 
 @dataclasses.dataclass
@@ -43,26 +47,37 @@ class DeleteUserResult(NoPydanticValidation):
 async def create_user(
     executor: edgedb.AsyncIOExecutor,
     *,
+    name: str,
     username: str,
     email: str | None,
-    hashed_password: str | None,
+    mobile: str | None,
+    hashed_password: str,
 ) -> CreateUserResult:
     return await executor.query_single(
         """\
         with
+            name := <str>$name,
             username := <str>$username,
             email := <optional str>$email,
-            hashed_password := <optional str>$hashed_password
+            mobile := <optional str>$mobile,
+            hashed_password := <str>$hashed_password
         select (
             insert User {
+                name := name,
                 username := username,
                 email := email,
+                mobile := mobile,
                 hashed_password := hashed_password
             }
-        ) {id, username, email, created_at};\
+        ) {
+            id, name, username, email, mobile,
+            is_deleted, created_at, last_login_at
+        };\
         """,
+        name=name,
         username=username,
         email=email,
+        mobile=mobile,
         hashed_password=hashed_password,
     )
 
@@ -91,7 +106,10 @@ async def get_user_by_id(
     return await executor.query_single(
         """\
         select
-            User {id, username, email, created_at}
+            User {
+                id, name, username, email, mobile,
+                is_deleted, created_at, last_login_at
+            }
         filter .id = <uuid>$id;\
         """,
         id=id,
@@ -101,28 +119,39 @@ async def get_user_by_id(
 async def update_user(
     executor: edgedb.AsyncIOExecutor,
     *,
+    name: str | None,
     username: str | None,
     email: str | None,
+    mobile: str | None,
     hashed_password: str | None,
     id: uuid.UUID,
 ) -> CreateUserResult | None:
     return await executor.query_single(
         """\
         with
+            name := <optional str>$name,
             username := <optional str>$username,
             email := <optional str>$email,
+            mobile := <optional str>$mobile,
             hashed_password := <optional str>$hashed_password
         select (
             update User filter .id = <uuid>$id
             set {
+                name := name,
                 username := username,
                 email := email,
+                mobile := mobile,
                 hashed_password := hashed_password
             }
-        ) {id, username, email, created_at};\
+        ) {
+            id, name, username, email, mobile,
+            is_deleted, created_at, last_login_at
+        };\
         """,
+        name=name,
         username=username,
         email=email,
+        mobile=mobile,
         hashed_password=hashed_password,
         id=id,
     )

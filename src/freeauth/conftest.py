@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator
 import edgedb
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient
+from fastapi.testclient import TestClient
 
 from freeauth.app import get_app
 
@@ -23,7 +23,7 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 async def db():
     default_cli = edgedb.create_async_client()
     databases = await default_cli.query("select {sys::Database.name}")
@@ -57,15 +57,16 @@ async def edgedb_client(db) -> AsyncGenerator[edgedb.AsyncIOClient, None]:
 
 
 @pytest.fixture
-def app(db, mocker) -> FastAPI:
+def app(mocker) -> FastAPI:
     mocker.patch("freeauth.app.setup_edgedb", tx_setup_edgedb)
     mocker.patch("freeauth.app.shutdown_edgedb", tx_shutdown_edgedb)
     return get_app()
 
 
 @pytest.fixture
-async def test_client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
-    yield AsyncClient(app=app, base_url="http://test")
+def test_client(app):
+    with TestClient(app) as client:
+        yield client
 
 
 async def tx_setup_edgedb(app):

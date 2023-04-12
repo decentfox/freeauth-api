@@ -18,8 +18,10 @@ from freeauth.queries.query_api import (
 async def user(edgedb_client: edgedb.AsyncIOClient) -> CreateUserResult:
     user: CreateUserResult = await create_user(
         edgedb_client,
+        name="张三",
         username="user",
         email="user@example.com",
+        mobile="13800000000",
         hashed_password="password",
     )
     return user
@@ -27,37 +29,42 @@ async def user(edgedb_client: edgedb.AsyncIOClient) -> CreateUserResult:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "username,email,hashed_password",
+    "name,username,email,mobile,hashed_password",
     [
-        ("user", None, None),
-        ("user", "user@example.com", None),
-        ("user", "user@example.com", "password"),
+        ("张三", "user", None, None, "password"),
+        ("张三", "user", "user@example.com", None, "password"),
+        ("张三", "user", "user@example.com", "13800000000", "password"),
     ],
 )
 async def test_create_user(
     edgedb_client: edgedb.AsyncIOClient,
+    name: str,
     username: str,
     email: str | None,
-    hashed_password: str | None,
+    mobile: str | None,
+    hashed_password: str,
 ):
     user: CreateUserResult = await create_user(
         edgedb_client,
+        name=name,
         username=username,
         email=email,
+        mobile=mobile,
         hashed_password=hashed_password,
     )
     assert user.id is not None
-    assert user.username == username
-    assert user.email == email
+    assert user.name == name, user.username == username
+    assert user.email == email, user.mobile == mobile
     assert user.created_at is not None
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "new_username,new_email,field",
+    "new_username,new_email,new_mobile,field",
     [
-        ("user", "user1@example.com", "username"),
-        ("user1", "user@example.com", "email"),
+        ("user", "user1@example.com", "13800000001", "username"),
+        ("user1", "user@example.com", "13800000001", "email"),
+        ("user1", "user1@example.com", "13800000000", "mobile"),
     ],
 )
 async def test_create_user_existing(
@@ -65,14 +72,17 @@ async def test_create_user_existing(
     user: CreateUserResult,
     new_username: str,
     new_email: str,
+    new_mobile: str,
     field,
 ):
     with pytest.raises(edgedb.errors.ConstraintViolationError) as e:
         await create_user(
             edgedb_client,
+            name="张三",
             username=new_username,
             email=new_email,
-            hashed_password=None,
+            mobile=new_mobile,
+            hashed_password="password",
         )
 
     assert f"{field} violates exclusivity constraint" in str(e.value)
@@ -80,23 +90,28 @@ async def test_create_user_existing(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "username,email,hashed_password",
+    "name,username,email,mobile,hashed_password",
     [
-        ("user1", None, None),
-        ("user1", "user1@example.com", "password1"),
+        ("张三", "user1", None, None, "password"),
+        ("张三", "user1", "user1@example.com", None, "password1"),
+        ("张三", "user1", "user1@example.com", "13800000001", "password1"),
     ],
 )
 async def test_update_user(
     edgedb_client: edgedb.AsyncIOClient,
     user: CreateUserResult,
+    name: str,
     username: str,
     email: str | None,
-    hashed_password: str | None,
+    mobile: str | None,
+    hashed_password: str,
 ):
     updated_user: Optional[CreateUserResult] = await update_user(
         edgedb_client,
+        name=name,
         username=username,
         email=email,
+        mobile=mobile,
         hashed_password=hashed_password,
         id=user.id,
     )

@@ -10,7 +10,10 @@ lint:
 test:
 	poetry run pytest src
 
-dev: install
+up:
+	edgedb migrate
+
+dev: install up
 	poetry run uvicorn freeauth.asgi:app --reload --host 0.0.0.0 --port 5001
 
 genqlapi:

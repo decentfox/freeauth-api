@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient
+from fastapi.testclient import TestClient
 
 
-@pytest.mark.asyncio
-async def test_app(app: FastAPI, test_client: AsyncClient):
+def test_app(app: FastAPI, test_client: TestClient):
     @app.get("/")
     async def index() -> dict[str, str]:
         return {"Hello": "World"}
 
-    resp = await test_client.get("/")
+    resp = test_client.get("/")
 
     assert resp.status_code == 200
     assert resp.json() == {"Hello": "World"}

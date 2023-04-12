@@ -4,7 +4,8 @@ module default {
         select User filter .id = global current_user_id
     );
 
-    type User extending TimeStamped {
+    type User extending TimeStamped, SoftDeletable {
+        property name -> str;
         property username -> str {
             constraint exclusive;
         };
@@ -12,9 +13,14 @@ module default {
         property email -> str {
             constraint exclusive;
         };
+        property mobile -> str {
+            constraint exclusive;
+        };
+        property last_login_at -> datetime;
 
         index on (.username);
         index on (.email);
+        index on (.mobile);
     }
 
     type EmailAuth extending TimeStamped {
