@@ -26,7 +26,9 @@ def event_loop():
 @pytest.fixture(scope="session", autouse=True)
 async def db(request):
     reset_db = request.config.getoption("--reset-db")
-    default_cli = edgedb.create_async_client()
+    default_cli = edgedb.create_async_client(
+        wait_until_available=60,
+    )
     databases = await default_cli.query("select {sys::Database.name}")
     exists = TEST_DBNAME in databases
     if reset_db and exists:
@@ -37,7 +39,7 @@ async def db(request):
 
     client = edgedb.create_async_client(database=TEST_DBNAME)
 
-    if reset_db:
+    if reset_db or not exists:
         for file_or_dir in sorted(
             pathlib.Path("dbschema/migrations").iterdir()
         ):
