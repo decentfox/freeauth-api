@@ -28,6 +28,7 @@ async def db(request):
     reset_db = request.config.getoption("--reset-db")
     default_cli = edgedb.create_async_client(
         wait_until_available=60,
+        timeout=30,
     )
     databases = await default_cli.query("select {sys::Database.name}")
     exists = TEST_DBNAME in databases

@@ -24,22 +24,22 @@ def test_create_user_at_least_one_field_error(test_client: TestClient):
         (
             "username",
             "long_username" * 4,
-            "ensure this value has at most 50 characters",
+            "最大支持的长度为50个字符",
         ),
         (
             "name",
             "很长的名字" * 11,
-            "ensure this value has at most 50 characters",
+            "最大支持的长度为50个字符",
         ),
         (
             "email",
             "invalid email address",
-            "value is not a valid email address",
+            "邮箱格式有误",
         ),
         (
             "mobile",
             "invalid mobile",
-            'string does not match regex "^1[0-9]{10}$"',
+            "仅支持中国大陆11位手机号",
         ),
     ],
 )

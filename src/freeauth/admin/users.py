@@ -14,13 +14,19 @@ from ..utils import gen_random_string, get_password_hash
 router = APIRouter(tags=["用户管理"])
 
 
-class BodyConfig:
+class UserBodyConfig:
     anystr_strip_whitespace = True
+    error_msg_templates = {
+        "value_error.any_str.max_length": (
+            "最大支持的长度为{limit_value}个字符"
+        ),
+        "value_error.email": "邮箱格式有误",
+        "value_error.str.regex": "仅支持中国大陆11位手机号",
+    }
 
 
-@dataclass(config=BodyConfig)
+@dataclass(config=UserBodyConfig)
 class UserPostBody:
-    # TODO: localize error msg template
     name: str | None = Field(None, title="姓名", max_length=50)
     username: str | None = Field(None, title="用户名", max_length=50)
     email: EmailStr | None = Field(None, title="邮箱")

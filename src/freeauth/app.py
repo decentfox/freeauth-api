@@ -1,7 +1,15 @@
 import functools
+from typing import cast
 
 import edgedb
 from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
+from pydantic.error_wrappers import ErrorWrapper
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from .admin import users
 
@@ -16,9 +24,28 @@ async def shutdown_edgedb(app):
     await client.aclose()
 
 
+async def http_exception_accept_handler(
+    request: Request, exc: RequestValidationError
+) -> Response:
+    raw_errors = exc.raw_errors
+    error_wrapper: ErrorWrapper = cast(ErrorWrapper, raw_errors[0])
+    validation_error: ValidationError = cast(
+        ValidationError, error_wrapper.exc
+    )
+    overwritten_errors = validation_error.errors()
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": jsonable_encoder(overwritten_errors)},
+    )
+
+
 def get_app():
     app = FastAPI(
-        title="FreeAuth", description="Async REST API in Python for FreeAuth."
+        title="FreeAuth",
+        description="Async REST API in Python for FreeAuth.",
+        exception_handlers={
+            RequestValidationError: http_exception_accept_handler,
+        },
     )
 
     app.on_event("startup")(functools.partial(setup_edgedb, app))
