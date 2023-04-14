@@ -26,10 +26,7 @@ def event_loop():
 @pytest.fixture(scope="session", autouse=True)
 async def db(request):
     reset_db = request.config.getoption("--reset-db")
-    default_cli = edgedb.create_async_client(
-        wait_until_available=60,
-        timeout=30,
-    )
+    default_cli = edgedb.create_async_client()
     databases = await default_cli.query("select {sys::Database.name}")
     exists = TEST_DBNAME in databases
     if reset_db and exists:

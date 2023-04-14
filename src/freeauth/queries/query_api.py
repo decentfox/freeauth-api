@@ -123,7 +123,7 @@ async def update_user(
     username: str | None,
     email: str | None,
     mobile: str | None,
-    hashed_password: str | None,
+    is_deleted: bool,
     id: uuid.UUID,
 ) -> CreateUserResult | None:
     return await executor.query_single(
@@ -133,7 +133,7 @@ async def update_user(
             username := <optional str>$username,
             email := <optional str>$email,
             mobile := <optional str>$mobile,
-            hashed_password := <optional str>$hashed_password
+            is_deleted := <bool>$is_deleted
         select (
             update User filter .id = <uuid>$id
             set {
@@ -141,7 +141,7 @@ async def update_user(
                 username := username,
                 email := email,
                 mobile := mobile,
-                hashed_password := hashed_password
+                deleted_at := datetime_of_transaction() if is_deleted else {}
             }
         ) {
             id, name, username, email, mobile,
@@ -152,6 +152,6 @@ async def update_user(
         username=username,
         email=email,
         mobile=mobile,
-        hashed_password=hashed_password,
+        is_deleted=is_deleted,
         id=id,
     )

@@ -90,11 +90,24 @@ async def test_create_user_existing(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "name,username,email,mobile,hashed_password",
+    "name,username,email,mobile,is_deleted",
     [
-        ("张三", "user1", None, None, "password"),
-        ("张三", "user1", "user1@example.com", None, "password1"),
-        ("张三", "user1", "user1@example.com", "13800000001", "password1"),
+        ("张三", "user1", None, None, False),
+        ("张三", "user1", "user1@example.com", None, False),
+        (
+            "张三",
+            "user1",
+            "user1@example.com",
+            "13800000001",
+            False,
+        ),
+        (
+            "张三",
+            "user1",
+            "user1@example.com",
+            "13800000001",
+            True,
+        ),
     ],
 )
 async def test_update_user(
@@ -104,7 +117,7 @@ async def test_update_user(
     username: str,
     email: str | None,
     mobile: str | None,
-    hashed_password: str,
+    is_deleted: bool,
 ):
     updated_user: Optional[CreateUserResult] = await update_user(
         edgedb_client,
@@ -112,13 +125,14 @@ async def test_update_user(
         username=username,
         email=email,
         mobile=mobile,
-        hashed_password=hashed_password,
         id=user.id,
+        is_deleted=is_deleted,
     )
     assert updated_user is not None
     assert updated_user.id == user.id
     assert updated_user.username == username != user.username
     assert updated_user.email == email != user.email
+    assert updated_user.is_deleted == is_deleted
 
 
 @pytest.mark.asyncio

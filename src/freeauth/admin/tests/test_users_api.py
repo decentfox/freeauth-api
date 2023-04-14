@@ -93,3 +93,49 @@ def test_create_user_strip_whitespace(
     user = resp.json()
     assert resp.status_code == HTTPStatus.CREATED, user
     assert data[field] != user[field] == db_value
+
+
+def test_toggle_user_status(test_client: TestClient):
+    data: Dict = {}
+    resp = test_client.put("/users/status", json=data)
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    for item in error["detail"]:
+        assert item["msg"] == "该字段为必填项"
+
+    data: Dict = {
+        "user_ids": ["invalid_id"],
+        "is_deleted": True,
+    }
+    resp = test_client.put("/users/status", json=data)
+    error = resp.json()
+    assert error["detail"][0]["msg"] == "用户ID格式错误"
+
+    data: Dict = {"username": "user1"}
+    resp = test_client.post("/users", json=data)
+    user = resp.json()
+    assert resp.status_code == HTTPStatus.CREATED, user
+
+    data: Dict = {
+        "user_ids": ["12345678-1234-5678-1234-567812345678"],
+        "is_deleted": False,
+    }
+    resp = test_client.put("/users/status", json=data)
+    assert resp.status_code == HTTPStatus.NOT_FOUND, resp.json()
+    assert resp.json()["detail"]["error"] == "用户不存在"
+
+    data: Dict = {
+        "user_ids": [user["id"]],
+        "is_deleted": True,
+    }
+    resp = test_client.put("/users/status", json=data)
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+    assert resp.json()["updated_ids"] == data["user_ids"]
+
+    data: Dict = {
+        "user_ids": [user["id"]],
+        "is_deleted": False,
+    }
+    resp = test_client.put("/users/status", json=data)
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+    assert resp.json()["updated_ids"] == data["user_ids"]

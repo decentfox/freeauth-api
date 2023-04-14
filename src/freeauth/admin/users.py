@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import uuid
 from http import HTTPStatus
+from typing import List
 
 import edgedb
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,7 +10,12 @@ from pydantic import EmailStr, Field, root_validator
 from pydantic.dataclasses import dataclass
 
 from .. import get_edgedb_client
-from ..queries.query_api import CreateUserResult, create_user
+from ..queries.query_api import (
+    CreateUserResult,
+    create_user,
+    get_user_by_id,
+    update_user,
+)
 from ..utils import gen_random_string, get_password_hash
 
 router = APIRouter(tags=["用户管理"])
@@ -22,15 +29,34 @@ class UserBodyConfig:
         ),
         "value_error.email": "邮箱格式有误",
         "value_error.str.regex": "仅支持中国大陆11位手机号",
+        "value_error.missing": "该字段为必填项",
+        "type_error.uuid": "用户ID格式错误",
     }
 
 
 @dataclass(config=UserBodyConfig)
 class UserPostBody:
-    name: str | None = Field(None, title="姓名", max_length=50)
-    username: str | None = Field(None, title="用户名", max_length=50)
-    email: EmailStr | None = Field(None, title="邮箱")
-    mobile: str | None = Field(None, title="手机号", regex=r"^1[0-9]{10}$")
+    name: str | None = Field(
+        None,
+        title="姓名",
+        description="用户姓名（选填），默认为用户名",
+        max_length=50,
+    )
+    username: str | None = Field(
+        None,
+        title="用户名",
+        description="登录用户名，未提供则由随机生成",
+        max_length=50,
+    )
+    email: EmailStr | None = Field(
+        None, description="邮箱，可接收登录验证邮件", title="邮箱"
+    )
+    mobile: str | None = Field(
+        None,
+        title="手机号",
+        description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
+        regex=r"^1[0-9]{10}$",
+    )
 
     @root_validator(skip_on_failure=True)
     def validate_username_or_email_or_mobile(cls, values):
@@ -44,12 +70,17 @@ class UserPostBody:
         return values
 
 
-@router.post("/users", status_code=HTTPStatus.CREATED)
+@router.post(
+    "/users",
+    status_code=HTTPStatus.CREATED,
+    summary="创建用户",
+    description="姓名（选填）；用户名 + 手机号 + 邮箱（三选一必填）",
+)
 async def post_user(
     user: UserPostBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateUserResult:
-    username = user.username
+    username: str | None = user.username
     if not username:
         username = gen_random_string(8)
     password: str = gen_random_string(12, secret=True)
@@ -69,3 +100,52 @@ async def post_user(
             detail={"error": f'"{getattr(user, field)}" 已被使用'},
         )
     return created_user
+
+
+@dataclass(config=UserBodyConfig)
+class UserStatusBody:
+    user_ids: List[uuid.UUID] = Field(
+        ...,
+        title="用户 ID 数组",
+        description="待变更状态的用户 ID 列表",
+    )
+    is_deleted: bool = Field(
+        ...,
+        title="是否禁用",
+        description="true 为禁用用户，false 为启用用户",
+    )
+
+
+@router.put(
+    "/users/status", summary="变更用户状态", description="支持批量变更"
+)
+async def toggle_user_status(
+    body: UserStatusBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+):
+    user_ids: List[uuid.UUID] = body.user_ids
+    is_batch: bool = len(user_ids) > 1
+    is_deleted: bool = body.is_deleted
+    updated_ids = []
+    for user_id in user_ids:
+        user: CreateUserResult | None = await get_user_by_id(
+            client, id=user_id
+        )
+        if user:
+            updated_user: CreateUserResult | None = await update_user(
+                client,
+                name=user.name,
+                username=user.username,
+                email=user.email,
+                mobile=user.mobile,
+                is_deleted=is_deleted,
+                id=user.id,
+            )
+            if updated_user and updated_user.is_deleted == is_deleted:
+                updated_ids.append(user.id)
+        elif not is_batch:
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail={"error": "用户不存在"},
+            )
+    return {"updated_ids": updated_ids}
