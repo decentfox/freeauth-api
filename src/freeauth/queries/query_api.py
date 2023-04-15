@@ -138,7 +138,7 @@ async def update_user(
             name := <optional str>$name,
             username := <optional str>$username,
             email := <optional str>$email,
-            mobile := <optional str>$mobile,
+            mobile := <optional str>$mobile
         select (
             update User filter .id = <uuid>$id
             set {
