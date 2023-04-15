@@ -90,23 +90,21 @@ async def test_create_user_existing(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "name,username,email,mobile,is_deleted",
+    "name,username,email,mobile",
     [
-        ("张三", "user1", None, None, False),
-        ("张三", "user1", "user1@example.com", None, False),
+        ("张三", "user1", None, None),
+        ("张三", "user1", "user1@example.com", None),
         (
             "张三",
             "user1",
             "user1@example.com",
             "13800000001",
-            False,
         ),
         (
             "张三",
             "user1",
             "user1@example.com",
             "13800000001",
-            True,
         ),
     ],
 )
@@ -117,7 +115,6 @@ async def test_update_user(
     username: str,
     email: str | None,
     mobile: str | None,
-    is_deleted: bool,
 ):
     updated_user: Optional[CreateUserResult] = await update_user(
         edgedb_client,
@@ -126,13 +123,11 @@ async def test_update_user(
         email=email,
         mobile=mobile,
         id=user.id,
-        is_deleted=is_deleted,
     )
     assert updated_user is not None
     assert updated_user.id == user.id
     assert updated_user.username == username != user.username
     assert updated_user.email == email != user.email
-    assert updated_user.is_deleted == is_deleted
 
 
 @pytest.mark.asyncio
@@ -140,6 +135,6 @@ async def test_delete_user(
     edgedb_client: edgedb.AsyncIOClient,
     user: CreateUserResult,
 ):
-    await delete_user(edgedb_client, id=user.id)
+    await delete_user(edgedb_client, user_ids=[user.id])
     deleted_user = await get_user_by_id(edgedb_client, id=user.id)
     assert deleted_user is None

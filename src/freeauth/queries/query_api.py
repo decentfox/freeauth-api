@@ -3,6 +3,7 @@
 #     'src/freeauth/queries/admin/delete_user.edgeql'
 #     'src/freeauth/queries/admin/get_user_by_id.edgeql'
 #     'src/freeauth/queries/admin/update_user.edgeql'
+#     'src/freeauth/queries/admin/update_user_status.edgeql'
 # WITH:
 #     $ edgedb-py --file src/freeauth/queries/query_api.py
 
@@ -41,7 +42,14 @@ class CreateUserResult(NoPydanticValidation):
 @dataclasses.dataclass
 class DeleteUserResult(NoPydanticValidation):
     id: uuid.UUID
-    username: str | None
+    name: str | None
+
+
+@dataclasses.dataclass
+class UpdateUserStatusResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str | None
+    is_deleted: bool
 
 
 async def create_user(
@@ -85,16 +93,15 @@ async def create_user(
 async def delete_user(
     executor: edgedb.AsyncIOExecutor,
     *,
-    id: uuid.UUID,
+    user_ids: list[uuid.UUID],
 ) -> list[DeleteUserResult]:
     return await executor.query(
         """\
-        with
-            user := (delete User filter .id = <uuid>$id)
-        select
-            User {id, username};\
+        select (
+            delete User filter .id in array_unpack(<array<uuid>>$user_ids)
+        ) {id, name} order by .created_at desc;\
         """,
-        id=id,
+        user_ids=user_ids,
     )
 
 
@@ -123,7 +130,6 @@ async def update_user(
     username: str | None,
     email: str | None,
     mobile: str | None,
-    is_deleted: bool,
     id: uuid.UUID,
 ) -> CreateUserResult | None:
     return await executor.query_single(
@@ -133,7 +139,6 @@ async def update_user(
             username := <optional str>$username,
             email := <optional str>$email,
             mobile := <optional str>$mobile,
-            is_deleted := <bool>$is_deleted
         select (
             update User filter .id = <uuid>$id
             set {
@@ -141,7 +146,6 @@ async def update_user(
                 username := username,
                 email := email,
                 mobile := mobile,
-                deleted_at := datetime_of_transaction() if is_deleted else {}
             }
         ) {
             id, name, username, email, mobile,
@@ -152,6 +156,30 @@ async def update_user(
         username=username,
         email=email,
         mobile=mobile,
-        is_deleted=is_deleted,
         id=id,
+    )
+
+
+async def update_user_status(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    user_ids: list[uuid.UUID],
+    is_deleted: bool,
+) -> list[UpdateUserStatusResult]:
+    return await executor.query(
+        """\
+        with
+            user_ids := <array<uuid>>$user_ids,
+            is_deleted := <bool>$is_deleted
+        select (
+            update User filter .id in array_unpack(user_ids)
+            set {
+                deleted_at := datetime_of_transaction() if is_deleted else {}
+            }
+        ) {
+            id, name, is_deleted
+        } order by .created_at desc;\
+        """,
+        user_ids=user_ids,
+        is_deleted=is_deleted,
     )

@@ -5,7 +5,7 @@ branch = True
 omit =
     .venv/*
     src/freeauth/asgi.py
-    src/freeauth/tests/*
+    src/freeauth/conftest.py
 
 [report]
 exclude_lines =

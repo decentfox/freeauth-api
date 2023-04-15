@@ -76,3 +76,8 @@ Run all the tests with:
 ```bash
 make test
 ```
+
+### Automatic API documents
+
+ - Swagger UI: http://localhost:5001/docs
+ - ReDoc: http://localhost:5001/redoc

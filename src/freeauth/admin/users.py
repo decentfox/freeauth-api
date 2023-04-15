@@ -12,9 +12,13 @@ from pydantic.dataclasses import dataclass
 from .. import get_edgedb_client
 from ..queries.query_api import (
     CreateUserResult,
+    DeleteUserResult,
+    UpdateUserStatusResult,
     create_user,
+    delete_user,
     get_user_by_id,
     update_user,
+    update_user_status,
 )
 from ..utils import gen_random_string, get_password_hash
 
@@ -30,6 +34,7 @@ class UserBodyConfig:
         "value_error.email": "邮箱格式有误",
         "value_error.str.regex": "仅支持中国大陆11位手机号",
         "value_error.missing": "该字段为必填项",
+        "type_error.none.not_allowed": "该字段不得为空",
         "type_error.uuid": "用户ID格式错误",
     }
 
@@ -70,6 +75,54 @@ class UserPostBody:
         return values
 
 
+@dataclass(config=UserBodyConfig)
+class UserPutBody:
+    name: str = Field(
+        ...,
+        title="姓名",
+        description="用户姓名",
+        max_length=50,
+    )
+    username: str = Field(
+        ...,
+        title="用户名",
+        description="登录用户名",
+        max_length=50,
+    )
+    email: EmailStr | None = Field(
+        None, description="邮箱，可接收登录验证邮件", title="邮箱"
+    )
+    mobile: str | None = Field(
+        None,
+        title="手机号",
+        description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
+        regex=r"^1[0-9]{10}$",
+    )
+
+
+@dataclass(config=UserBodyConfig)
+class UserStatusBody:
+    user_ids: List[uuid.UUID] = Field(
+        ...,
+        title="用户 ID 数组",
+        description="待变更状态的用户 ID 列表",
+    )
+    is_deleted: bool = Field(
+        ...,
+        title="是否禁用",
+        description="true 为禁用用户，false 为启用用户",
+    )
+
+
+@dataclass(config=UserBodyConfig)
+class UserDeleteBody:
+    user_ids: List[uuid.UUID] = Field(
+        ...,
+        title="用户 ID 数组",
+        description="待删除的用户 ID 列表",
+    )
+
+
 @router.post(
     "/users",
     status_code=HTTPStatus.CREATED,
@@ -97,23 +150,11 @@ async def post_user(
         field = str(e).split(" ")[0]
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail={"error": f'"{getattr(user, field)}" 已被使用'},
+            detail=[
+                {"loc": [field], "msg": f'"{getattr(user, field)}" 已被使用'}
+            ],
         )
     return created_user
-
-
-@dataclass(config=UserBodyConfig)
-class UserStatusBody:
-    user_ids: List[uuid.UUID] = Field(
-        ...,
-        title="用户 ID 数组",
-        description="待变更状态的用户 ID 列表",
-    )
-    is_deleted: bool = Field(
-        ...,
-        title="是否禁用",
-        description="true 为禁用用户，false 为启用用户",
-    )
 
 
 @router.put(
@@ -124,28 +165,67 @@ async def toggle_user_status(
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ):
     user_ids: List[uuid.UUID] = body.user_ids
-    is_batch: bool = len(user_ids) > 1
     is_deleted: bool = body.is_deleted
-    updated_ids = []
-    for user_id in user_ids:
-        user: CreateUserResult | None = await get_user_by_id(
-            client, id=user_id
+    updated_users: List[UpdateUserStatusResult] = await update_user_status(
+        client, user_ids=user_ids, is_deleted=is_deleted
+    )
+    return {"users": updated_users}
+
+
+@router.delete("/users", summary="删除用户", description="支持批量删除")
+async def delete_users(
+    body: UserDeleteBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+):
+    user_ids: List[uuid.UUID] = body.user_ids
+    deleted_users: List[DeleteUserResult] = await delete_user(
+        client, user_ids=user_ids
+    )
+    return {"users": deleted_users}
+
+
+@router.put(
+    "/users/{user_id}",
+    summary="更新用户信息",
+    description="更新指定用户的用户信息",
+)
+async def put_user(
+    user_id: uuid.UUID,
+    user: UserPutBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+):
+    try:
+        updated_user = await update_user(
+            client,
+            name=user.name,
+            username=user.username,
+            email=user.email,
+            mobile=user.mobile,
+            id=user_id,
         )
-        if user:
-            updated_user: CreateUserResult | None = await update_user(
-                client,
-                name=user.name,
-                username=user.username,
-                email=user.email,
-                mobile=user.mobile,
-                is_deleted=is_deleted,
-                id=user.id,
-            )
-            if updated_user and updated_user.is_deleted == is_deleted:
-                updated_ids.append(user.id)
-        elif not is_batch:
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_FOUND,
-                detail={"error": "用户不存在"},
-            )
-    return {"updated_ids": updated_ids}
+    except edgedb.errors.ConstraintViolationError as e:
+        field = str(e).split(" ")[0]
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=[
+                {"loc": [field], "msg": f'"{getattr(user, field)}" 已被使用'}
+            ],
+        )
+    return updated_user
+
+
+@router.get(
+    "/users/{user_id}",
+    summary="获取用户信息",
+    description="获取指定用户的用户信息",
+)
+async def get_user(
+    user_id: uuid.UUID,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+):
+    user: CreateUserResult | None = await get_user_by_id(client, id=user_id)
+    if not user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
+        )
+    return user
