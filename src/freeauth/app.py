@@ -32,10 +32,14 @@ async def http_exception_accept_handler(
     validation_error: ValidationError = cast(
         ValidationError, error_wrapper.exc
     )
-    overwritten_errors = validation_error.errors()
+    try:
+        overwritten_errors = validation_error.errors()
+        detail = jsonable_encoder(overwritten_errors)
+    except AttributeError:
+        detail = str(validation_error)
     return JSONResponse(
         status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": jsonable_encoder(overwritten_errors)},
+        content={"detail": detail},
     )
 
 

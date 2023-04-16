@@ -162,12 +162,12 @@ FilterOperatorEnum.nct.expr = "not contains({0}, {1})"
 
 @dataclass
 class FilterItem:
-    name: str = Field(..., title="字段名")
-    op: FilterOperatorEnum = Field(
+    field: str = Field(..., title="字段名")
+    operator: FilterOperatorEnum = Field(
         ...,
         title="运算符",
     )
-    val: Any = Field(..., title="值")
+    value: Any = Field(..., title="值")
 
 
 @dataclass
@@ -191,14 +191,16 @@ class UserQueryBody:
         None,
         title="筛选条件",
         description=(
-            "支持多个筛选条件，"
-            "每个筛选条件包含 field（字段名）, op （运算符）, val（值）三个数据，"
-            '例如： {"name": "mobile", "op": "eq", "val": "13800000000"}。'
-            "支持的运算符有："
-            "eq（等于）, neq（不等于）, gt（大于）, gte（大于等于）, "
-            "lt（小于）, lte（小于等于）, ct（包含）, nct（不包含）"
+            "支持多个筛选条件，每个筛选条件包含 field（字段名）, operator"
+            ' （运算符）, value（值）三个数据，例如： {"field": "mobile",'
+            ' "operator": "eq", "value": "13800000000"}。'
+            "支持的运算符有：eq（等于）, neq（不等于）, gt（大于）,"
+            " gte（大于等于）, lt（小于）, lte（小于等于）, ct（包含）,"
+            " nct（不包含）"
         ),
-        example='[{"name": "mobile", "op": "eq", "val": "13800000000"}]',
+        example=(
+            '[{"field": "mobile", "operator": "eq", "value": "13800000000"}]'
+        ),
     )
     page: int | None = Field(
         1, title="分页页码", description="起始页码默认为 1"
@@ -228,9 +230,11 @@ class UserQueryBody:
             return "true"
         ret: list = []
         for field in self.filter_by:
-            val_type = TYPE_MAPPING[type(field.val).__name__]
+            val_type = TYPE_MAPPING[type(field.value).__name__]
             ret.append(
-                field.op.format(f".{field.name}", f"<{val_type}>'{field.val}'")
+                field.operator.format(
+                    f".{field.field}", f"<{val_type}>'{field.value}'"
+                )
             )
         return " and ".join(ret)
 
