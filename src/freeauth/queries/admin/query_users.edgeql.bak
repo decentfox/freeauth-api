@@ -1,206 +1,148 @@
 WITH
+    q := <optional str>$q,
     users := (
-        DISTINCT(
-            (SELECT User FILTER .name ILIKE <optional str>$q)
-            UNION
-            (SELECT User FILTER .username ILIKE <optional str>$q)
-            UNION
-            (SELECT User FILTER .mobile ILIKE <optional str>$q)
-            UNION
-            (SELECT User FILTER .email ILIKE <optional str>$q)
-        )
-        IF EXISTS <optional str>$q
-        ELSE (SELECT User)
+        (SELECT User) IF NOT EXISTS q ELSE
+        
+        (
+            SELECT User
+            FILTER .name ?? '' ILIKE q
+            OR .username ?? '' ILIKE q
+            OR .mobile ?? '' ILIKE q
+            OR .email ?? '' ILIKE q
+        ) 
     ),
+
     name_filter := <optional json>$name,
+    name_filter_op := <str>name_filter['op'],
+    name_filter_val := <str>name_filter['val'],
     users1 := (
-        (
-            (SELECT users FILTER .name = <str>name_filter['val'])
-            IF <str>name_filter['op'] = 'eq'
-            ELSE (
-                (
-                    (SELECT users FILTER .name != <str>name_filter['val'])
-                    UNION
-                    (SELECT users FILTER NOT EXISTS .name)
-                )
-                IF <str>name_filter['op'] = 'neq'
-                ELSE (
-                    (
-                        SELECT users
-                        FILTER contains(
-                            .name,
-                            <str>name_filter['val']
-                        )
-                    )
-                    IF <str>name_filter['op'] = 'ct'
-                    ELSE (
-                        (
-                            SELECT users
-                            FILTER NOT contains(
-                                .name,
-                                <str>name_filter['val']
-                            )
-                        )
-                        UNION
-                        (SELECT users FILTER NOT EXISTS .name)
-                    )
-                )
-            )
-        )
-        IF EXISTS <optional json>$name
-        ELSE (SELECT users)
+        (SELECT users) IF NOT EXISTS name_filter_op ELSE
+        
+        (SELECT users FILTER .name = name_filter_val)
+        IF name_filter_op = 'eq' ELSE
+        
+        (SELECT users FILTER (.name != name_filter_val) ?? true)
+        IF name_filter_op = 'neq' ELSE
+        
+        (SELECT users FILTER contains(.name, name_filter_val))
+        IF name_filter_op = 'ct' ELSE 
+        
+        (SELECT users FILTER (NOT contains(.name, name_filter_val)) ?? true)
     ),
+
     username_filter := <optional json>$username,
+    username_filter_op := <str>username_filter['op'],
+    username_filter_val := <str>username_filter['val'],
     users2 := (
+        (SELECT users1) IF NOT EXISTS username_filter_op ELSE
+        
+        (SELECT users1 FILTER .username = username_filter_val)
+        IF username_filter_op = 'eq' ELSE 
+        
+        (SELECT users1 FILTER (.username != username_filter_val) ?? true)
+        IF username_filter_op = 'neq' ELSE 
+        
+        (SELECT users1 FILTER contains(.username, username_filter_val))
+        IF username_filter_op = 'ct' ELSE 
+        
         (
-            (SELECT users1 FILTER .username = <str>username_filter['val'])
-            IF <str>username_filter['op'] = 'eq'
-            ELSE (
-                (
-                    (SELECT users1 FILTER .username != <str>username_filter['val'])
-                    UNION
-                    (SELECT users1 FILTER NOT EXISTS .username)
-                )
-                IF <str>username_filter['op'] = 'neq'
-                ELSE (
-                    (
-                        SELECT users1
-                        FILTER contains(
-                            .username,
-                            <str>username_filter['val']
-                        )
-                    )
-                    IF <str>username_filter['op'] = 'ct'
-                    ELSE (
-                        (
-                            SELECT users1
-                            FILTER NOT contains(
-                                .username,
-                                <str>username_filter['val']
-                            )
-                        )
-                        UNION
-                        (SELECT users1 FILTER NOT EXISTS .username)
-                    )
-                )
-            )
+            SELECT users1
+            FILTER (NOT contains(.username, username_filter_val)) ?? true
         )
-        IF EXISTS <optional json>$username
-        ELSE (SELECT users1)
     ),
+
     mobile_filter := <optional json>$mobile,
+    mobile_filter_op := <str>mobile_filter['op'],
+    mobile_filter_val := <str>mobile_filter['val'],
     users3 := (
+        (SELECT users2) IF NOT EXISTS mobile_filter_op ELSE 
+    
+        (SELECT users2 FILTER .mobile = mobile_filter_val)
+        IF mobile_filter_op = 'eq' ELSE
+        
+        (SELECT users2 FILTER (.mobile != mobile_filter_val) ?? true)
+        IF mobile_filter_op = 'neq' ELSE 
+        
+        (SELECT users2 FILTER contains(.mobile, mobile_filter_val))
+        IF mobile_filter_op = 'ct' ELSE
+        
         (
-            (SELECT users2 FILTER .mobile = <str>mobile_filter['val'])
-            IF <str>mobile_filter['op'] = 'eq'
-            ELSE (
-                (
-                    (SELECT users2 FILTER .mobile != <str>mobile_filter['val'])
-                    UNION
-                    (SELECT users2 FILTER NOT EXISTS .mobile)
-                )
-                IF <str>mobile_filter['op'] = 'neq'
-                ELSE (
-                    (
-                        SELECT users2
-                        FILTER contains(
-                            .mobile,
-                            <str>mobile_filter['val']
-                        )
-                    )
-                    IF <str>mobile_filter['op'] = 'ct'
-                    ELSE (
-                        (
-                            SELECT users2
-                            FILTER NOT contains(
-                                .mobile,
-                                <str>mobile_filter['val']
-                            )
-                        )
-                        UNION
-                        (SELECT users2 FILTER NOT EXISTS .mobile)
-                    )
-                )
-            )
+            SELECT users2
+            FILTER (NOT contains(.mobile, mobile_filter_val)) ?? true
         )
-        IF EXISTS <optional json>$mobile
-        ELSE (SELECT users2)
     ),
+
     email_filter := <optional json>$email,
+    email_filter_op := <str>email_filter['op'],
+    email_filter_val := <str>email_filter['val'],
     users4 := (
-        (
-            (SELECT users3 FILTER .email = <str>email_filter['val'])
-            IF <str>email_filter['op'] = 'eq'
-            ELSE (
-                (
-                    (SELECT users3 FILTER .email != <str>email_filter['val'])
-                    UNION
-                    (SELECT users3 FILTER NOT EXISTS .email)
-                )
-                IF <str>email_filter['op'] = 'neq'
-                ELSE (
-                    (
-                        SELECT users3
-                        FILTER contains(
-                            .email,
-                            <str>email_filter['val']
-                        )
-                    )
-                    IF <str>email_filter['op'] = 'ct'
-                    ELSE (
-                        (
-                            SELECT users3
-                            FILTER NOT contains(
-                                .email,
-                                <str>email_filter['val']
-                            )
-                        )
-                        UNION
-                        (SELECT users3 FILTER NOT EXISTS .email)
-                    )
-                )
-            )
-        )
-        IF EXISTS <optional json>$email
-        ELSE (SELECT users3)
+        (SELECT users3) IF NOT EXISTS email_filter_op ELSE
+
+        (SELECT users3 FILTER .email = email_filter_val)
+        IF email_filter_op = 'eq' ELSE
+
+        (SELECT users3 FILTER (.email != email_filter_val) ?? true)
+        IF email_filter_op = 'neq' ELSE
+
+        (SELECT users3 FILTER contains(.email, email_filter_val))
+        IF email_filter_op = 'ct' ELSE
+
+        (SELECT users3 FILTER (NOT contains(.email, email_filter_val)) ?? true)
     ),
+
     is_deleted_filter := <optional json>$is_deleted,
+    is_deleted_filter_val := <bool>is_deleted_filter['val'],
     users5 := (
-        (
-            (SELECT users4 FILTER .is_deleted = <bool>is_deleted_filter['val'])
-            IF <str>is_deleted_filter['op'] in {'eq', 'ct'}
-            ELSE (
-                SELECT users4 FILTER .is_deleted != <bool>is_deleted_filter['val']
-            )
-        )
-        IF EXISTS <optional json>$is_deleted
-        ELSE (SELECT users4)
+        (SELECT users4) IF EXISTS is_deleted_filter ELSE
+
+        (SELECT users4 FILTER .is_deleted = is_deleted_filter_val)
+        IF <str>is_deleted_filter['op'] in {'eq', 'ct'} ELSE
+
+        (SELECT users4 FILTER .is_deleted != is_deleted_filter_val)
     ),
+
     created_at_filter := <optional json>$created_at,
+    created_at_filter_uval := <datetime>created_at_filter['uval'],
+    created_at_filter_lval := <datetime>created_at_filter['lval'],
     users6 := (
+        (SELECT users5) IF NOT EXISTS created_at_filter ELSE
+
+        (SELECT users5 FILTER .created_at <= created_at_filter_uval)
+        IF NOT EXISTS created_at_filter_lval ELSE
+
+        (SELECT users5 FILTER .created_at >= created_at_filter_lval)
+        IF NOT EXISTS created_at_filter_uval ELSE
+
         (
-            (SELECT users5 FILTER .created_at = <datetime>created_at_filter['val'])
-            IF <str>created_at_filter['op'] in {'eq', 'ct'}
-            ELSE (
-                SELECT users5 FILTER .created_at != <datetime>created_at_filter['val']
-            )
+            SELECT users5
+            FILTER .created_at >= created_at_filter_lval
+            AND .created_at <= created_at_filter_uval
         )
-        IF EXISTS <optional json>$created_at
-        ELSE (SELECT users5)
     ),
+
     last_login_at_filter := <optional json>$last_login_at,
+    last_login_at_filter_uval := <datetime>last_login_at_filter['uval'],
+    last_login_at_filter_lval := <datetime>last_login_at_filter['lval'],
     users7 := (
+        (SELECT users6) IF NOT EXISTS last_login_at_filter ELSE
+
         (
-            (SELECT users6 FILTER .last_login_at = <datetime>last_login_at_filter['val'])
-            IF <str>last_login_at_filter['op'] in {'eq', 'ct'}
-            ELSE (
-                SELECT users6 FILTER .last_login_at != <datetime>last_login_at_filter['val']
-            )
+            SELECT users6
+            FILTER (.last_login_at <= last_login_at_filter_uval) ?? true
+        ) IF NOT EXISTS last_login_at_filter_lval ELSE
+
+        (SELECT users6 FILTER .last_login_at >= last_login_at_filter_lval)
+        IF NOT EXISTS last_login_at_filter_uval ELSE
+
+        (
+            SELECT users6
+            FILTER .last_login_at >= last_login_at_filter_lval
+            AND .last_login_at <= last_login_at_filter_uval
         )
-        IF EXISTS <optional json>$last_login_at
-        ELSE (SELECT users6)
     ),
+
     total := count(users7)
+
 select <json>(
     total := total,
     per_page := <int64>$per_page,
