@@ -1,5 +1,6 @@
 install:
 	poetry install --sync
+	poetry run pre-commit install
 
 lint:
 	poetry run isort src

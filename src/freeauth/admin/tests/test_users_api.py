@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from http import HTTPStatus
-from typing import Dict
+from typing import Dict, List
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,20 +10,38 @@ from fastapi.testclient import TestClient
 from ...queries.query_api import CreateUserResult
 
 
-@pytest.fixture
-async def user(test_client: TestClient) -> CreateUserResult:
+def create_user(
+    test_client: TestClient,
+    name: str | None = None,
+    username: str | None = None,
+    email: str | None = None,
+    mobile: str | None = None,
+    password: str | None = None,
+) -> CreateUserResult:
     resp = test_client.post(
         "/users",
         json=dict(
-            name="张三",
-            username="user",
-            email="user@example.com",
-            mobile="13800000000",
-            hashed_password="password",
+            name=name,
+            username=username,
+            email=email,
+            mobile=mobile,
+            hashed_password=password,
         ),
     )
     user = resp.json()
     return CreateUserResult(**user)
+
+
+@pytest.fixture
+async def user(test_client: TestClient) -> CreateUserResult:
+    return create_user(
+        test_client,
+        name="张三",
+        username="user",
+        email="user@example.com",
+        mobile="13800000000",
+        password="password",
+    )
 
 
 def test_create_user_at_least_one_field_error(test_client: TestClient):
@@ -319,3 +338,149 @@ def test_get_user(test_client: TestClient, user: CreateUserResult):
     resp = test_client.get(f"/users/{user.id}")
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert CreateUserResult(**resp.json()) == user
+
+
+def test_query_users(test_client: TestClient, faker):
+    users: List[CreateUserResult] = [
+        create_user(test_client, name=faker.name(), username=faker.user_name())
+    ]
+    for _ in range(3):
+        users.append(
+            create_user(
+                test_client,
+                name=faker.name(),
+                username=faker.user_name(),
+                mobile=faker.phone_number(),
+                email=faker.email(),
+            )
+        )
+    for _ in range(3):
+        users.append(
+            create_user(
+                test_client,
+                name=faker.name(),
+                username=faker.user_name(),
+                email=faker.email(),
+            )
+        )
+    for _ in range(3):
+        users.append(
+            create_user(
+                test_client,
+                name=faker.name(),
+                username=faker.user_name(),
+                mobile=faker.phone_number(),
+            )
+        )
+
+    status_data: Dict = {
+        "user_ids": [],
+        "is_deleted": True,
+    }
+    for idx in {3, 5, 7}:
+        status_data["user_ids"].append(str(users[idx].id))
+        users[idx].is_deleted = True
+    test_client.put("/users/status", json=status_data)
+
+    data: Dict = dict()
+    resp = test_client.post("/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 10
+    assert len(rv["rows"]) == 10
+    assert rv["page"] == 1
+    assert rv["per_page"] == 20
+
+    data["q"] = users[0].name
+    resp = test_client.post("/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 1
+    assert rv["rows"][0]["name"] == users[0].name
+
+    data["q"] = "example.com"
+    resp = test_client.post("/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert all(data["q"] in u["email"] for u in rv["rows"])
+
+    data = dict(
+        page=1,
+        per_page=3,
+    )
+    resp = test_client.post("/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["last"] == 4
+    assert len(rv["rows"]) == 3
+
+    data["page"] = 4
+    resp = test_client.post("/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["page"] == 4
+    assert len(rv["rows"]) == 1
+
+    data = dict(
+        order_by=["username"],
+    )
+    resp = test_client.post("/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert sorted(u.username or "" for u in users) == [
+        u["username"] for u in rv["rows"]
+    ]
+
+    data["order_by"] = ["-username"]
+    resp = test_client.post("/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert sorted([u.username or "" for u in users], reverse=True) == [
+        u["username"] for u in rv["rows"]
+    ]
+
+    data["order_by"] = ["-is_deleted", "username"]
+    resp = test_client.post("/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert [
+        str(u.id)
+        for u in sorted(users, key=lambda u: (-u.is_deleted, u.username or ""))
+    ] == [u["id"] for u in rv["rows"]]
+
+    data = dict(
+        filter_by=[
+            dict(field="username", operator="eq", value=users[0].username),
+            dict(
+                field="is_deleted",
+                operator="neq",
+                value=True,
+            ),
+            dict(
+                field="created_at",
+                operator="lte",
+                value=datetime.utcnow()
+                .replace(tzinfo=timezone.utc)
+                .isoformat(),
+            ),
+        ],
+    )
+    resp = test_client.post("/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv["rows"]) == 1
+    assert users[0].username == rv["rows"][0]["username"]
+
+    data["filter_by"] = [
+        dict(field="username", operator="neq", value=users[0].username),
+        dict(
+            field="is_deleted",
+            operator="neq",
+            value=True,
+        ),
+    ]
+    resp = test_client.post("/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv["rows"]) == 6
+    assert users[0].username not in [u["username"] for u in rv["rows"]]

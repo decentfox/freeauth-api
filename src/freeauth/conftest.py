@@ -93,3 +93,8 @@ async def tx_shutdown_edgedb(app):
     tx, app.state.edgedb = app.state.edgedb, None
     await tx.__aexit__(Exception, Exception(), None)
     await client.aclose()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def faker_locale():
+    return ["zh_CN"]

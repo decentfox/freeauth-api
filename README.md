@@ -22,12 +22,22 @@ edgedb project init
 make install
 ```
 
-4. Add pre-commit hook
+### Run in dev mode
 
 ```bash
-poetry run pre-commit install
+make dev
 ```
-If you need to skip hook you can run `git commit --no-verify
+
+### Open the EdgeDB UI
+
+```bash
+edgedb ui
+```
+
+### Automatic API documents
+
+ - Swagger UI: http://localhost:5001/docs
+ - ReDoc: http://localhost:5001/redoc
 
 ### DB Migrations
 
@@ -43,22 +53,10 @@ edgedb migration create
 edgedb migrate
 ```
 
-### Run in dev mode
-
-```bash
-make dev
-```
-
 ### Generate query APIs
 
 ```bash
 make genqlapi
-```
-
-### Open the EdgeDB UI
-
-```bash
-edgedb ui
 ```
 
 ### Format and lint the code
@@ -76,8 +74,3 @@ Run all the tests with:
 ```bash
 make test
 ```
-
-### Automatic API documents
-
- - Swagger UI: http://localhost:5001/docs
- - ReDoc: http://localhost:5001/redoc

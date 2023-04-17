@@ -25,13 +25,12 @@ from ..utils import gen_random_string, get_password_hash
 
 router = APIRouter(tags=["用户管理"])
 
-
 TYPE_MAPPING = {
     "str": "str",
     "int": "int64",
     "bool": "bool",
-    "UUID": "uuid",
-    "datetime": "datetime",
+    "uuid.UUID": "uuid",
+    "datetime.datetime": "datetime",
 }
 
 
@@ -151,13 +150,13 @@ class FilterOperatorEnum(str, Enum):
 
 
 FilterOperatorEnum.eq.expr = "{0} = {1}"
-FilterOperatorEnum.neq.expr = "{0} != {1}"
+FilterOperatorEnum.neq.expr = "({0} != {1}) ?? true"
 FilterOperatorEnum.gt.expr = "{0} > {1}"
 FilterOperatorEnum.gte.expr = "{0} >= {1}"
 FilterOperatorEnum.lt.expr = "{0} < {1}"
 FilterOperatorEnum.lte.expr = "{0} <= {1}"
 FilterOperatorEnum.ct.expr = "contains({0}, {1})"
-FilterOperatorEnum.nct.expr = "not contains({0}, {1})"
+FilterOperatorEnum.nct.expr = "(NOT contains({0}, {1})) ?? true"
 
 
 @dataclass
@@ -170,7 +169,7 @@ class FilterItem:
     value: Any = Field(..., title="值")
 
 
-@dataclass
+@dataclass(config=UserBodyConfig)
 class UserQueryBody:
     q: str | None = Field(
         None,
@@ -228,9 +227,13 @@ class UserQueryBody:
     def filtering_expr(self) -> str:
         if not self.filter_by:
             return "true"
+
         ret: list = []
+        user_annotations = CreateUserResult.__dict__.get("__annotations__", {})
         for field in self.filter_by:
-            val_type = TYPE_MAPPING[type(field.value).__name__]
+            val_type = TYPE_MAPPING[
+                user_annotations[field.field].split(" | ")[0]
+            ]
             ret.append(
                 field.operator.format(
                     f".{field.field}", f"<{val_type}>'{field.value}'"
@@ -364,30 +367,36 @@ async def query_users(
     body: UserQueryBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedUsers:
-    keyword: str = body.q or ""
-    ordering_expr: str = body.ordering_expr
-    filtering_expr: str = body.filtering_expr
     result = await client.query_single_json(
         f"""\
-        with
-            users := distinct(
-                (select User filter .name ilike <str>$q)
-                union
-                (select User filter .username ilike <str>$q)
-                union
-                (select User filter .mobile ilike <str>$q)
-                union
-                (select User filter .email ilike <str>$q)
+        WITH
+            page := <optional int64>$page ?? 1,
+            per_page := <optional int64>$per_page ?? 20,
+            q := <optional str>$q,
+            users := (
+                (
+                    SELECT User
+                    FILTER {body.filtering_expr}
+                ) IF NOT EXISTS q ELSE
+
+                (
+                    SELECT User
+                    FILTER .name ?? '' ILIKE q
+                    OR .username ?? '' ILIKE q
+                    OR .mobile ?? '' ILIKE q
+                    OR .email ?? '' ILIKE q
+                    AND {body.filtering_expr}
+                )
             ),
-            users1 := (select users FILTER {filtering_expr}),
-            total := count(users1)
-        select <json>(
+            total := count(users)
+
+        SELECT <json>(
             total := total,
-            per_page := <int64>$per_page,
-            page := <int64>$page,
-            last := math::ceil(total / <int64>$per_page),
+            per_page := per_page,
+            page := page,
+            last := math::ceil(total / per_page),
             rows := array_agg((
-                select users1 {{
+                SELECT users {{
                     id,
                     name,
                     username,
@@ -397,13 +406,13 @@ async def query_users(
                     created_at,
                     last_login_at
                 }}
-                order by {ordering_expr}
-                offset (<int64>$page - 1) * <int64>$per_page
-                limit <int64>$per_page
+                ORDER BY {body.ordering_expr}
+                OFFSET (page - 1) * per_page
+                LIMIT per_page
             ))
         );\
         """,
-        q=f"%{keyword}%",
+        q=f"%{body.q}%" if body.q else None,
         page=body.page,
         per_page=body.per_page,
     )
