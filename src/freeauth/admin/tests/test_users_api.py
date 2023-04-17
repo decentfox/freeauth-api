@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from http import HTTPStatus
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import pytest
 from fastapi.testclient import TestClient
@@ -50,7 +50,7 @@ def test_create_user_at_least_one_field_error(test_client: TestClient):
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert (
-        error["detail"][0]["msg"]
+        error["detail"]["errors"]["__root__"]
         == "用户名、邮箱、手机号三个信息中请至少提供一项"
     )
 
@@ -87,7 +87,7 @@ def test_create_user_validate_errors(
     resp = test_client.post("/users", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
-    assert error["detail"][0]["msg"] == msg
+    assert error["detail"]["errors"][field] == msg
 
 
 @pytest.mark.parametrize(
@@ -108,7 +108,7 @@ def test_create_user_exist_error(
     resp = test_client.post("/users", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.BAD_REQUEST, error
-    assert error["detail"][0]["msg"] == f'"{value}" 已被使用'
+    assert error["detail"]["errors"][field] == f"{value} 已被使用"
 
 
 @pytest.mark.parametrize(
@@ -132,21 +132,44 @@ def test_create_user_strip_whitespace(
     assert data[field] != user[field] == db_value
 
 
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("mobile", ""),
+        ("email", ""),
+    ],
+)
+def test_create_user_empty_string(
+    test_client: TestClient, field: str, value: str
+):
+    data: Dict[str, str] = dict(
+        name="张三",
+        username="user",
+        mobile="13800000001",
+        email="user@example.com",
+    )
+    data.update({field: value})
+    resp = test_client.post("/users", json=data)
+    user = resp.json()
+    assert resp.status_code == HTTPStatus.CREATED, user
+    assert user[field] is None
+
+
 def test_toggle_user_status(test_client: TestClient, user: CreateUserResult):
     data: Dict = {}
     resp = test_client.put("/users/status", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
-    for item in error["detail"]:
-        assert item["msg"] == "该字段为必填项"
+    for msg in error["detail"]["errors"].values():
+        assert msg == "该字段为必填项"
 
-    data: Dict = {
+    data: Dict[str, Any] = {
         "user_ids": ["invalid_id"],
         "is_deleted": True,
     }
     resp = test_client.put("/users/status", json=data)
     error = resp.json()
-    assert error["detail"][0]["msg"] == "用户ID格式错误"
+    assert error["detail"]["errors"]["user_ids.0"] == "用户ID格式错误"
 
     data: Dict = {
         "user_ids": ["12345678-1234-5678-1234-567812345678"],
@@ -182,15 +205,15 @@ def test_delete_users(test_client: TestClient, user: CreateUserResult):
     resp = test_client.request("DELETE", "/users", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
-    for item in error["detail"]:
-        assert item["msg"] == "该字段为必填项"
+    for msg in error["detail"]["errors"].values():
+        assert msg == "该字段为必填项"
 
     data: Dict = {
         "user_ids": ["invalid_id"],
     }
     resp = test_client.request("DELETE", "/users", json=data)
     error = resp.json()
-    assert error["detail"][0]["msg"] == "用户ID格式错误"
+    assert error["detail"]["errors"]["user_ids.0"] == "用户ID格式错误"
 
     data: Dict = {
         "user_ids": ["12345678-1234-5678-1234-567812345678"],
@@ -268,7 +291,7 @@ def test_update_user_validate_errors(
     resp = test_client.put(f"/users/{user.id}", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
-    assert error["detail"][0]["msg"] == msg
+    assert error["detail"]["errors"][field] == msg
 
 
 @pytest.mark.parametrize(
@@ -296,7 +319,7 @@ def test_update_user_exist_error(
     resp = test_client.put(f"/users/{user.id}", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.BAD_REQUEST, error
-    assert error["detail"][0]["msg"] == f'"{value}" 已被使用'
+    assert error["detail"]["errors"][field] == f"{value} 已被使用"
 
 
 @pytest.mark.parametrize(
@@ -333,7 +356,7 @@ def test_get_user(test_client: TestClient, user: CreateUserResult):
     resp = test_client.get(f"/users/{not_found_id}")
     error = resp.json()
     assert resp.status_code == HTTPStatus.NOT_FOUND, error
-    assert error["detail"] == "用户不存在"
+    assert error["detail"]["message"] == "获取用户信息失败：用户不存在"
 
     resp = test_client.get(f"/users/{user.id}")
     assert resp.status_code == HTTPStatus.OK, resp.json()

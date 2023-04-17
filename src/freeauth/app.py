@@ -1,5 +1,5 @@
 import functools
-from typing import cast
+from typing import Dict, Union, cast
 
 import edgedb
 from fastapi import FastAPI
@@ -7,6 +7,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from pydantic.error_wrappers import ErrorWrapper
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
@@ -25,20 +26,40 @@ async def shutdown_edgedb(app):
 
 
 async def http_exception_accept_handler(
-    request: Request, exc: RequestValidationError
+    request: Request,
+    exc: Union[RequestValidationError, StarletteHTTPException],
 ) -> Response:
-    raw_errors = exc.raw_errors
-    error_wrapper: ErrorWrapper = cast(ErrorWrapper, raw_errors[0])
-    validation_error: ValidationError = cast(
-        ValidationError, error_wrapper.exc
-    )
-    try:
-        overwritten_errors = validation_error.errors()
-        detail = jsonable_encoder(overwritten_errors)
-    except AttributeError:
-        detail = str(validation_error)
+    message = f"{request.scope['route'].summary or '请求'}失败"
+    if isinstance(exc, RequestValidationError):
+        status_code = HTTP_422_UNPROCESSABLE_ENTITY
+        raw_errors = exc.raw_errors
+        error_wrapper: ErrorWrapper = cast(ErrorWrapper, raw_errors[0])
+        validation_error: ValidationError = cast(
+            ValidationError, error_wrapper.exc
+        )
+        try:
+            overwritten_errors = validation_error.errors()
+            detail = jsonable_encoder(overwritten_errors)
+            errors: Dict[str, str] = {}
+            for err in detail:
+                errors[".".join(str(i) for i in err["loc"])] = err["msg"]
+            detail = dict(
+                message=message,
+                errors=errors,
+            )
+        except AttributeError:
+            detail = dict(message=f"{message}：{validation_error}")
+    else:
+        status_code = exc.status_code
+        if isinstance(exc.detail, str):
+            detail = dict(message=f"{message}：{exc.detail}")
+        else:
+            detail = dict(
+                message=message,
+                errors=exc.detail,
+            )
     return JSONResponse(
-        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status_code,
         content={"detail": detail},
     )
 
@@ -48,6 +69,7 @@ def get_app():
         title="FreeAuth",
         description="Async REST API in Python for FreeAuth.",
         exception_handlers={
+            StarletteHTTPException: http_exception_accept_handler,
             RequestValidationError: http_exception_accept_handler,
         },
     )

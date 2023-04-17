@@ -7,7 +7,7 @@ from typing import Any, List
 
 import edgedb
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr, Field, root_validator
+from pydantic import BaseModel, EmailStr, Field, root_validator, validator
 from pydantic.dataclasses import dataclass
 
 from .. import get_edgedb_client
@@ -72,7 +72,13 @@ class UserPostBody:
         regex=r"^1[0-9]{10}$",
     )
 
-    @root_validator(skip_on_failure=True)
+    @validator("*", pre=True)
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
+
+    @root_validator
     def validate_username_or_email_or_mobile(cls, values):
         username, email, mobile = (
             values.get("username"),
@@ -277,9 +283,7 @@ async def post_user(
         field = str(e).split(" ")[0]
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail=[
-                {"loc": [field], "msg": f'"{getattr(user, field)}" 已被使用'}
-            ],
+            detail={field: f"{getattr(user, field)} 已被使用"},
         )
     return created_user
 
@@ -334,9 +338,7 @@ async def put_user(
         field = str(e).split(" ")[0]
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail=[
-                {"loc": [field], "msg": f'"{getattr(user, field)}" 已被使用'}
-            ],
+            detail={field: f"{getattr(user, field)} 已被使用"},
         )
     return updated_user
 
