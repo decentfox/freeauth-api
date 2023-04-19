@@ -376,23 +376,18 @@ async def query_users(
             per_page := <optional int64>$per_page ?? 20,
             q := <optional str>$q,
             users := (
-                (
-                    SELECT User
-                    FILTER {body.filtering_expr}
-                ) IF NOT EXISTS q ELSE
-
-                (
-                    SELECT User
-                    FILTER .name ?? '' ILIKE q
-                    OR .username ?? '' ILIKE q
-                    OR .mobile ?? '' ILIKE q
-                    OR .email ?? '' ILIKE q
-                    AND {body.filtering_expr}
-                )
+                SELECT User
+                FILTER (
+                    true IF not EXISTS q ELSE
+                    .name ?? '' ILIKE q OR
+                    .username ?? '' ILIKE q OR
+                    .mobile ?? '' ILIKE q OR
+                    .email ?? '' ILIKE q
+                ) AND {body.filtering_expr}
             ),
             total := count(users)
 
-        SELECT <json>(
+        SELECT (
             total := total,
             per_page := per_page,
             page := page,
