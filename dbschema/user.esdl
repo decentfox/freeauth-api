@@ -22,21 +22,4 @@ module default {
         index on (.email);
         index on (.mobile);
     }
-
-    type EmailAuth extending TimeStamped {
-        required property email -> str {
-            readonly := true;
-        };
-        required property code -> str {
-            readonly := true;
-        };
-        property token -> str {
-            constraint exclusive;
-        };
-
-        required link user -> User;
-
-        index on (.token);
-        index on ((.email, .code));
-    }
 }

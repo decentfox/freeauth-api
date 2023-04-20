@@ -13,6 +13,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from .admin import users
+from .auth import code_verify
 
 
 async def setup_edgedb(app):
@@ -29,7 +30,9 @@ async def http_exception_accept_handler(
     request: Request,
     exc: Union[RequestValidationError, StarletteHTTPException],
 ) -> Response:
-    message = f"{request.scope['route'].summary or '请求'}失败"
+    message = "请求失败"
+    if request.scope.get("route"):
+        message = f"{request.scope['route'].summary or '请求'}失败"
     if isinstance(exc, RequestValidationError):
         status_code = HTTP_422_UNPROCESSABLE_ENTITY
         raw_errors = exc.raw_errors
@@ -82,5 +85,6 @@ def get_app():
         return {"status": "Ok"}
 
     app.include_router(users.router)
+    app.include_router(code_verify.router)
 
     return app

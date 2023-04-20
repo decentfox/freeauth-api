@@ -11,6 +11,9 @@ lint:
 test:
 	poetry run pytest --reset-db
 
+db:
+	edgedb migration create
+
 up:
 	edgedb migrate
 

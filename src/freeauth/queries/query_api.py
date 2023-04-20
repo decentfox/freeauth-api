@@ -2,8 +2,10 @@
 #     'src/freeauth/queries/admin/create_user.edgeql'
 #     'src/freeauth/queries/admin/delete_user.edgeql'
 #     'src/freeauth/queries/admin/get_user_by_id.edgeql'
+#     'src/freeauth/queries/auth/send_verify_code.edgeql'
 #     'src/freeauth/queries/admin/update_user.edgeql'
 #     'src/freeauth/queries/admin/update_user_status.edgeql'
+#     'src/freeauth/queries/auth/validate_verify_code.edgeql'
 # WITH:
 #     $ edgedb-py --file src/freeauth/queries/query_api.py
 
@@ -12,6 +14,8 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import enum
+import typing
 import uuid
 
 import edgedb
@@ -25,6 +29,11 @@ class NoPydanticValidation:
         pydantic_dataclass(cls)
         cls.__pydantic_model__.__get_validators__ = lambda: []
         return []
+
+
+class CodeType(enum.Enum):
+    SMS = "SMS"
+    EMAIL = "Email"
 
 
 @dataclasses.dataclass
@@ -46,10 +55,20 @@ class DeleteUserResult(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class SendVerifyCodeResult(NoPydanticValidation):
+    id: uuid.UUID
+
+
+@dataclasses.dataclass
 class UpdateUserStatusResult(NoPydanticValidation):
     id: uuid.UUID
     name: str | None
     is_deleted: bool
+
+
+class ValidateVerifyCodeResult(typing.NamedTuple):
+    record: SendVerifyCodeResult
+    valid: bool
 
 
 async def create_user(
@@ -123,6 +142,33 @@ async def get_user_by_id(
     )
 
 
+async def send_verify_code(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    account: str,
+    code_type: CodeType,
+    code: str,
+) -> SendVerifyCodeResult:
+    return await executor.query_single(
+        """\
+        WITH
+            account := <str>$account,
+            code_type := <auth::VerifyCodeType>$code_type,
+            code := <str>$code
+        SELECT (
+            INSERT auth::VerifyRecord {
+                account := account,
+                code_type := code_type,
+                code := code
+            }
+        );\
+        """,
+        account=account,
+        code_type=code_type,
+        code=code,
+    )
+
+
 async def update_user(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -182,4 +228,46 @@ async def update_user_status(
         """,
         user_ids=user_ids,
         is_deleted=is_deleted,
+    )
+
+
+async def validate_verify_code(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    account: str,
+    code_type: CodeType,
+    code: str,
+    ttl: str,
+) -> list[ValidateVerifyCodeResult]:
+    return await executor.query(
+        """\
+        WITH
+            account := <str>$account,
+            code_type := <auth::VerifyCodeType>$code_type,
+            code := <str>$code,
+            ttl := <str>$ttl,
+            record := (
+                SELECT auth::VerifyRecord
+                FILTER .account = account
+                    AND .code_type  = code_type
+                    AND .code = code
+            ),
+            valid_record := (
+                UPDATE record
+                FILTER .created_at + <cal::relative_duration>ttl
+                        < datetime_of_transaction()
+                    AND NOT EXISTS .consumed_at
+                SET {
+                    consumed_at := datetime_of_transaction()
+                }
+            )
+        SELECT (
+            record := record,
+            valid := valid_record = record
+        );\
+        """,
+        account=account,
+        code_type=code_type,
+        code=code,
+        ttl=ttl,
     )
