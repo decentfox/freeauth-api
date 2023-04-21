@@ -21,7 +21,7 @@ from ..queries.query_api import (
     update_user,
     update_user_status,
 )
-from ..utils import gen_random_string, get_password_hash
+from ..utils import MOBILE_REGEX, gen_random_string, get_password_hash
 
 router = APIRouter(tags=["用户管理"])
 
@@ -69,7 +69,7 @@ class UserPostBody:
         None,
         title="手机号",
         description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
-        regex=r"^1[0-9]{10}$",
+        regex=MOBILE_REGEX,
     )
 
     @validator("*", pre=True)

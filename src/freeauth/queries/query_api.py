@@ -15,7 +15,6 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import enum
-import typing
 import uuid
 
 import edgedb
@@ -31,9 +30,14 @@ class NoPydanticValidation:
         return []
 
 
-class CodeType(enum.Enum):
+class AuthCodeType(enum.Enum):
     SMS = "SMS"
     EMAIL = "Email"
+
+
+class AuthVerifyType(enum.Enum):
+    LOGIN = "Login"
+    REGISTER = "Register"
 
 
 @dataclasses.dataclass
@@ -57,6 +61,12 @@ class DeleteUserResult(NoPydanticValidation):
 @dataclasses.dataclass
 class SendVerifyCodeResult(NoPydanticValidation):
     id: uuid.UUID
+    created_at: datetime.datetime
+    account: str
+    code_type: AuthCodeType
+    verify_type: AuthVerifyType
+    expired_at: datetime.datetime
+    ttl: int
 
 
 @dataclasses.dataclass
@@ -66,9 +76,16 @@ class UpdateUserStatusResult(NoPydanticValidation):
     is_deleted: bool
 
 
-class ValidateVerifyCodeResult(typing.NamedTuple):
-    record: SendVerifyCodeResult
-    valid: bool
+@dataclasses.dataclass
+class ValidateVerifyCodeResult(NoPydanticValidation):
+    id: uuid.UUID
+    created_at: datetime.datetime
+    account: str
+    code: str
+    code_type: AuthCodeType
+    verify_type: AuthVerifyType
+    expired_at: datetime.datetime
+    valid: bool | None
 
 
 async def create_user(
@@ -146,26 +163,44 @@ async def send_verify_code(
     executor: edgedb.AsyncIOExecutor,
     *,
     account: str,
-    code_type: CodeType,
+    code_type: AuthCodeType,
+    verify_type: AuthVerifyType,
     code: str,
+    ttl: int,
 ) -> SendVerifyCodeResult:
     return await executor.query_single(
         """\
         WITH
             account := <str>$account,
-            code_type := <auth::VerifyCodeType>$code_type,
-            code := <str>$code
+            code_type := <auth::CodeType>$code_type,
+            verify_type := <auth::VerifyType>$verify_type,
+            code := <str>$code,
+            ttl := <int16>$ttl
         SELECT (
             INSERT auth::VerifyRecord {
                 account := account,
                 code_type := code_type,
-                code := code
+                verify_type := verify_type,
+                code := code,
+                expired_at := (
+                    datetime_of_transaction() +
+                    <cal::relative_duration>(<str>ttl ++ ' seconds')
+                )
             }
-        );\
+        ) {
+            created_at,
+            account,
+            code_type,
+            verify_type,
+            expired_at,
+            ttl := ttl
+        };\
         """,
         account=account,
         code_type=code_type,
+        verify_type=verify_type,
         code=code,
+        ttl=ttl,
     )
 
 
@@ -235,39 +270,46 @@ async def validate_verify_code(
     executor: edgedb.AsyncIOExecutor,
     *,
     account: str,
-    code_type: CodeType,
+    code_type: AuthCodeType,
+    verify_type: AuthVerifyType,
     code: str,
-    ttl: str,
-) -> list[ValidateVerifyCodeResult]:
-    return await executor.query(
+) -> ValidateVerifyCodeResult | None:
+    return await executor.query_single(
         """\
         WITH
             account := <str>$account,
-            code_type := <auth::VerifyCodeType>$code_type,
+            code_type := <auth::CodeType>$code_type,
+            verify_type := <auth::VerifyType>$verify_type,
             code := <str>$code,
-            ttl := <str>$ttl,
             record := (
                 SELECT auth::VerifyRecord
                 FILTER .account = account
                     AND .code_type  = code_type
+                    AND .verify_type = verify_type
                     AND .code = code
             ),
             valid_record := (
                 UPDATE record
-                FILTER .created_at + <cal::relative_duration>ttl
-                        < datetime_of_transaction()
+                FILTER .expired_at < datetime_of_transaction()
                     AND NOT EXISTS .consumed_at
                 SET {
                     consumed_at := datetime_of_transaction()
                 }
             )
         SELECT (
-            record := record,
-            valid := valid_record = record
-        );\
+            record
+        ) {
+            created_at,
+            account,
+            code,
+            code_type,
+            verify_type,
+            expired_at,
+            valid := EXISTS record AND valid_record = record
+        };\
         """,
         account=account,
         code_type=code_type,
+        verify_type=verify_type,
         code=code,
-        ttl=ttl,
     )

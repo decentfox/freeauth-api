@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 from typing import Dict, Union, cast
 
@@ -14,6 +16,8 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from .admin import users
 from .auth import code_verify
+from .config import get_settings
+from .log import configure_logging
 
 
 async def setup_edgedb(app):
@@ -68,7 +72,9 @@ async def http_exception_accept_handler(
 
 
 def get_app():
+    settings = get_settings()
     app = FastAPI(
+        debug=settings.debug,
         title="FreeAuth",
         description="Async REST API in Python for FreeAuth.",
         exception_handlers={
@@ -76,6 +82,7 @@ def get_app():
             RequestValidationError: http_exception_accept_handler,
         },
     )
+    configure_logging(app)
 
     app.on_event("startup")(functools.partial(setup_edgedb, app))
     app.on_event("shutdown")(functools.partial(shutdown_edgedb, app))
