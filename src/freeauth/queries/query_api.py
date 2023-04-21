@@ -15,6 +15,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import enum
+import typing
 import uuid
 
 import edgedb
@@ -36,8 +37,8 @@ class AuthCodeType(enum.Enum):
 
 
 class AuthVerifyType(enum.Enum):
-    LOGIN = "Login"
-    REGISTER = "Register"
+    SIGNIN = "SignIn"
+    SIGNUP = "SignUp"
 
 
 @dataclasses.dataclass
@@ -76,16 +77,9 @@ class UpdateUserStatusResult(NoPydanticValidation):
     is_deleted: bool
 
 
-@dataclasses.dataclass
-class ValidateVerifyCodeResult(NoPydanticValidation):
-    id: uuid.UUID
-    created_at: datetime.datetime
-    account: str
-    code: str
-    code_type: AuthCodeType
-    verify_type: AuthVerifyType
-    expired_at: datetime.datetime
-    valid: bool | None
+class ValidateVerifyCodeResult(typing.NamedTuple):
+    code_found: bool
+    code_valid: bool
 
 
 async def create_user(
@@ -273,7 +267,7 @@ async def validate_verify_code(
     code_type: AuthCodeType,
     verify_type: AuthVerifyType,
     code: str,
-) -> ValidateVerifyCodeResult | None:
+) -> ValidateVerifyCodeResult:
     return await executor.query_single(
         """\
         WITH
@@ -287,26 +281,20 @@ async def validate_verify_code(
                     AND .code_type  = code_type
                     AND .verify_type = verify_type
                     AND .code = code
+                    AND NOT EXISTS .consumed_at
             ),
             valid_record := (
                 UPDATE record
-                FILTER .expired_at < datetime_of_transaction()
-                    AND NOT EXISTS .consumed_at
+                FILTER .expired_at >= datetime_of_transaction()
                 SET {
                     consumed_at := datetime_of_transaction()
                 }
-            )
+            ),
+            valid := EXISTS record AND EXISTS valid_record,
         SELECT (
-            record
-        ) {
-            created_at,
-            account,
-            code,
-            code_type,
-            verify_type,
-            expired_at,
-            valid := EXISTS record AND valid_record = record
-        };\
+            code_found := EXISTS record,
+            code_valid := EXISTS valid_record
+        );\
         """,
         account=account,
         code_type=code_type,

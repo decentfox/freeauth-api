@@ -9,23 +9,17 @@ WITH
             AND .code_type  = code_type
             AND .verify_type = verify_type
             AND .code = code
+            AND NOT EXISTS .consumed_at
     ),
     valid_record := (
         UPDATE record
-        FILTER .expired_at < datetime_of_transaction()
-            AND NOT EXISTS .consumed_at
+        FILTER .expired_at >= datetime_of_transaction()
         SET {
             consumed_at := datetime_of_transaction()
         }
-    )
+    ),
+    valid := EXISTS record AND EXISTS valid_record,
 SELECT (
-    record
-) {
-    created_at,
-    account,
-    code,
-    code_type,
-    verify_type,
-    expired_at,
-    valid := EXISTS record AND valid_record = record
-};
+    code_found := EXISTS record,
+    code_valid := EXISTS valid_record
+);

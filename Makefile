@@ -11,6 +11,11 @@ lint:
 test:
 	poetry run pytest --reset-db
 
+resetdb:
+	edgedb query "create database tmp"
+	edgedb -d tmp query "drop database edgedb" "create database edgedb"
+	edgedb query "drop database tmp"
+
 db:
 	edgedb migration create
 

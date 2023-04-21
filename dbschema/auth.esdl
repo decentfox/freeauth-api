@@ -1,6 +1,6 @@
 module auth {
     scalar type CodeType extending enum<SMS, Email>;
-    scalar type VerifyType extending enum<Login, Register>;
+    scalar type VerifyType extending enum<SignIn, SignUp>;
 
     type VerifyRecord extending default::TimeStamped {
         required property account -> str {
