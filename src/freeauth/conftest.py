@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import pathlib
 from collections.abc import AsyncGenerator
 
@@ -64,6 +65,8 @@ async def edgedb_client(db) -> AsyncGenerator[edgedb.AsyncIOClient, None]:
 
 @pytest.fixture
 def app(mocker) -> FastAPI:
+    os.environ["TESTING"] = "true"
+    os.environ["DEMO_ACCOUNTS"] = '["user@example.com", "13800000000"]'
     mocker.patch("freeauth.app.setup_edgedb", tx_setup_edgedb)
     mocker.patch("freeauth.app.shutdown_edgedb", tx_shutdown_edgedb)
     return get_app()

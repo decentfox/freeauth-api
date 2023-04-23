@@ -9,7 +9,9 @@ WITH
             AND .code_type  = code_type
             AND .verify_type = verify_type
             AND .code = code
-            AND NOT EXISTS .consumed_at
+            AND .consumable
+        ORDER BY .created_at DESC
+        LIMIT 1
     ),
     valid_record := (
         UPDATE record

@@ -1,9 +1,9 @@
 with
-    name := <str>$name,
-    username := <str>$username,
+    name := <optional str>$name,
+    username := <optional str>$username,
     email := <optional str>$email,
     mobile := <optional str>$mobile,
-    hashed_password := <str>$hashed_password
+    hashed_password := <optional str>$hashed_password
 select (
     insert User {
         name := name,

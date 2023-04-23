@@ -19,8 +19,10 @@ module auth {
             readonly := true;
         }
         property consumed_at -> datetime;
+        required property consumable := not exists .consumed_at;
 
-        constraint exclusive on ((.account, .code, .code_type, .verify_type));
+        index on (.code);
+        index on ((.account, .code_type, .verify_type, .consumable));
     }
 
     abstract type Identity extending default::TimeStamped {

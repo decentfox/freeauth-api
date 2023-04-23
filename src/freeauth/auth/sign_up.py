@@ -14,12 +14,15 @@ from ..config import get_settings
 from ..queries.query_api import (
     AuthCodeType,
     AuthVerifyType,
+    CreateUserResult,
     SendVerifyCodeResult,
     ValidateVerifyCodeResult,
+    create_user,
+    get_user_by_exclusive_field,
     send_verify_code,
     validate_verify_code,
 )
-from ..utils import MOBILE_REGEX, gen_random_string
+from ..utils import MOBILE_REGEX, gen_random_string, get_password_hash
 from . import router
 
 
@@ -34,34 +37,11 @@ class AuthBodyConfig:
 
 @dataclass(config=AuthBodyConfig)
 class SendVerifyCodeBody:
-    account: str = Field(
-        ...,
-        title="手机号或邮箱",
-        description="如使用短信验证则需提供手机号码，如使用邮件验证则需提供邮箱",
-    )
-
-    @validator("account")
-    def validate_account(cls, v):
-        if not re.match(MOBILE_REGEX, v):
-            try:
-                EmailStr.validate(v)
-            except ValueError:
-                raise ValueError("手机号码或邮箱格式有误")
-        return v
-
-
-@dataclass(config=AuthBodyConfig)
-class SignUpVerifyCodeBody:
     code_type: AuthCodeType = Field(..., title="验证码类型")
     account: str = Field(
         ...,
         title="注册账号",
         description="手机号或邮箱",
-    )
-    code: str = Field(
-        ...,
-        title="验证码",
-        description="使用手机号或邮箱注册时，需提供验证码",
     )
 
     @validator("account")
@@ -81,32 +61,45 @@ class SignUpVerifyCodeBody:
 
 
 @dataclass(config=AuthBodyConfig)
-class SignUpBody:
-    account: str = Field(
+class SignUpVerifyCodeBody(SendVerifyCodeBody):
+    code: str = Field(
         ...,
-        title="用户名、手机号或邮箱",
-        description="注册账号",
-    )
-    code: str | None = Field(
-        None,
         title="验证码",
         description="使用手机号或邮箱注册时，需提供验证码",
     )
-    code_type: AuthCodeType | None = Field(None, title="验证码类型")
-    password: str | None = Field(
-        None,
-        title="登录密码",
-        description="使用用户名注册时，需提供登录密码",
-    )
 
-    @validator("account")
-    def validate_account(cls, v):
-        if not re.match(MOBILE_REGEX, v):
-            try:
-                EmailStr.validate(v)
-            except ValueError:
-                raise ValueError("手机号码或邮箱格式有误")
-        return v
+
+async def verify_sign_up_account(
+    account: str,
+    code_type: AuthCodeType,
+    client: edgedb.AsyncIOClient,
+):
+    user = await get_user_by_exclusive_field(
+        client,
+        id=None,
+        username=None,
+        mobile=account if code_type == AuthCodeType.SMS else None,
+        email=account if code_type == AuthCodeType.EMAIL else None,
+    )
+    if user:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={"account": f"{account} 已被使用"},
+        )
+
+
+async def verify_account_when_send_code(
+    body: SendVerifyCodeBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+):
+    await verify_sign_up_account(body.account, body.code_type, client)
+
+
+async def verify_account_when_sign_up(
+    body: SignUpVerifyCodeBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+):
+    await verify_sign_up_account(body.account, body.code_type, client)
 
 
 @router.post(
@@ -114,6 +107,7 @@ class SignUpBody:
     status_code=HTTPStatus.OK,
     summary="发送注册验证码",
     description="通过短信或邮件发送注册验证码",
+    dependencies=[Depends(verify_account_when_send_code)],
 )
 async def send_sign_up_verify_code(
     body: SendVerifyCodeBody,
@@ -122,22 +116,25 @@ async def send_sign_up_verify_code(
     code_type = AuthCodeType.EMAIL
     if re.match(MOBILE_REGEX, body.account):
         code_type = AuthCodeType.SMS
+
+    # TODO: validate code limit
+
     settings = get_settings()
-    while True:
-        try:
-            code: str = gen_random_string(6, letters=string.digits)
-            rv = await send_verify_code(
-                client,
-                account=body.account,
-                code_type=code_type.value,  # type: ignore
-                verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
-                code=code,
-                ttl=settings.verify_code_ttl,
-            )
-            logger.info("Send %s to account %s", code, body.account)
-            return rv
-        except edgedb.errors.ConstraintViolationError:
-            pass
+    if body.account in settings.demo_accounts:
+        code = settings.demo_code
+    else:
+        code = gen_random_string(6, letters=string.digits)
+    rv = await send_verify_code(
+        client,
+        account=body.account,
+        code_type=code_type.value,  # type: ignore
+        verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
+        code=code,
+        ttl=settings.verify_code_ttl,
+    )
+    logger.info("Send %s to account %s", code, body.account)
+    # TODO: send sms
+    return rv
 
 
 @router.post(
@@ -145,12 +142,13 @@ async def send_sign_up_verify_code(
     status_code=HTTPStatus.OK,
     summary="注册账号",
     description="通过手机号或邮箱注册账号",
+    dependencies=[Depends(verify_account_when_sign_up)],
 )
 async def sign_up_with_code(
     body: SignUpVerifyCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> ValidateVerifyCodeResult | None:
-    rv = await validate_verify_code(
+) -> CreateUserResult | None:
+    rv: ValidateVerifyCodeResult = await validate_verify_code(
         client,
         account=body.account,
         code_type=body.code_type.value,  # type: ignore
@@ -167,4 +165,16 @@ async def sign_up_with_code(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail={"code": "验证码已失效，请重新获取"},
         )
-    return rv
+
+    # sign up
+    username: str = gen_random_string(8)
+    password: str = gen_random_string(12, secret=True)
+    user: CreateUserResult = await create_user(
+        client,
+        mobile=body.account if body.code_type == AuthCodeType.SMS else None,
+        name=username,
+        username=username,
+        email=body.account if body.code_type == AuthCodeType.EMAIL else None,
+        hashed_password=get_password_hash(password),
+    )
+    return user
