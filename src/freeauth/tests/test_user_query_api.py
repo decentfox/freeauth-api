@@ -9,7 +9,7 @@ from freeauth.queries.query_api import (
     CreateUserResult,
     create_user,
     delete_user,
-    get_user_by_exclusive_field,
+    get_user_by_id,
     update_user,
 )
 
@@ -136,7 +136,5 @@ async def test_delete_user(
     user: CreateUserResult,
 ):
     await delete_user(edgedb_client, user_ids=[user.id])
-    deleted_user = await get_user_by_exclusive_field(
-        edgedb_client, id=user.id, username=None, mobile=None, email=None
-    )
+    deleted_user = await get_user_by_id(edgedb_client, id=user.id)
     assert deleted_user is None

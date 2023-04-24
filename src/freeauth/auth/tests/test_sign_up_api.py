@@ -13,13 +13,13 @@ from ...config import get_settings
 from ...queries.query_api import (
     AuthCodeType,
     AuthVerifyType,
-    send_verify_code,
-    validate_verify_code,
+    send_code,
+    validate_code,
 )
 from ...utils import gen_random_string
 
 
-def test_send_sign_up_verify_code(test_client: TestClient):
+def test_send_sign_up_code(test_client: TestClient):
     data: Dict = {}
     resp = test_client.post("/sign_up/code", json=data)
     error = resp.json()
@@ -79,7 +79,7 @@ def test_send_sign_up_verify_code(test_client: TestClient):
     resp = test_client.post("/sign_up/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
-    assert error["detail"]["errors"]["account"] == "13800000000 已被使用"
+    assert error["detail"]["errors"]["account"] == "该账号已注册，请直接登录"
 
     data = dict(
         account="user@example.com",
@@ -88,7 +88,14 @@ def test_send_sign_up_verify_code(test_client: TestClient):
     resp = test_client.post("/sign_up/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
-    assert error["detail"]["errors"]["account"] == "user@example.com 已被使用"
+    assert error["detail"]["errors"]["account"] == "该账号已注册，请直接登录"
+
+    data["account"] = "user1@example.com"
+    resp = test_client.post("/sign_up/code", json=data)
+    record = resp.json()
+    assert resp.status_code == HTTPStatus.OK, record
+    assert record["account"] == data["account"]
+    assert record["verify_type"] == AuthVerifyType.SIGNUP.value
 
 
 @pytest.mark.parametrize(
@@ -147,7 +154,7 @@ def test_send_sign_up_verify_code(test_client: TestClient):
         ),
     ],
 )
-def test_send_sign_up_verify_code_failed(
+def test_validate_sign_up_code_failed(
     test_client: TestClient, data: Dict, errors: Dict
 ):
     settings = get_settings()
@@ -183,7 +190,7 @@ def test_sign_up(test_client: TestClient):
     resp = test_client.post("/sign_up/verify", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
-    assert error["detail"]["errors"]["account"] == "13800000000 已被使用"
+    assert error["detail"]["errors"]["account"] == "该账号已注册，请直接登录"
 
     account = "user@example.com"
     test_client.post(
@@ -204,10 +211,10 @@ def test_sign_up(test_client: TestClient):
     assert user["email"] == account
 
 
-async def test_validate_verify_code(edgedb_client: edgedb.AsyncIOClient):
+async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     account: str = "13800000000"
 
-    rv = await validate_verify_code(
+    rv = await validate_code(
         edgedb_client,
         account=account,
         code_type=AuthCodeType.SMS.value,  # type: ignore
@@ -218,7 +225,7 @@ async def test_validate_verify_code(edgedb_client: edgedb.AsyncIOClient):
     assert not rv.code_valid
 
     code: str = gen_random_string(6, letters=string.digits)
-    await send_verify_code(
+    await send_code(
         edgedb_client,
         account=account,
         code_type=AuthCodeType.SMS.value,  # type: ignore
@@ -227,7 +234,7 @@ async def test_validate_verify_code(edgedb_client: edgedb.AsyncIOClient):
         ttl=-1,
     )
 
-    rv = await validate_verify_code(
+    rv = await validate_code(
         edgedb_client,
         account=account,
         code_type=AuthCodeType.SMS.value,  # type: ignore
@@ -238,7 +245,7 @@ async def test_validate_verify_code(edgedb_client: edgedb.AsyncIOClient):
     assert not rv.code_valid
 
     code: str = gen_random_string(6, letters=string.digits)
-    await send_verify_code(
+    await send_code(
         edgedb_client,
         account=account,
         code_type=AuthCodeType.SMS.value,  # type: ignore
@@ -247,7 +254,7 @@ async def test_validate_verify_code(edgedb_client: edgedb.AsyncIOClient):
         ttl=300,
     )
 
-    rv = await validate_verify_code(
+    rv = await validate_code(
         edgedb_client,
         account=account,
         code_type=AuthCodeType.SMS.value,  # type: ignore
@@ -257,7 +264,7 @@ async def test_validate_verify_code(edgedb_client: edgedb.AsyncIOClient):
     assert rv.code_found
     assert rv.code_valid
 
-    rv = await validate_verify_code(
+    rv = await validate_code(
         edgedb_client,
         account=account,
         code_type=AuthCodeType.SMS.value,  # type: ignore

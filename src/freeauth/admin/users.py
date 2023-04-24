@@ -17,7 +17,7 @@ from ..queries.query_api import (
     UpdateUserStatusResult,
     create_user,
     delete_user,
-    get_user_by_exclusive_field,
+    get_user_by_id,
     update_user,
     update_user_status,
 )
@@ -352,9 +352,7 @@ async def get_user(
     user_id: uuid.UUID,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ):
-    user: CreateUserResult | None = await get_user_by_exclusive_field(
-        client, id=user_id, username=None, mobile=None, email=None
-    )
+    user: CreateUserResult | None = await get_user_by_id(client, id=user_id)
     if not user:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"

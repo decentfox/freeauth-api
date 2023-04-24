@@ -20,7 +20,7 @@ WITH
             consumed_at := datetime_of_transaction()
         }
     ),
-    valid := EXISTS record AND EXISTS valid_record,
+    valid := EXISTS record AND EXISTS valid_record
 SELECT (
     code_found := EXISTS record,
     code_valid := EXISTS valid_record
