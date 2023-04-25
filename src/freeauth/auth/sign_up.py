@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import string
 from http import HTTPStatus
 
 import edgedb
@@ -9,30 +8,18 @@ from fastapi import Depends, HTTPException
 from pydantic import EmailStr, Field, validator
 from pydantic.dataclasses import dataclass
 
-from .. import get_edgedb_client, logger
-from ..config import get_settings
+from .. import get_edgedb_client
 from ..queries.query_api import (
     AuthCodeType,
     AuthVerifyType,
     CreateUserResult,
     SendCodeResult,
-    ValidateCodeResult,
     get_user_by_account,
-    send_code,
     sign_up,
-    validate_code,
 )
 from ..utils import MOBILE_REGEX, gen_random_string, get_password_hash
 from . import router
-
-
-class AuthBodyConfig:
-    anystr_strip_whitespace = True
-    error_msg_templates = {
-        "type_error.enum": "不是有效的枚举值",
-        "value_error.missing": "该字段为必填项",
-        "type_error.none.not_allowed": "该字段不得为空",
-    }
+from .common import AuthBodyConfig, send_auth_code, validate_auth_code
 
 
 @dataclass(config=AuthBodyConfig)
@@ -108,30 +95,7 @@ async def send_signup_code(
     body: SendCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> SendCodeResult:
-    code_type = AuthCodeType.EMAIL
-    if re.match(MOBILE_REGEX, body.account):
-        code_type = AuthCodeType.SMS
-
-    # TODO: validate code limit
-
-    settings = get_settings()
-    if body.account in settings.demo_accounts:
-        code = settings.demo_code
-    else:
-        code = gen_random_string(6, letters=string.digits)
-    rv = await send_code(
-        client,
-        account=body.account,
-        code_type=code_type.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
-        code=code,
-        ttl=settings.verify_code_ttl,
-    )
-    logger.info(
-        "Send signup %s to account %s by %s", code, body.account, code_type
-    )
-    # TODO: send sms or email
-    return rv
+    return await send_auth_code(client, body.account, AuthVerifyType.SIGNUP)
 
 
 @router.post(
@@ -145,26 +109,11 @@ async def sign_up_with_code(
     body: SignUpBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateUserResult | None:
-    code_type: AuthCodeType = body.code_type
-    rv: ValidateCodeResult = await validate_code(
-        client,
-        account=body.account,
-        code_type=code_type.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
-        code=body.code,
+    await validate_auth_code(
+        client, body.account, AuthVerifyType.SIGNUP, body.code
     )
-    if not rv.code_found:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"code": "验证码错误，请重新输入"},
-        )
-    elif not rv.code_valid:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"code": "验证码已失效，请重新获取"},
-        )
 
-    # sign up
+    code_type: AuthCodeType = body.code_type
     username: str = gen_random_string(8)
     password: str = gen_random_string(12, secret=True)
     return await sign_up(

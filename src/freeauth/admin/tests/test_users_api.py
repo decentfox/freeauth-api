@@ -16,7 +16,6 @@ def create_user(
     username: str | None = None,
     email: str | None = None,
     mobile: str | None = None,
-    password: str | None = None,
 ) -> CreateUserResult:
     resp = test_client.post(
         "/users",
@@ -25,7 +24,6 @@ def create_user(
             username=username,
             email=email,
             mobile=mobile,
-            hashed_password=password,
         ),
     )
     user = resp.json()
@@ -40,7 +38,6 @@ async def user(test_client: TestClient) -> CreateUserResult:
         username="user",
         email="user@example.com",
         mobile="13800000000",
-        password="password",
     )
 
 

@@ -31,7 +31,6 @@ def test_send_sign_up_code(test_client: TestClient):
         account="user@example.com",
         code_type=AuthCodeType.EMAIL.value,
     )
-    data["account"] = "user@example.com"
     resp = test_client.post("/sign_up/code", json=data)
     resp_data = resp.json()
     assert resp.status_code == HTTPStatus.OK, resp_data
