@@ -63,6 +63,13 @@ class DeleteUserResult(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class GetUserByAccountResult(NoPydanticValidation):
+    id: uuid.UUID
+    hashed_password: str | None
+    is_deleted: bool
+
+
+@dataclasses.dataclass
 class SendCodeResult(NoPydanticValidation):
     id: uuid.UUID
     created_at: datetime.datetime
@@ -142,31 +149,17 @@ async def get_user_by_account(
     executor: edgedb.AsyncIOExecutor,
     *,
     account: str,
-    hashed_password: str | None,
-) -> CreateUserResult | None:
+) -> GetUserByAccountResult | None:
     return await executor.query_single(
         """\
         WITH
-            account := <str>$account,
-            hashed_password := <optional str>$hashed_password
+            account := <str>$account
         SELECT
-            User {
-                id, name, username, email, mobile,
-                is_deleted, created_at, last_login_at
-            }
-        FILTER
-            (
-                .username ?= account OR .email ?= account OR .mobile ?= account
-            )
-            AND
-            (
-                true IF NOT EXISTS hashed_password ELSE
-                .hashed_password ?= hashed_password
-            )
+            User { id, hashed_password, is_deleted }
+        FILTER .username ?= account OR .email ?= account OR .mobile ?= account
         LIMIT 1;\
         """,
         account=account,
-        hashed_password=hashed_password,
     )
 
 
@@ -236,19 +229,30 @@ async def send_code(
 async def sign_in(
     executor: edgedb.AsyncIOExecutor,
     *,
+    access_token: str,
     id: uuid.UUID,
 ) -> CreateUserResult | None:
     return await executor.query_single(
         """\
-        SELECT (
-            UPDATE User
-            FILTER .id = <uuid>$id
-            SET { last_login_at := datetime_of_transaction() }
-        ) {
+        WITH
+            access_token := <str>$access_token,
+            user := (
+                UPDATE User
+                FILTER .id = <uuid>$id
+                SET { last_login_at := datetime_of_transaction() }
+            ),
+            token := (
+                INSERT auth::Token {
+                    access_token := access_token,
+                    user := user
+                }
+            )
+        SELECT user {
             id, name, username, email, mobile,
             is_deleted, created_at, last_login_at
         };\
         """,
+        access_token=access_token,
         id=id,
     )
 

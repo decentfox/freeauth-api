@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import re
 import string
+import uuid
+from datetime import datetime, timedelta
 from http import HTTPStatus
 
 import edgedb
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
+from jose import jwt
 
 from .. import logger
 from ..config import get_settings
@@ -88,3 +91,19 @@ async def validate_auth_code(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail={"code": "验证码已失效，请重新获取"},
         )
+
+
+def create_access_token(response: Response, user_id: uuid.UUID) -> str:
+    now = datetime.utcnow()
+    settings = get_settings()
+    payload = {
+        "sub": str(user_id),
+        "exp": now + timedelta(minutes=settings.jwt_token_ttl),
+    }
+    token = jwt.encode(
+        payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+    )
+    response.set_cookie(
+        key=settings.jwt_cookie_key, value=token, httponly=True
+    )
+    return token

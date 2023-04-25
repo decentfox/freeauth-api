@@ -25,19 +25,12 @@ module auth {
         index on ((.account, .code_type, .verify_type, .consumable));
     }
 
-    abstract type Identity extending default::TimeStamped {
+    type Token extending default::TimeStamped {
         required link user -> default::User;
-    }
-
-    type SMSIdentity extending Identity {
-        required property mobile -> str {
+        required property access_token -> str {
             constraint exclusive;
         }
-    }
-
-    type EmailIdentity extending Identity {
-        required property email -> str {
-            constraint exclusive;
-        }
+        property revoked_at -> datetime;
+        property is_revoked := exists .revoked_at;
     }
 }

@@ -4,7 +4,7 @@ import re
 from http import HTTPStatus
 
 import edgedb
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Response
 from pydantic import EmailStr, Field, validator
 from pydantic.dataclasses import dataclass
 
@@ -15,11 +15,17 @@ from ..queries.query_api import (
     CreateUserResult,
     SendCodeResult,
     get_user_by_account,
+    sign_in,
     sign_up,
 )
 from ..utils import MOBILE_REGEX, gen_random_string, get_password_hash
 from . import router
-from .common import AuthBodyConfig, send_auth_code, validate_auth_code
+from .common import (
+    AuthBodyConfig,
+    create_access_token,
+    send_auth_code,
+    validate_auth_code,
+)
 
 
 @dataclass(config=AuthBodyConfig)
@@ -60,9 +66,7 @@ async def verify_signup_account(
     account: str,
     client: edgedb.AsyncIOClient,
 ):
-    user = await get_user_by_account(
-        client, account=account, hashed_password=None
-    )
+    user = await get_user_by_account(client, account=account)
     if user:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -107,16 +111,16 @@ async def send_signup_code(
 )
 async def sign_up_with_code(
     body: SignUpBody,
+    response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateUserResult | None:
     await validate_auth_code(
         client, body.account, AuthVerifyType.SIGNUP, body.code
     )
-
     code_type: AuthCodeType = body.code_type
     username: str = gen_random_string(8)
     password: str = gen_random_string(12, secret=True)
-    return await sign_up(
+    user = await sign_up(
         client,
         name=username,
         username=username,
@@ -124,3 +128,5 @@ async def sign_up_with_code(
         email=body.account if code_type == AuthCodeType.EMAIL else None,
         hashed_password=get_password_hash(password),
     )
+    token = create_access_token(response, user.id)
+    return await sign_in(client, id=user.id, access_token=token)

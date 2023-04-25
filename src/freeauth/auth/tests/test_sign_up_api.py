@@ -7,6 +7,7 @@ from typing import Dict
 import edgedb
 import pytest
 from fastapi.testclient import TestClient
+from jose import jwt
 
 from ...admin.tests.test_users_api import create_user
 from ...config import get_settings
@@ -208,6 +209,16 @@ def test_sign_up(test_client: TestClient):
     user = resp.json()
     assert resp.status_code == HTTPStatus.OK, user
     assert user["email"] == account
+    assert user["last_login_at"] is not None
+
+    settings = get_settings()
+    token = resp.cookies.get(settings.jwt_cookie_key)
+    assert token is not None
+
+    payload = jwt.decode(
+        token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+    )
+    assert payload["sub"] == user["id"]
 
 
 async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):

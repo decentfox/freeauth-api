@@ -4,7 +4,7 @@ import re
 from http import HTTPStatus
 
 import edgedb
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Response
 from pydantic import EmailStr, Field, validator
 from pydantic.dataclasses import dataclass
 
@@ -12,13 +12,19 @@ from .. import get_edgedb_client
 from ..queries.query_api import (
     AuthVerifyType,
     CreateUserResult,
+    GetUserByAccountResult,
     SendCodeResult,
     get_user_by_account,
     sign_in,
 )
 from ..utils import MOBILE_REGEX, get_password_hash
 from . import router
-from .common import AuthBodyConfig, send_auth_code, validate_auth_code
+from .common import (
+    AuthBodyConfig,
+    create_access_token,
+    send_auth_code,
+    validate_auth_code,
+)
 
 
 @dataclass(config=AuthBodyConfig)
@@ -65,13 +71,8 @@ class SignInPwdBody:
 async def get_signin_account(
     account: str,
     client: edgedb.AsyncIOClient,
-    password: str | None = None,
-) -> CreateUserResult:
-    user = await get_user_by_account(
-        client,
-        account=account,
-        hashed_password=get_password_hash(password) if password else None,
-    )
+) -> GetUserByAccountResult:
+    user = await get_user_by_account(client, account=account)
     if not user:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -88,24 +89,22 @@ async def get_signin_account(
 async def verify_account_when_send_code(
     body: SendCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> CreateUserResult:
+) -> GetUserByAccountResult:
     return await get_signin_account(body.account, client)
 
 
 async def verify_account_when_sign_in_with_code(
     body: SignInCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> CreateUserResult:
+) -> GetUserByAccountResult:
     return await get_signin_account(body.account, client)
 
 
 async def verify_account_when_sign_in_with_pwd(
     body: SignInPwdBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> CreateUserResult:
-    return await get_signin_account(
-        body.account, client, password=body.password
-    )
+) -> GetUserByAccountResult:
+    return await get_signin_account(body.account, client)
 
 
 @router.post(
@@ -130,13 +129,15 @@ async def send_signin_code(
 )
 async def sign_in_with_code(
     body: SignInCodeBody,
+    response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     user: CreateUserResult = Depends(verify_account_when_sign_in_with_code),
 ) -> CreateUserResult | None:
     await validate_auth_code(
         client, body.account, AuthVerifyType.SIGNIN, body.code
     )
-    return await sign_in(client, id=user.id)
+    token = create_access_token(response, user.id)
+    return await sign_in(client, id=user.id, access_token=token)
 
 
 @router.post(
@@ -146,13 +147,17 @@ async def sign_in_with_code(
     description="通过用户名或手机号或邮箱及密码登录账号",
 )
 async def sign_in_with_pwd(
+    body: SignInPwdBody,
+    response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-    user: CreateUserResult = Depends(verify_account_when_sign_in_with_pwd),
+    user: GetUserByAccountResult = Depends(
+        verify_account_when_sign_in_with_pwd
+    ),
 ) -> CreateUserResult | None:
-    user = await sign_in(client, id=user.id)
-    if not user:
+    if user.hashed_password != get_password_hash(body.password):
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail={"account": "密码输入错误"},
         )
-    return user
+    token = create_access_token(response, user.id)
+    return await sign_in(client, id=user.id, access_token=token)

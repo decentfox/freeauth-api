@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     debug: bool = False
     testing: bool = False
 
+    jwt_algorithm: str = "HS256"
+    jwt_token_ttl: int = 1440  # 分钟，默认为一天
+    jwt_secret_key: str = "secret_key"
+    jwt_cookie_key: str = "access_token"
+
     verify_code_ttl: int = 300  # in minutes
     verify_code_cool_down: int = 60  # in seconds
     demo_code: str = "888888"
