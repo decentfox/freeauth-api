@@ -9,7 +9,11 @@ from jose import jwt
 
 from ...admin.tests.test_users_api import create_user
 from ...config import get_settings
-from ...queries.query_api import AuthCodeType, AuthVerifyType
+from ...queries.query_api import (
+    AuthAuditEventType,
+    AuthCodeType,
+    AuthVerifyType,
+)
 
 
 def test_send_sign_in_code(test_client: TestClient):
@@ -172,11 +176,19 @@ def test_sign_in_with_code(test_client: TestClient):
     settings = get_settings()
     token = resp.cookies.get(settings.jwt_cookie_key)
     assert token is not None
-
     payload = jwt.decode(
         token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
     )
     assert payload["sub"] == user["id"]
+
+    resp = test_client.post("/audit_logs/query", json={})
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv["rows"]) == 1
+    assert rv["rows"][0]["event_type"] == AuthAuditEventType.SIGNIN.value
+    assert rv["rows"][0]["status_code"] == HTTPStatus.OK
+    assert rv["rows"][0]["user"]["email"] == account
+    assert rv["rows"][0]["os"] == "Mac OS X"
 
 
 async def test_sign_in_with_password(test_client: TestClient):

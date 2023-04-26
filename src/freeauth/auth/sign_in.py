@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from http import HTTPStatus
 
@@ -22,6 +23,7 @@ from . import router
 from .common import (
     AuthBodyConfig,
     create_access_token,
+    get_client_info,
     send_auth_code,
     validate_auth_code,
 )
@@ -132,12 +134,18 @@ async def sign_in_with_code(
     response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     user: CreateUserResult = Depends(verify_account_when_sign_in_with_code),
+    client_info: dict = Depends(get_client_info),
 ) -> CreateUserResult | None:
     await validate_auth_code(
         client, body.account, AuthVerifyType.SIGNIN, body.code
     )
     token = create_access_token(response, user.id)
-    return await sign_in(client, id=user.id, access_token=token)
+    return await sign_in(
+        client,
+        id=user.id,
+        access_token=token,
+        client_info=json.dumps(client_info),
+    )
 
 
 @router.post(
@@ -153,6 +161,7 @@ async def sign_in_with_pwd(
     user: GetUserByAccountResult = Depends(
         verify_account_when_sign_in_with_pwd
     ),
+    client_info: dict = Depends(get_client_info),
 ) -> CreateUserResult | None:
     if user.hashed_password != get_password_hash(body.password):
         raise HTTPException(
@@ -160,4 +169,9 @@ async def sign_in_with_pwd(
             detail={"account": "密码输入错误"},
         )
     token = create_access_token(response, user.id)
-    return await sign_in(client, id=user.id, access_token=token)
+    return await sign_in(
+        client,
+        id=user.id,
+        access_token=token,
+        client_info=json.dumps(client_info),
+    )

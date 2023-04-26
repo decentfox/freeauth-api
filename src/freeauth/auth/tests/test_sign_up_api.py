@@ -12,6 +12,7 @@ from jose import jwt
 from ...admin.tests.test_users_api import create_user
 from ...config import get_settings
 from ...queries.query_api import (
+    AuthAuditEventType,
     AuthCodeType,
     AuthVerifyType,
     send_code,
@@ -219,6 +220,13 @@ def test_sign_up(test_client: TestClient):
         token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
     )
     assert payload["sub"] == user["id"]
+
+    resp = test_client.post("/audit_logs/query", json={})
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv["rows"]) == 2
+    assert rv["rows"][0]["event_type"] == AuthAuditEventType.SIGNIN.value
+    assert rv["rows"][1]["event_type"] == AuthAuditEventType.SIGNUP.value
 
 
 async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):

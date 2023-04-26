@@ -15,7 +15,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from . import auth
-from .admin import users
+from .admin import audit_logs, users
 from .config import get_settings
 from .log import configure_logging
 
@@ -91,7 +91,8 @@ def get_app():
     async def health_check() -> dict[str, str]:
         return {"status": "Ok"}
 
-    app.include_router(users.router)
+    app.include_router(audit_logs.router)
     app.include_router(auth.get_router())
+    app.include_router(users.router)
 
     return app

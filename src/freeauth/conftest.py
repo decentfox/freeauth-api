@@ -74,7 +74,17 @@ def app(mocker) -> FastAPI:
 
 @pytest.fixture
 def test_client(app):
-    with TestClient(app) as client:
+    with TestClient(
+        app,
+        headers={
+            "user-agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/112.0.0.0 Safari/537.36"
+            ),
+            "x-forwarded-for": "162.158.233.39",
+        },
+    ) as client:
         yield client
 
 

@@ -15,6 +15,7 @@ httpx = "^0.23.3"
 pydantic = {extras = ["dotenv", "email"], version = "^1.10.7"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+user-agents = "^2.2.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"

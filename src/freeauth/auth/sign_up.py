@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from http import HTTPStatus
 
@@ -23,6 +24,7 @@ from . import router
 from .common import (
     AuthBodyConfig,
     create_access_token,
+    get_client_info,
     send_auth_code,
     validate_auth_code,
 )
@@ -113,6 +115,7 @@ async def sign_up_with_code(
     body: SignUpBody,
     response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+    client_info: dict = Depends(get_client_info),
 ) -> CreateUserResult | None:
     await validate_auth_code(
         client, body.account, AuthVerifyType.SIGNUP, body.code
@@ -127,6 +130,12 @@ async def sign_up_with_code(
         mobile=body.account if code_type == AuthCodeType.SMS else None,
         email=body.account if code_type == AuthCodeType.EMAIL else None,
         hashed_password=get_password_hash(password),
+        client_info=json.dumps(client_info),
     )
     token = create_access_token(response, user.id)
-    return await sign_in(client, id=user.id, access_token=token)
+    return await sign_in(
+        client,
+        id=user.id,
+        access_token=token,
+        client_info=json.dumps(client_info),
+    )

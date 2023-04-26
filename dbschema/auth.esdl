@@ -1,6 +1,7 @@
 module auth {
     scalar type CodeType extending enum<SMS, Email>;
     scalar type VerifyType extending enum<SignIn, SignUp>;
+    scalar type AuditEventType extending enum<SignIn, SignOut, SignUp>;
 
     type VerifyRecord extending default::TimeStamped {
         required property account -> str {
@@ -32,5 +33,34 @@ module auth {
         }
         property revoked_at -> datetime;
         property is_revoked := exists .revoked_at;
+    }
+
+    type AuditLog extending default::TimeStamped {
+        required link user -> default::User;
+        required property client_ip -> str {
+            readonly := true;
+        }
+        required property event_type -> AuditEventType {
+            readonly := true;
+        };
+        required property status_code -> int16 {
+            readonly := true;
+        };
+        property is_succeed := .status_code = 200;
+        property raw_ua -> str {
+            readonly := true;
+        };
+        property os -> str {
+            readonly := true;
+        };
+        property device -> str {
+            readonly := true;
+        };
+        property browser -> str {
+            readonly := true;
+        };
+
+        index on (.event_type);
+        index on (.is_succeed);
     }
 }
