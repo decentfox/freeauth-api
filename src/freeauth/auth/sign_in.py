@@ -139,7 +139,7 @@ async def sign_in_with_code(
     await validate_auth_code(
         client, body.account, AuthVerifyType.SIGNIN, body.code
     )
-    token = create_access_token(response, user.id)
+    token = await create_access_token(client, response, user.id)
     return await sign_in(
         client,
         id=user.id,
@@ -168,7 +168,7 @@ async def sign_in_with_pwd(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail={"account": "密码输入错误"},
         )
-    token = create_access_token(response, user.id)
+    token = await create_access_token(client, response, user.id)
     return await sign_in(
         client,
         id=user.id,

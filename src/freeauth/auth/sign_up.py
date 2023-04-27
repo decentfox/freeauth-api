@@ -132,7 +132,7 @@ async def sign_up_with_code(
         hashed_password=get_password_hash(password),
         client_info=json.dumps(client_info),
     )
-    token = create_access_token(response, user.id)
+    token = await create_access_token(client, response, user.id)
     return await sign_in(
         client,
         id=user.id,

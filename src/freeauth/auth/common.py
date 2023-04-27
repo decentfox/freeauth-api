@@ -21,6 +21,7 @@ from ..queries.query_api import (
     send_code,
     validate_code,
 )
+from ..settings import get_login_settings
 from ..utils import MOBILE_REGEX, gen_random_string
 
 
@@ -94,12 +95,16 @@ async def validate_auth_code(
         )
 
 
-def create_access_token(response: Response, user_id: uuid.UUID) -> str:
+async def create_access_token(
+    client: edgedb.AsyncIOClient, response: Response, user_id: uuid.UUID
+) -> str:
     now = datetime.utcnow()
     config = get_config()
+    login_settings = get_login_settings()
+    jwt_token_ttl = await login_settings.get("jwt_token_ttl", client)
     payload = {
         "sub": str(user_id),
-        "exp": now + timedelta(minutes=config.jwt_token_ttl),
+        "exp": now + timedelta(minutes=jwt_token_ttl or config.jwt_token_ttl),
     }
     token = jwt.encode(
         payload, config.jwt_secret_key, algorithm=config.jwt_algorithm
@@ -108,7 +113,8 @@ def create_access_token(response: Response, user_id: uuid.UUID) -> str:
         key=config.jwt_cookie_key,
         value=token,
         httponly=True,
-        max_age=config.jwt_token_ttl * 60,
+        max_age=jwt_token_ttl * 60 if jwt_token_ttl else None,
+        samesite="strict",
     )
     return token
 
