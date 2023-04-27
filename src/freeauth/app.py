@@ -4,7 +4,7 @@ import functools
 from typing import Dict, Union, cast
 
 import edgedb
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
@@ -16,8 +16,10 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from . import auth
 from .admin import audit_logs, users
-from .config import get_settings
+from .config import get_config
 from .log import configure_logging
+
+router = APIRouter(prefix="/v1")
 
 
 async def setup_edgedb(app):
@@ -72,9 +74,9 @@ async def http_exception_accept_handler(
 
 
 def get_app():
-    settings = get_settings()
+    config = get_config()
     app = FastAPI(
-        debug=settings.debug,
+        debug=config.debug,
         title="FreeAuth",
         description="Async REST API in Python for FreeAuth.",
         exception_handlers={
@@ -91,8 +93,13 @@ def get_app():
     async def health_check() -> dict[str, str]:
         return {"status": "Ok"}
 
+    from .settings import endpoints  # noqa
+
+    app.include_router(router)
+
     app.include_router(audit_logs.router)
     app.include_router(auth.get_router())
+    # app.include_router(endpoints.endpoints)
     app.include_router(users.router)
 
     return app

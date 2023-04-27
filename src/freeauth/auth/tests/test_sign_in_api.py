@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from jose import jwt
 
 from ...admin.tests.test_users_api import create_user
-from ...config import get_settings
+from ...config import get_config
 from ...queries.query_api import (
     AuthAuditEventType,
     AuthCodeType,
@@ -111,14 +111,14 @@ def test_validate_sign_in_code_failed(
         email="user@example.com",
         mobile="13800000000",
     )
-    settings = get_settings()
+    config = get_config()
     if (
-        data.get("account") in settings.demo_accounts
-        and data.get("code") == settings.demo_code
+        data.get("account") in config.demo_accounts
+        and data.get("code") == config.demo_code
     ):
-        ttl, settings.verify_code_ttl = settings.verify_code_ttl, -1
+        ttl, config.verify_code_ttl = config.verify_code_ttl, -1
         test_client.post("/sign_in/code", json={"account": data["account"]})
-        settings.verify_code_ttl = ttl
+        config.verify_code_ttl = ttl
 
     resp = test_client.post("/sign_in/verify", json=data)
     error = resp.json()
@@ -173,11 +173,11 @@ def test_sign_in_with_code(test_client: TestClient):
     assert user["email"] == account
     assert user["last_login_at"] is not None
 
-    settings = get_settings()
-    token = resp.cookies.get(settings.jwt_cookie_key)
+    config = get_config()
+    token = resp.cookies.get(config.jwt_cookie_key)
     assert token is not None
     payload = jwt.decode(
-        token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+        token, config.jwt_secret_key, algorithms=[config.jwt_algorithm]
     )
     assert payload["sub"] == user["id"]
 

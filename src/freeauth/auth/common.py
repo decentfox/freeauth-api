@@ -12,7 +12,7 @@ from jose import jwt
 from user_agents import parse  # type: ignore
 
 from .. import logger
-from ..config import get_settings
+from ..config import get_config
 from ..queries.query_api import (
     AuthCodeType,
     AuthVerifyType,
@@ -42,9 +42,9 @@ async def send_auth_code(
 
     # TODO: validate code limit
 
-    settings = get_settings()
-    if account in settings.demo_accounts:
-        code = settings.demo_code
+    config = get_config()
+    if account in config.demo_accounts:
+        code = config.demo_code
     else:
         code = gen_random_string(6, letters=string.digits)
     rv = await send_code(
@@ -53,7 +53,7 @@ async def send_auth_code(
         code_type=code_type.value,  # type: ignore
         verify_type=verify_type.value,  # type: ignore
         code=code,
-        ttl=settings.verify_code_ttl,
+        ttl=config.verify_code_ttl,
     )
     logger.info(
         "Send %s %s to account %s by %s",
@@ -96,16 +96,19 @@ async def validate_auth_code(
 
 def create_access_token(response: Response, user_id: uuid.UUID) -> str:
     now = datetime.utcnow()
-    settings = get_settings()
+    config = get_config()
     payload = {
         "sub": str(user_id),
-        "exp": now + timedelta(minutes=settings.jwt_token_ttl),
+        "exp": now + timedelta(minutes=config.jwt_token_ttl),
     }
     token = jwt.encode(
-        payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+        payload, config.jwt_secret_key, algorithm=config.jwt_algorithm
     )
     response.set_cookie(
-        key=settings.jwt_cookie_key, value=token, httponly=True
+        key=config.jwt_cookie_key,
+        value=token,
+        httponly=True,
+        max_age=config.jwt_token_ttl * 60,
     )
     return token
 

@@ -2,6 +2,8 @@
 #     'src/freeauth/queries/auth/create_audit_log.edgeql'
 #     'src/freeauth/queries/admin/create_user.edgeql'
 #     'src/freeauth/queries/admin/delete_user.edgeql'
+#     'src/freeauth/settings/queries/get_login_setting.edgeql'
+#     'src/freeauth/settings/queries/get_login_setting_by_key.edgeql'
 #     'src/freeauth/queries/auth/get_user_by_account.edgeql'
 #     'src/freeauth/queries/admin/get_user_by_id.edgeql'
 #     'src/freeauth/queries/auth/send_code.edgeql'
@@ -9,6 +11,7 @@
 #     'src/freeauth/queries/auth/sign_up.edgeql'
 #     'src/freeauth/queries/admin/update_user.edgeql'
 #     'src/freeauth/queries/admin/update_user_status.edgeql'
+#     'src/freeauth/settings/queries/upsert_login_setting.edgeql'
 #     'src/freeauth/queries/auth/validate_code.edgeql'
 # WITH:
 #     $ edgedb-py --file src/freeauth/queries/query_api.py
@@ -88,6 +91,13 @@ class CreateUserResult(NoPydanticValidation):
 class DeleteUserResult(NoPydanticValidation):
     id: uuid.UUID
     name: str | None
+
+
+@dataclasses.dataclass
+class GetLoginSettingResult(NoPydanticValidation):
+    id: uuid.UUID
+    key: str
+    value: str
 
 
 @dataclasses.dataclass
@@ -221,6 +231,29 @@ async def delete_user(
     )
 
 
+async def get_login_setting(
+    executor: edgedb.AsyncIOExecutor,
+) -> list[GetLoginSettingResult]:
+    return await executor.query(
+        """\
+        SELECT LoginSetting { key, value } ORDER BY .key;\
+        """,
+    )
+
+
+async def get_login_setting_by_key(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    key: str,
+) -> GetLoginSettingResult | None:
+    return await executor.query_single(
+        """\
+        SELECT LoginSetting { key, value } FILTER .key = <str>$key;\
+        """,
+        key=key,
+    )
+
+
 async def get_user_by_account(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -331,6 +364,7 @@ async def sign_in(
                     client_ip := <str>client_info.client_ip,
                     event_type := <auth::AuditEventType>'SignIn',
                     status_code := <int16>200,
+                    raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
                     browser := <str>client_info.user_agent['browser'],
@@ -463,6 +497,31 @@ async def update_user_status(
         """,
         user_ids=user_ids,
         is_deleted=is_deleted,
+    )
+
+
+async def upsert_login_setting(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    key: str,
+    value: str,
+) -> GetLoginSettingResult:
+    return await executor.query_single(
+        """\
+        WITH
+            key := <str>$key,
+            value := <str>$value
+        SELECT (
+            INSERT LoginSetting {
+                key := key,
+                value := value
+            } UNLESS CONFLICT ON (.key) ELSE (
+                UPDATE LoginSetting SET { value := value}
+            )
+        ) { key, value };\
+        """,
+        key=key,
+        value=value,
     )
 
 
