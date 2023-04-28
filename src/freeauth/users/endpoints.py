@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException
 
 from .. import get_edgedb_client
 from ..app import router
-from ..forms import PaginatedData, QueryBody
+from ..dataclasses import PaginatedData, QueryBody
 from ..query_api import (
     CreateUserResult,
     DeleteUserResult,
@@ -21,7 +21,12 @@ from ..query_api import (
     update_user_status,
 )
 from ..utils import gen_random_string, get_password_hash
-from .forms import UserDeleteBody, UserPostBody, UserPutBody, UserStatusBody
+from .dataclasses import (
+    UserDeleteBody,
+    UserPostBody,
+    UserPutBody,
+    UserStatusBody,
+)
 
 
 @router.post(

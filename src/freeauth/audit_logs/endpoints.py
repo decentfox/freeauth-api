@@ -5,7 +5,7 @@ from fastapi import Depends
 
 from .. import get_edgedb_client
 from ..app import router
-from ..forms import PaginatedData, QueryBody
+from ..dataclasses import PaginatedData, QueryBody
 
 
 @router.post(

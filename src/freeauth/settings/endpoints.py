@@ -8,16 +8,9 @@ from fastapi import Depends, HTTPException
 
 from .. import get_edgedb_client
 from ..app import router
-from . import LoginSettings, get_login_settings
-from .forms import LoginSettingBody
-
-
-def get_setting_keys():
-    return [
-        x
-        for x in vars(LoginSettings).keys()
-        if not callable(getattr(LoginSettings, x)) and not x.startswith("_")
-    ]
+from . import get_login_settings
+from .dataclasses import LoginSettingBody
+from .dependencies import get_setting_keys
 
 
 @router.get(

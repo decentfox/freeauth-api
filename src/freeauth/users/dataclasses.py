@@ -6,7 +6,7 @@ from typing import List
 from pydantic import EmailStr, Field, root_validator, validator
 from pydantic.dataclasses import dataclass
 
-from ..forms import BaseModelConfig
+from ..dataclasses import BaseModelConfig
 from ..utils import MOBILE_REGEX
 
 

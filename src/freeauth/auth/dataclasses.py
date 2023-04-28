@@ -5,7 +5,7 @@ import re
 from pydantic import EmailStr, Field, validator
 from pydantic.dataclasses import dataclass
 
-from ..forms import BaseModelConfig
+from ..dataclasses import BaseModelConfig
 from ..query_api import AuthCodeType
 from ..utils import MOBILE_REGEX
 
