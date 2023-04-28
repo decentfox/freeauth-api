@@ -15,7 +15,7 @@ TYPE_MAPPING = {
 }
 
 
-class QueryBodyConfig:
+class BaseModelConfig:
     anystr_strip_whitespace = True
     error_msg_templates = {
         "value_error.missing": "该字段为必填项",
@@ -60,7 +60,7 @@ class FilterItem:
     value: Any = Field(..., title="值")
 
 
-@dataclass(config=QueryBodyConfig)
+@dataclass(config=BaseModelConfig)
 class QueryBody:
     q: str | None = Field(
         None,

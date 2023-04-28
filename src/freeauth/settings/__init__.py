@@ -5,7 +5,7 @@ from functools import lru_cache
 
 import edgedb
 
-from ..queries.query_api import (
+from ..query_api import (
     GetLoginSettingResult,
     get_login_setting,
     get_login_setting_by_key,

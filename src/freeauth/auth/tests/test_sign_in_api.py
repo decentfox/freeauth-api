@@ -7,30 +7,26 @@ import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
 
-from ...admin.tests.test_users_api import create_user
 from ...config import get_config
-from ...queries.query_api import (
-    AuthAuditEventType,
-    AuthCodeType,
-    AuthVerifyType,
-)
+from ...query_api import AuthAuditEventType, AuthCodeType, AuthVerifyType
+from ...users.tests.test_api import create_user
 
 
 def test_send_sign_in_code(test_client: TestClient):
     data: Dict = {}
-    resp = test_client.post("/sign_in/code", json=data)
+    resp = test_client.post("/v1/sign_in/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "该字段为必填项"
 
     data["account"] = "invalid_account"
-    resp = test_client.post("/sign_in/code", json=data)
+    resp = test_client.post("/v1/sign_in/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "手机号码或邮箱格式有误"
 
     data["account"] = "user@example.com"
-    resp = test_client.post("/sign_in/code", json=data)
+    resp = test_client.post("/v1/sign_in/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert (
@@ -43,14 +39,14 @@ def test_send_sign_in_code(test_client: TestClient):
         email="user@example.com",
     )
     resp = test_client.put(
-        "/users/status",
+        "/v1/users/status",
         json={
             "user_ids": [str(user.id)],
             "is_deleted": True,
         },
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
-    resp = test_client.post("/sign_in/code", json=data)
+    resp = test_client.post("/v1/sign_in/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "您的账号已停用"
@@ -60,7 +56,7 @@ def test_send_sign_in_code(test_client: TestClient):
         mobile="13800000000",
     )
     data["account"] = "13800000000"
-    resp = test_client.post("/sign_in/code", json=data)
+    resp = test_client.post("/v1/sign_in/code", json=data)
     resp_data = resp.json()
     assert resp.status_code == HTTPStatus.OK, resp_data
     assert resp_data["account"] == user.mobile
@@ -117,10 +113,10 @@ def test_validate_sign_in_code_failed(
         and data.get("code") == config.demo_code
     ):
         ttl, config.verify_code_ttl = config.verify_code_ttl, -1
-        test_client.post("/sign_in/code", json={"account": data["account"]})
+        test_client.post("/v1/sign_in/code", json={"account": data["account"]})
         config.verify_code_ttl = ttl
 
-    resp = test_client.post("/sign_in/verify", json=data)
+    resp = test_client.post("/v1/sign_in/verify", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"] == errors
@@ -132,7 +128,7 @@ def test_sign_in_with_code(test_client: TestClient):
         "account": account,
         "code": "123123",
     }
-    resp = test_client.post("/sign_in/verify", json=data)
+    resp = test_client.post("/v1/sign_in/verify", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert (
@@ -145,14 +141,14 @@ def test_sign_in_with_code(test_client: TestClient):
         mobile=account,
     )
     resp = test_client.put(
-        "/users/status",
+        "/v1/users/status",
         json={
             "user_ids": [str(user.id)],
             "is_deleted": True,
         },
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
-    resp = test_client.post("/sign_in/verify", json=data)
+    resp = test_client.post("/v1/sign_in/verify", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "您的账号已停用"
@@ -162,12 +158,12 @@ def test_sign_in_with_code(test_client: TestClient):
         test_client,
         email=account,
     )
-    test_client.post("/sign_in/code", json={"account": account})
+    test_client.post("/v1/sign_in/code", json={"account": account})
     data = {
         "account": account,
         "code": "888888",
     }
-    resp = test_client.post("/sign_in/verify", json=data)
+    resp = test_client.post("/v1/sign_in/verify", json=data)
     user = resp.json()
     assert resp.status_code == HTTPStatus.OK, user
     assert user["email"] == account
@@ -181,7 +177,7 @@ def test_sign_in_with_code(test_client: TestClient):
     )
     assert payload["sub"] == user["id"]
 
-    resp = test_client.post("/audit_logs/query", json={})
+    resp = test_client.post("/v1/audit_logs/query", json={})
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["rows"]) == 1
@@ -192,7 +188,7 @@ def test_sign_in_with_code(test_client: TestClient):
 
 
 async def test_sign_in_with_password(test_client: TestClient):
-    resp = test_client.post("/sign_in", json={})
+    resp = test_client.post("/v1/sign_in", json={})
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "该字段为必填项"
@@ -203,7 +199,7 @@ async def test_sign_in_with_password(test_client: TestClient):
         "account": account,
         "password": "123123",
     }
-    resp = test_client.post("/sign_in", json=data)
+    resp = test_client.post("/v1/sign_in", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert (

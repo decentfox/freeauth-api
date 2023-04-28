@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import edgedb
-from fastapi import APIRouter, Depends
+from fastapi import Depends
 
 from .. import get_edgedb_client
-from .common import PaginatedData, QueryBody
-
-router = APIRouter(tags=["审计日志"])
+from ..app import router
+from ..forms import PaginatedData, QueryBody
 
 
 @router.post(

@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import Field
 from pydantic.dataclasses import dataclass
 
-from ..base import BaseModelConfig
+from ..forms import BaseModelConfig
 
 
 @dataclass(config=BaseModelConfig)

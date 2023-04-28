@@ -9,20 +9,15 @@ import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
 
-from ...admin.tests.test_users_api import create_user
 from ...config import get_config
-from ...queries.query_api import (
-    AuthCodeType,
-    AuthVerifyType,
-    send_code,
-    validate_code,
-)
+from ...query_api import AuthCodeType, AuthVerifyType, send_code, validate_code
+from ...users.tests.test_api import create_user
 from ...utils import gen_random_string
 
 
 def test_send_sign_up_code(test_client: TestClient):
     data: Dict = {}
-    resp = test_client.post("/sign_up/code", json=data)
+    resp = test_client.post("/v1/sign_up/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "该字段为必填项"
@@ -32,7 +27,7 @@ def test_send_sign_up_code(test_client: TestClient):
         account="user@example.com",
         code_type=AuthCodeType.EMAIL.value,
     )
-    resp = test_client.post("/sign_up/code", json=data)
+    resp = test_client.post("/v1/sign_up/code", json=data)
     resp_data = resp.json()
     assert resp.status_code == HTTPStatus.OK, resp_data
     assert resp_data["account"] == data["account"]
@@ -42,26 +37,26 @@ def test_send_sign_up_code(test_client: TestClient):
         account="13800000000",
         code_type=AuthCodeType.SMS.value,
     )
-    resp = test_client.post("/sign_up/code", json=data)
+    resp = test_client.post("/v1/sign_up/code", json=data)
     resp_data = resp.json()
     assert resp.status_code == HTTPStatus.OK, resp_data
     assert resp_data["account"] == data["account"]
     assert resp_data["verify_type"] == AuthVerifyType.SIGNUP.value
 
     data["account"] = "invalid-account"
-    resp = test_client.post("/sign_up/code", json=data)
+    resp = test_client.post("/v1/sign_up/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "仅支持中国大陆11位手机号"
 
     data["code_type"] = AuthCodeType.EMAIL.value
-    resp = test_client.post("/sign_up/code", json=data)
+    resp = test_client.post("/v1/sign_up/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "邮箱格式有误"
 
     data["code_type"] = "InvalidType"
-    resp = test_client.post("/sign_up/code", json=data)
+    resp = test_client.post("/v1/sign_up/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["code_type"] == "不是有效的枚举值"
@@ -76,7 +71,7 @@ def test_send_sign_up_code(test_client: TestClient):
         account="13800000000",
         code_type=AuthCodeType.SMS.value,
     )
-    resp = test_client.post("/sign_up/code", json=data)
+    resp = test_client.post("/v1/sign_up/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "该账号已注册，请直接登录"
@@ -85,13 +80,13 @@ def test_send_sign_up_code(test_client: TestClient):
         account="user@example.com",
         code_type=AuthCodeType.EMAIL.value,
     )
-    resp = test_client.post("/sign_up/code", json=data)
+    resp = test_client.post("/v1/sign_up/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "该账号已注册，请直接登录"
 
     data["account"] = "user1@example.com"
-    resp = test_client.post("/sign_up/code", json=data)
+    resp = test_client.post("/v1/sign_up/code", json=data)
     record = resp.json()
     assert resp.status_code == HTTPStatus.OK, record
     assert record["account"] == data["account"]
@@ -164,12 +159,12 @@ def test_validate_sign_up_code_failed(
     ):
         ttl, config.verify_code_ttl = config.verify_code_ttl, -1
         test_client.post(
-            "/sign_up/code",
+            "/v1/sign_up/code",
             json={"account": data["account"], "code_type": data["code_type"]},
         )
         config.verify_code_ttl = ttl
 
-    resp = test_client.post("/sign_up/verify", json=data)
+    resp = test_client.post("/v1/sign_up/verify", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"] == errors
@@ -187,14 +182,14 @@ def test_sign_up(test_client: TestClient):
         "code": "123123",
         "code_type": AuthCodeType.SMS.value,
     }
-    resp = test_client.post("/sign_up/verify", json=data)
+    resp = test_client.post("/v1/sign_up/verify", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "该账号已注册，请直接登录"
 
     account = "user@example.com"
     test_client.post(
-        "/sign_up/code",
+        "/v1/sign_up/code",
         json={
             "account": account,
             "code_type": AuthCodeType.EMAIL.value,
@@ -205,7 +200,7 @@ def test_sign_up(test_client: TestClient):
         "code": "888888",
         "code_type": AuthCodeType.EMAIL.value,
     }
-    resp = test_client.post("/sign_up/verify", json=data)
+    resp = test_client.post("/v1/sign_up/verify", json=data)
     user = resp.json()
     assert resp.status_code == HTTPStatus.OK, user
     assert user["email"] == account
@@ -220,7 +215,7 @@ def test_sign_up(test_client: TestClient):
     )
     assert payload["sub"] == user["id"]
 
-    resp = test_client.post("/audit_logs/query", json={})
+    resp = test_client.post("/v1/audit_logs/query", json={})
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["rows"]) == 2
