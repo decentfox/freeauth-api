@@ -28,6 +28,12 @@ from .dataclasses import (
     UserStatusBody,
 )
 
+FILTER_TYPE_MAPPING = {
+    "last_login_at": "datetime",
+    "created_at": "datetime",
+    "is_deleted": "bool",
+}
+
 
 @router.post(
     "/users",
@@ -151,7 +157,7 @@ async def query_users(
     body: QueryBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
-    filtering_expr = body.get_filtering_expr(CreateUserResult)
+    filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
     result = await client.query_single_json(
         f"""\
         WITH

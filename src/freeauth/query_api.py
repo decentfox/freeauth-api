@@ -62,6 +62,7 @@ class CreateAuditLogResult(NoPydanticValidation):
     device: str | None
     browser: str | None
     status_code: int
+    is_succeed: bool
     event_type: AuthAuditEventType
     created_at: datetime.datetime
     user: CreateAuditLogResultUser
@@ -162,6 +163,7 @@ async def create_audit_log(
             device,
             browser,
             status_code,
+            is_succeed,
             event_type,
             created_at,
             user: {

@@ -6,14 +6,6 @@ from typing import Any, List
 from pydantic import BaseModel, Field
 from pydantic.dataclasses import dataclass
 
-TYPE_MAPPING = {
-    "str": "str",
-    "int": "int64",
-    "bool": "bool",
-    "uuid.UUID": "uuid",
-    "datetime.datetime": "datetime",
-}
-
 
 class BaseModelConfig:
     anystr_strip_whitespace = True
@@ -114,19 +106,16 @@ class QueryBody:
             else ".created_at desc"
         )
 
-    def get_filtering_expr(self, obj_cls) -> str:
+    def get_filtering_expr(self, type_mapping: dict[str, str]) -> str:
         if not self.filter_by:
             return "true"
 
         ret: list = []
-        user_annotations = obj_cls.__dict__.get("__annotations__", {})
-        for field in self.filter_by:
-            val_type = TYPE_MAPPING[
-                user_annotations[field.field].split(" | ")[0]
-            ]
+        for item in self.filter_by:
+            val_type = type_mapping.get(item.field, "str")
             ret.append(
-                field.operator.format(
-                    f".{field.field}", f"<{val_type}>'{field.value}'"
+                item.operator.format(
+                    f".{item.field}", f"<{val_type}>'{item.value}'"
                 )
             )
         return " and ".join(ret)

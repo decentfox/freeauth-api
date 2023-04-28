@@ -163,6 +163,7 @@ async def sign_up_with_code(
     code_type: AuthCodeType = body.code_type
     username: str = gen_random_string(8)
     password: str = gen_random_string(12, secret=True)
+    client_info: str = json.dumps(client_info)
     user = await sign_up(
         client,
         name=username,
@@ -170,14 +171,14 @@ async def sign_up_with_code(
         mobile=body.account if code_type == AuthCodeType.SMS else None,
         email=body.account if code_type == AuthCodeType.EMAIL else None,
         hashed_password=get_password_hash(password),
-        client_info=json.dumps(client_info),
+        client_info=client_info,
     )
     token = await create_access_token(client, response, user.id)
     return await sign_in(
         client,
         id=user.id,
         access_token=token,
-        client_info=json.dumps(client_info),
+        client_info=client_info,
     )
 
 

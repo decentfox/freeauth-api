@@ -20,6 +20,7 @@ SELECT (
     device,
     browser,
     status_code,
+    is_succeed,
     event_type,
     created_at,
     user: {

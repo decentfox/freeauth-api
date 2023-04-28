@@ -7,6 +7,12 @@ from .. import get_edgedb_client
 from ..app import router
 from ..dataclasses import PaginatedData, QueryBody
 
+FILTER_TYPE_MAPPING = {
+    "event_type": "auth::AuditEventType",
+    "created_at": "datetime",
+    "is_succeed": "bool",
+}
+
 
 @router.post(
     "/audit_logs/query",
@@ -17,13 +23,25 @@ async def query_audit_logs(
     body: QueryBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
+    filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
     result = await client.query_single_json(
         f"""\
         WITH
             page := <optional int64>$page ?? 1,
             per_page := <optional int64>$per_page ?? 20,
             q := <optional str>$q,
-            audit_logs := (SELECT auth::AuditLog),
+            audit_logs := (
+                SELECT auth::AuditLog
+                FILTER (
+                    true IF not EXISTS q ELSE
+                    .raw_ua ?? '' ILIKE q OR
+                    .client_ip ?? '' ILIKE q OR
+                    .user.name ?? '' ILIKE q OR
+                    .user.username ?? '' ILIKE q OR
+                    .user.mobile ?? '' ILIKE q OR
+                    .user.email ?? '' ILIKE q
+                ) AND {filtering_expr}
+            ),
             total := count(audit_logs)
         SELECT (
             total := total,
@@ -43,6 +61,7 @@ async def query_audit_logs(
                     device,
                     browser,
                     status_code,
+                    is_succeed,
                     created_at
                 }}
                 ORDER BY {body.ordering_expr}
