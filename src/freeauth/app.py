@@ -93,6 +93,7 @@ def get_app():
 
     from .audit_logs import endpoints  # noqa
     from .auth import endpoints  # noqa
+    from .organizations import endpoints  # noqa
     from .settings import endpoints  # noqa
     from .users import endpoints  # noqa
 

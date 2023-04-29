@@ -16,6 +16,7 @@ FILTER_TYPE_MAPPING = {
 
 @router.post(
     "/audit_logs/query",
+    tags=["审计日志"],
     summary="获取审计日志列表",
     description="分页获取，支持关键字搜索、排序及条件过滤",
 )

@@ -132,7 +132,7 @@ async def create_access_token(
 
 @router.post(
     "/sign_up/code",
-    status_code=HTTPStatus.OK,
+    tags=["认证相关"],
     summary="发送注册验证码",
     description="通过短信或邮件发送注册验证码",
     dependencies=[Depends(verify_new_account_when_send_code)],
@@ -146,7 +146,7 @@ async def send_signup_code(
 
 @router.post(
     "/sign_up/verify",
-    status_code=HTTPStatus.OK,
+    tags=["认证相关"],
     summary="使用验证码注册账号",
     description="通过手机号或邮箱注册账号",
     dependencies=[Depends(verify_account_when_sign_up)],
@@ -184,7 +184,7 @@ async def sign_up_with_code(
 
 @router.post(
     "/sign_in/code",
-    status_code=HTTPStatus.OK,
+    tags=["认证相关"],
     summary="发送登录验证码",
     description="通过短信或邮件发送登录验证码",
     dependencies=[Depends(verify_account_when_send_code)],
@@ -198,7 +198,7 @@ async def send_signin_code(
 
 @router.post(
     "/sign_in/verify",
-    status_code=HTTPStatus.OK,
+    tags=["认证相关"],
     summary="使用验证码登录账号",
     description="通过手机号或邮箱及验证码登录账号",
 )
@@ -223,7 +223,7 @@ async def sign_in_with_code(
 
 @router.post(
     "/sign_in",
-    status_code=HTTPStatus.OK,
+    tags=["认证相关"],
     summary="使用密码登录账号",
     description="通过用户名或手机号或邮箱及密码登录账号",
 )
