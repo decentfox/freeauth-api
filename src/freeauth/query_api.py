@@ -278,7 +278,7 @@ async def delete_org_type(
         """\
         SELECT (
             DELETE OrganizationType
-            FILTER .id in array_unpack(<array<uuid>>$ids)
+            FILTER .id in array_unpack(<array<uuid>>$ids) AND NOT .is_protected
         ) { name };\
         """,
         ids=ids,
@@ -556,7 +556,8 @@ async def update_org_type(
                 description := description ?? .description,
                 deleted_at := (
                     .deleted_at IF NOT EXISTS is_deleted ELSE
-                    datetime_of_transaction() IF is_deleted ELSE {}
+                    datetime_of_transaction()
+                    IF is_deleted AND NOT .is_protected ELSE {}
                 )
             }
         ) { name, description, is_deleted, is_protected };\
@@ -580,7 +581,7 @@ async def update_org_type_status(
             is_deleted := <bool>$is_deleted
         SELECT (
             UPDATE OrganizationType
-            FILTER .id in array_unpack(<array<uuid>>$ids)
+            FILTER .id in array_unpack(<array<uuid>>$ids) AND NOT .is_protected
             SET {
                 deleted_at := datetime_of_transaction() IF is_deleted ELSE {}
             }

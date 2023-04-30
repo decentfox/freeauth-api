@@ -3,6 +3,7 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import Any
 
+import edgedb
 import pytest
 from fastapi.testclient import TestClient
 
@@ -65,16 +66,31 @@ def test_create_org_type(test_client: TestClient):
 
 
 @pytest.fixture
-async def org_type(test_client: TestClient) -> CreateOrgTypeResult:
+def org_type(test_client: TestClient) -> CreateOrgTypeResult:
     resp = test_client.post(
         "/v1/org_types", json={"name": "集团", "description": "描述"}
     )
     return CreateOrgTypeResult(**resp.json())
 
 
+@pytest.fixture
+async def default_org_type(edgedb_client: edgedb.AsyncIOClient):
+    org_type = await edgedb_client.query_single("""\
+        SELECT OrganizationType FILTER .is_protected = true LIMIT 1""")
+    yield org_type
+
+
 def test_update_org_type(
-    test_client: TestClient, org_type: CreateOrgTypeResult
+    test_client: TestClient,
+    org_type: CreateOrgTypeResult,
+    default_org_type,
 ):
+    not_found_id = "12345678-1234-5678-1234-567812345678"
+    resp = test_client.put(f"/v1/org_types/{not_found_id}", json={})
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.NOT_FOUND, error
+    assert error["detail"]["message"] == "更新组织类型失败：组织类型不存在"
+
     data: dict[str, Any] = {}
     resp = test_client.put(f"/v1/org_types/{org_type.id}", json=data)
     rv = resp.json()
@@ -102,6 +118,18 @@ def test_update_org_type(
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["name"] == "最大支持的长度为20个字符"
 
+    data = {
+        "name": "默认内部组织",
+        "description": "系统默认组织类型",
+        "is_deleted": True,
+    }
+    resp = test_client.put(f"/v1/org_types/{default_org_type.id}", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["name"] == "默认内部组织"
+    assert rv["description"] == "系统默认组织类型"
+    assert not rv["is_deleted"]
+
 
 def test_get_org_type(test_client: TestClient, org_type: CreateOrgTypeResult):
     not_found_id = "12345678-1234-5678-1234-567812345678"
@@ -116,7 +144,7 @@ def test_get_org_type(test_client: TestClient, org_type: CreateOrgTypeResult):
 
 
 def test_toggle_org_type_status(
-    test_client: TestClient, org_type: CreateOrgTypeResult
+    test_client: TestClient, org_type: CreateOrgTypeResult, default_org_type
 ):
     data: dict[str, Any] = {}
     resp = test_client.put("/v1/org_types/status", json=data)
@@ -148,7 +176,7 @@ def test_toggle_org_type_status(
     resp = test_client.put("/v1/org_types/status", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 1
+    assert len(rv["org_types"]) == 1
     assert rv["org_types"][0] == {
         "id": str(org_type.id),
         "name": org_type.name,
@@ -162,16 +190,25 @@ def test_toggle_org_type_status(
     resp = test_client.put("/v1/org_types/status", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 1
+    assert len(rv["org_types"]) == 1
     assert rv["org_types"][0] == {
         "id": str(org_type.id),
         "name": org_type.name,
         "is_deleted": False,
     }
 
+    data = {
+        "ids": [str(default_org_type.id)],
+        "is_deleted": True,
+    }
+    resp = test_client.put("/v1/org_types/status", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv["org_types"]) == 0
+
 
 def test_delete_org_types(
-    test_client: TestClient, org_type: CreateOrgTypeResult
+    test_client: TestClient, org_type: CreateOrgTypeResult, default_org_type
 ):
     data: dict[str, Any] = {}
     resp = test_client.request("DELETE", "/v1/org_types", json=data)
@@ -209,3 +246,19 @@ def test_delete_org_types(
         {"id": org_type1["id"], "name": org_type1["name"]},
         {"id": org_type2["id"], "name": org_type2["name"]},
     ]
+
+    data = {
+        "ids": [str(default_org_type.id)],
+    }
+    resp = test_client.request("DELETE", "/v1/org_types", json=data)
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+    assert len(resp.json()["org_types"]) == 0
+
+
+def test_get_org_types(
+    test_client: TestClient, default_org_type, org_type: CreateOrgTypeResult
+):
+    resp = test_client.get("/v1/org_types")
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv["org_types"]) == 2

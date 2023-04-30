@@ -10,7 +10,8 @@ SELECT (
         description := description ?? .description,
         deleted_at := (
             .deleted_at IF NOT EXISTS is_deleted ELSE
-            datetime_of_transaction() IF is_deleted ELSE {}
+            datetime_of_transaction()
+            IF is_deleted AND NOT .is_protected ELSE {}
         )
     }
 ) { name, description, is_deleted, is_protected };

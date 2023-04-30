@@ -229,11 +229,9 @@ def test_delete_users(test_client: TestClient, user: CreateUserResult):
     }
     resp = test_client.request("DELETE", "/v1/users", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
-    assert resp.json()["users"] == [
-        {"id": str(user.id), "name": user.name},
-        {"id": user1["id"], "name": user1["name"]},
-        {"id": user2["id"], "name": user2["name"]},
-    ]
+    assert sorted(u["id"] for u in resp.json()["users"]) == sorted(
+        [str(user.id), user1["id"], user2["id"]]
+    )
 
 
 @pytest.mark.parametrize(
