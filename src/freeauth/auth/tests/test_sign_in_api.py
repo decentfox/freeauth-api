@@ -12,6 +12,19 @@ from ...query_api import AuthAuditEventType, AuthCodeType, AuthVerifyType
 from ...users.tests.test_api import create_user
 
 
+@pytest.fixture(autouse=True)
+def login_settings_for_signup(test_client: TestClient):
+    # enable all signup modes
+    test_client.put(
+        "/v1/login_settings/code_signin_modes",
+        json={"value": ["mobile", "email"]},
+    )
+    test_client.put(
+        "/v1/login_settings/pwd_signin_modes",
+        json={"value": ["username", "mobile", "email"]},
+    )
+
+
 def test_send_sign_in_code(test_client: TestClient):
     data: Dict = {}
     resp = test_client.post("/v1/sign_in/code", json=data)
@@ -31,7 +44,7 @@ def test_send_sign_in_code(test_client: TestClient):
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert (
         error["detail"]["errors"]["account"]
-        == "账号未注册，请您确认登录名输入是否正确"
+        == "账号不存在，请您确认登录信息输入是否正确"
     )
 
     user = create_user(
@@ -88,6 +101,13 @@ def test_send_sign_in_code(test_client: TestClient):
                 "code": "12345678",
                 "account": "user@example.com",
             },
+            {"code": "验证码错误或已失效，请重新获取"},
+        ),
+        (
+            {
+                "code": "12345678",
+                "account": "13800000000",
+            },
             {"code": "验证码错误，请重新输入"},
         ),
         (
@@ -108,13 +128,17 @@ def test_validate_sign_in_code_failed(
         mobile="13800000000",
     )
     config = get_config()
-    if (
-        data.get("account") in config.demo_accounts
-        and data.get("code") == config.demo_code
-    ):
-        ttl, config.verify_code_ttl = config.verify_code_ttl, -1
+    if data.get("account") == "13800000000":
+        if data.get("code") == config.demo_code:
+            test_client.put(
+                "/v1/login_settings/signin_code_validating_limit",
+                json={"value": [3, -1]},
+            )
         test_client.post("/v1/sign_in/code", json={"account": data["account"]})
-        config.verify_code_ttl = ttl
+        test_client.put(
+            "/v1/login_settings/signin_code_validating_limit",
+            json={"value": [3, 10]},
+        )
 
     resp = test_client.post("/v1/sign_in/verify", json=data)
     error = resp.json()
@@ -133,7 +157,7 @@ def test_sign_in_with_code(test_client: TestClient):
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert (
         error["detail"]["errors"]["account"]
-        == "账号未注册，请您确认登录名输入是否正确"
+        == "账号不存在，请您确认登录信息输入是否正确"
     )
 
     user = create_user(
@@ -204,7 +228,7 @@ async def test_sign_in_with_password(test_client: TestClient):
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert (
         error["detail"]["errors"]["account"]
-        == "账号未注册，请您确认登录名输入是否正确"
+        == "账号不存在，请您确认登录信息输入是否正确"
     )
 
     # TODO: complete this test

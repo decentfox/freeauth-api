@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "secret_key"
     jwt_cookie_key: str = "access_token"
 
-    verify_code_ttl: int = 300  # in minutes
+    verify_code_ttl: int = 10  # in minutes
     verify_code_cool_down: int = 60  # in seconds
     demo_code: str = "888888"
     demo_accounts: list[str] = []

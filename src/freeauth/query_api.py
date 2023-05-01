@@ -155,8 +155,10 @@ class UpdateUserStatusResult(NoPydanticValidation):
 
 
 class ValidateCodeResult(typing.NamedTuple):
+    code_required: bool
     code_found: bool
     code_valid: bool
+    incorrect_attempts: int
 
 
 async def create_audit_log(
@@ -341,18 +343,28 @@ async def get_org_type_by_id(
 async def get_user_by_account(
     executor: edgedb.AsyncIOExecutor,
     *,
-    account: str,
+    username: str | None,
+    mobile: str | None,
+    email: str | None,
 ) -> GetUserByAccountResult | None:
     return await executor.query_single(
         """\
         WITH
-            account := <str>$account
+            username := <optional str>$username,
+            mobile := <optional str>$mobile,
+            email := <optional str>$email
         SELECT
             User { id, hashed_password, is_deleted }
-        FILTER .username ?= account OR .email ?= account OR .mobile ?= account
+        FILTER (
+            .username ?= username IF EXISTS username ELSE
+            .mobile ?= mobile IF EXISTS mobile ELSE
+            .email ?= email IF EXISTS email ELSE false
+        )
         LIMIT 1;\
         """,
-        account=account,
+        username=username,
+        mobile=mobile,
+        email=email,
     )
 
 
@@ -394,7 +406,9 @@ async def send_code(
     verify_type: AuthVerifyType,
     code: str,
     ttl: int,
-) -> SendCodeResult:
+    max_attempts: int | None,
+    attempts_ttl: int | None,
+) -> SendCodeResult | None:
     return await executor.query_single(
         """\
         WITH
@@ -402,32 +416,60 @@ async def send_code(
             code_type := <auth::CodeType>$code_type,
             verify_type := <auth::VerifyType>$verify_type,
             code := <str>$code,
-            ttl := <int16>$ttl
-        SELECT (
-            INSERT auth::VerifyRecord {
-                account := account,
-                code_type := code_type,
-                verify_type := verify_type,
-                code := code,
-                expired_at := (
-                    datetime_of_transaction() +
-                    <cal::relative_duration>(<str>ttl ++ ' seconds')
+            ttl := <int16>$ttl,
+            max_attempts := <optional int64>$max_attempts,
+            attempts_ttl := <optional int16>$attempts_ttl,
+            sent_records := (
+                SELECT auth::VerifyRecord
+                FILTER (
+                    EXISTS max_attempts
+                    AND EXISTS attempts_ttl
+                    AND EXISTS attempts_ttl
+                    AND .account = account
+                    AND .code_type  = code_type
+                    AND .verify_type = verify_type
+                    AND .created_at >= (
+                        datetime_of_transaction() -
+                        <cal::relative_duration>(
+                            <str>attempts_ttl ++ ' minutes'
+                        )
+                    )
                 )
+            ),
+        FOR _ IN (
+            SELECT true FILTER (
+                true IF NOT EXISTS max_attempts ELSE
+                count(sent_records) < max_attempts
+            )
+        ) UNION (
+            SELECT (
+                INSERT auth::VerifyRecord {
+                    account := account,
+                    code_type := code_type,
+                    verify_type := verify_type,
+                    code := code,
+                    expired_at := (
+                        datetime_of_transaction() +
+                        <cal::relative_duration>(<str>ttl ++ ' seconds')
+                    )
+                }
+            ) {
+                created_at,
+                account,
+                code_type,
+                verify_type,
+                expired_at,
+                ttl := ttl
             }
-        ) {
-            created_at,
-            account,
-            code_type,
-            verify_type,
-            expired_at,
-            ttl := ttl
-        };\
+        );\
         """,
         account=account,
         code_type=code_type,
         verify_type=verify_type,
         code=code,
         ttl=ttl,
+        max_attempts=max_attempts,
+        attempts_ttl=attempts_ttl,
     )
 
 
@@ -686,6 +728,7 @@ async def validate_code(
     code_type: AuthCodeType,
     verify_type: AuthVerifyType,
     code: str,
+    max_attempts: int | None,
 ) -> ValidateCodeResult:
     return await executor.query_single(
         """\
@@ -694,31 +737,53 @@ async def validate_code(
             code_type := <auth::CodeType>$code_type,
             verify_type := <auth::VerifyType>$verify_type,
             code := <str>$code,
-            record := (
+            max_attempts := <optional int64>$max_attempts,
+            consumable_record := (
                 SELECT auth::VerifyRecord
                 FILTER .account = account
                     AND .code_type  = code_type
                     AND .verify_type = verify_type
-                    AND .code = code
                     AND .consumable
+                    AND (
+                        true IF NOT EXISTS max_attempts ELSE
+                        .incorrect_attempts <= max_attempts
+                    )
                 ORDER BY .created_at DESC
                 LIMIT 1
             ),
+            record := (SELECT consumable_record FILTER .code = code),
             valid_record := (
                 UPDATE record
-                FILTER .expired_at >= datetime_of_transaction()
+                FILTER .expired_at > datetime_of_transaction()
                 SET {
                     consumed_at := datetime_of_transaction()
                 }
             ),
-            valid := EXISTS record AND EXISTS valid_record
+            incorrect_record := (
+                UPDATE consumable_record
+                FILTER EXISTS max_attempts AND NOT EXISTS record
+                SET {
+                    incorrect_attempts := .incorrect_attempts + 1,
+                    expired_at := (
+                        datetime_of_transaction() IF
+                        .incorrect_attempts = max_attempts - 1 ELSE
+                        .expired_at
+                    )
+                }
+            )
         SELECT (
+            code_required := NOT EXISTS consumable_record,
             code_found := EXISTS record,
-            code_valid := EXISTS valid_record
+            code_valid := EXISTS valid_record,
+            incorrect_attempts := (
+                incorrect_record.incorrect_attempts ??
+                consumable_record.incorrect_attempts ?? 0
+            )
         );\
         """,
         account=account,
         code_type=code_type,
         verify_type=verify_type,
         code=code,
+        max_attempts=max_attempts,
     )

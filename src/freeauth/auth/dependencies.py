@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from http import HTTPStatus
 
 import edgedb
@@ -7,7 +8,13 @@ from fastapi import Depends, HTTPException, Request
 from user_agents import parse as ua_parse  # type: ignore
 
 from .. import get_edgedb_client
-from ..query_api import GetUserByAccountResult, get_user_by_account
+from ..query_api import (
+    AuthCodeType,
+    GetUserByAccountResult,
+    get_user_by_account,
+)
+from ..settings import get_login_settings
+from ..utils import MOBILE_REGEX
 from .dataclasses import (
     SignInCodeBody,
     SignInPwdBody,
@@ -38,10 +45,14 @@ def get_client_info(request: Request) -> dict:
 
 
 async def verify_signup_account(
-    account: str,
     client: edgedb.AsyncIOClient,
+    username: str | None = None,
+    mobile: str | None = None,
+    email: str | None = None,
 ):
-    user = await get_user_by_account(client, account=account)
+    user = await get_user_by_account(
+        client, username=username, mobile=mobile, email=email
+    )
     if user:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -53,25 +64,54 @@ async def verify_new_account_when_send_code(
     body: SignUpSendCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ):
-    await verify_signup_account(body.account, client)
+    login_settings = get_login_settings()
+    signup_modes = await login_settings.get("signup_modes", client)
+    if not signup_modes:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={"code_type": "系统不支持注册，如您已有账号，请直接登录"},
+        )
+    if body.code_type == AuthCodeType.SMS and "mobile" not in signup_modes:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={"code_type": "不支持手机号和验证码注册"},
+        )
+    if body.code_type == AuthCodeType.EMAIL and "email" not in signup_modes:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={"code_type": "不支持邮箱和验证码注册"},
+        )
+    await verify_signup_account(
+        client,
+        mobile=body.account if body.code_type == AuthCodeType.SMS else None,
+        email=body.account if body.code_type == AuthCodeType.EMAIL else None,
+    )
 
 
 async def verify_account_when_sign_up(
     body: SignUpBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ):
-    await verify_signup_account(body.account, client)
+    await verify_signup_account(
+        client,
+        mobile=body.account if body.code_type == AuthCodeType.SMS else None,
+        email=body.account if body.code_type == AuthCodeType.EMAIL else None,
+    )
 
 
 async def get_signin_account(
-    account: str,
     client: edgedb.AsyncIOClient,
+    username: str | None = None,
+    mobile: str | None = None,
+    email: str | None = None,
 ) -> GetUserByAccountResult:
-    user = await get_user_by_account(client, account=account)
+    user = await get_user_by_account(
+        client, username=username, mobile=mobile, email=email
+    )
     if not user:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"account": "账号未注册，请您确认登录名输入是否正确"},
+            detail={"account": "账号不存在，请您确认登录信息输入是否正确"},
         )
     if user.is_deleted:
         raise HTTPException(
@@ -85,18 +125,58 @@ async def verify_account_when_send_code(
     body: SignInSendCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> GetUserByAccountResult:
-    return await get_signin_account(body.account, client)
+    login_settings = get_login_settings()
+    code_signin_modes = await login_settings.get("code_signin_modes", client)
+    if not code_signin_modes:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={"account": "系统不支持验证码登录，请使用其他登录方式"},
+        )
+    is_sms = re.match(MOBILE_REGEX, body.account)
+    if is_sms:
+        if "mobile" not in code_signin_modes:
+            raise HTTPException(
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                detail={"account": "不支持手机号和验证码登录"},
+            )
+    elif "email" not in code_signin_modes:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={"account": "不支持邮箱和验证码登录"},
+        )
+    return await get_signin_account(
+        client,
+        mobile=body.account if is_sms else None,
+        email=body.account if not is_sms else None,
+    )
 
 
 async def verify_account_when_sign_in_with_code(
     body: SignInCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> GetUserByAccountResult:
-    return await get_signin_account(body.account, client)
+    is_sms = re.match(MOBILE_REGEX, body.account)
+    return await get_signin_account(
+        client,
+        mobile=body.account if is_sms else None,
+        email=body.account if not is_sms else None,
+    )
 
 
 async def verify_account_when_sign_in_with_pwd(
     body: SignInPwdBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> GetUserByAccountResult:
-    return await get_signin_account(body.account, client)
+    login_settings = get_login_settings()
+    pwd_signin_modes = await login_settings.get("pwd_signin_modes", client)
+    if not pwd_signin_modes:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={"account": "系统不支持密码登录，请使用其他登录方式"},
+        )
+    return await get_signin_account(
+        client,
+        username=body.account if "username" in pwd_signin_modes else None,
+        mobile=body.account if "mobile" in pwd_signin_modes else None,
+        email=body.account if "email" in pwd_signin_modes else None,
+    )

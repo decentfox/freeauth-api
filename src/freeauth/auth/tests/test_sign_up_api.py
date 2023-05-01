@@ -15,6 +15,14 @@ from ...users.tests.test_api import create_user
 from ...utils import gen_random_string
 
 
+@pytest.fixture(autouse=True)
+def login_settings_for_signup(test_client: TestClient):
+    # enable all signup modes
+    test_client.put(
+        "/v1/login_settings/signup_modes", json={"value": ["mobile", "email"]}
+    )
+
+
 def test_send_sign_up_code(test_client: TestClient):
     data: Dict = {}
     resp = test_client.post("/v1/sign_up/code", json=data)
@@ -134,8 +142,16 @@ def test_send_sign_up_code(test_client: TestClient):
         (
             {
                 "code": "12345678",
-                "account": "user@example.com",
-                "code_type": AuthCodeType.EMAIL.value,
+                "account": "13800000001",
+                "code_type": AuthCodeType.SMS.value,
+            },
+            {"code": "验证码错误或已失效，请重新获取"},
+        ),
+        (
+            {
+                "code": "12345678",
+                "account": "13800000000",
+                "code_type": AuthCodeType.SMS.value,
             },
             {"code": "验证码错误，请重新输入"},
         ),
@@ -153,16 +169,20 @@ def test_validate_sign_up_code_failed(
     test_client: TestClient, data: Dict, errors: Dict
 ):
     config = get_config()
-    if (
-        data.get("account") in config.demo_accounts
-        and data.get("code") == config.demo_code
-    ):
-        ttl, config.verify_code_ttl = config.verify_code_ttl, -1
+    if data.get("account") in config.demo_accounts:
+        if data.get("code") == config.demo_code:
+            test_client.put(
+                "/v1/login_settings/signup_code_validating_limit",
+                json={"value": [3, -1]},
+            )
         test_client.post(
             "/v1/sign_up/code",
             json={"account": data["account"], "code_type": data["code_type"]},
         )
-        config.verify_code_ttl = ttl
+        test_client.put(
+            "/v1/login_settings/signup_code_validating_limit",
+            json={"value": [3, 10]},
+        )
 
     resp = test_client.post("/v1/sign_up/verify", json=data)
     error = resp.json()
@@ -230,29 +250,12 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
         code_type=AuthCodeType.SMS.value,  # type: ignore
         verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
         code="12345678",
+        max_attempts=None,
     )
+    assert rv.code_required
     assert not rv.code_found
     assert not rv.code_valid
-
-    code: str = gen_random_string(6, letters=string.digits)
-    await send_code(
-        edgedb_client,
-        account=account,
-        code_type=AuthCodeType.SMS.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
-        code=code,
-        ttl=-1,
-    )
-
-    rv = await validate_code(
-        edgedb_client,
-        account=account,
-        code_type=AuthCodeType.SMS.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
-        code=code,
-    )
-    assert rv.code_found
-    assert not rv.code_valid
+    assert rv.incorrect_attempts == 0
 
     code: str = gen_random_string(6, letters=string.digits)
     await send_code(
@@ -262,7 +265,23 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
         verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
         code=code,
         ttl=300,
+        max_attempts=3,
+        attempts_ttl=60,
     )
+
+    for i in range(3):
+        rv = await validate_code(
+            edgedb_client,
+            account=account,
+            code_type=AuthCodeType.SMS.value,  # type: ignore
+            verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
+            code="12345678",
+            max_attempts=3,
+        )
+        assert not rv.code_required
+        assert not rv.code_found
+        assert not rv.code_valid
+        assert rv.incorrect_attempts == i + 1
 
     rv = await validate_code(
         edgedb_client,
@@ -270,16 +289,47 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
         code_type=AuthCodeType.SMS.value,  # type: ignore
         verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
         code=code,
+        max_attempts=3,
     )
+    assert not rv.code_required
     assert rv.code_found
-    assert rv.code_valid
+    assert not rv.code_valid
+    assert rv.incorrect_attempts == 3
+
+    code: str = gen_random_string(6, letters=string.digits)
+    await send_code(
+        edgedb_client,
+        account=account,
+        code_type=AuthCodeType.SMS.value,  # type: ignore
+        verify_type=AuthVerifyType.SIGNIN.value,  # type: ignore
+        code=code,
+        ttl=300,
+        max_attempts=3,
+        attempts_ttl=60,
+    )
 
     rv = await validate_code(
         edgedb_client,
         account=account,
         code_type=AuthCodeType.SMS.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
-        code=code,
+        verify_type=AuthVerifyType.SIGNIN.value,  # type: ignore
+        code="12345678",
+        max_attempts=3,
     )
+    assert not rv.code_required
     assert not rv.code_found
     assert not rv.code_valid
+    assert rv.incorrect_attempts == 1
+
+    rv = await validate_code(
+        edgedb_client,
+        account=account,
+        code_type=AuthCodeType.SMS.value,  # type: ignore
+        verify_type=AuthVerifyType.SIGNIN.value,  # type: ignore
+        code=code,
+        max_attempts=3,
+    )
+    assert not rv.code_required
+    assert rv.code_found
+    assert rv.code_valid
+    assert rv.incorrect_attempts == 1

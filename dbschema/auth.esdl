@@ -16,11 +16,12 @@ module auth {
         required property verify_type -> VerifyType {
             readonly := true;
         };
-        required property expired_at -> datetime {
-            readonly := true;
-        }
+        required property expired_at -> datetime;
         property consumed_at -> datetime;
         required property consumable := not exists .consumed_at;
+        required property incorrect_attempts -> int64 {
+            default := 0
+        };
 
         index on (.code);
         index on ((.account, .code_type, .verify_type, .consumable));

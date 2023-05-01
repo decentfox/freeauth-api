@@ -46,27 +46,23 @@ from .dependencies import (
 
 
 async def send_auth_code(
-    client: edgedb.AsyncIOClient, account: str, verify_type: AuthVerifyType
+    client: edgedb.AsyncIOClient,
+    account: str,
+    verify_type: AuthVerifyType,
+    ttl: int | None,
+    max_attempts: int | None,
+    attempts_ttl: int | None,
 ) -> SendCodeResult:
     code_type = AuthCodeType.EMAIL
     if re.match(MOBILE_REGEX, account):
         code_type = AuthCodeType.SMS
-
-    # TODO: validate code limit
 
     config = get_config()
     if account in config.demo_accounts:
         code = config.demo_code
     else:
         code = gen_random_string(6, letters=string.digits)
-    rv = await send_code(
-        client,
-        account=account,
-        code_type=code_type.value,  # type: ignore
-        verify_type=verify_type.value,  # type: ignore
-        code=code,
-        ttl=config.verify_code_ttl,
-    )
+
     logger.info(
         "Send %s %s to account %s by %s",
         verify_type.value,
@@ -74,6 +70,22 @@ async def send_auth_code(
         account,
         code_type.value,
     )
+    rv = await send_code(
+        client,
+        account=account,
+        code_type=code_type.value,  # type: ignore
+        verify_type=verify_type.value,  # type: ignore
+        code=code,
+        ttl=(ttl or config.verify_code_ttl) * 60,
+        max_attempts=max_attempts,
+        attempts_ttl=attempts_ttl,
+    )
+    if not rv:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={"code": "验证码获取次数超限，请稍后再次获取"},
+        )
+
     # TODO: send sms or email
     return rv
 
@@ -83,6 +95,7 @@ async def validate_auth_code(
     account: str,
     verify_type: AuthVerifyType,
     code: str,
+    max_attempts: int | None,
 ):
     code_type = AuthCodeType.EMAIL
     if re.match(MOBILE_REGEX, account):
@@ -93,11 +106,22 @@ async def validate_auth_code(
         code_type=code_type.value,  # type: ignore
         verify_type=verify_type.value,  # type: ignore
         code=code,
+        max_attempts=max_attempts,
     )
-    if not rv.code_found:
+    if rv.code_required:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"code": "验证码错误，请重新输入"},
+            detail={"code": "验证码错误或已失效，请重新获取"},
+        )
+    if not rv.code_found:
+        err_msg = "验证码错误，请重新输入"
+        if max_attempts and rv.incorrect_attempts >= max_attempts:
+            err_msg = (
+                "您输入的错误验证码次数过多，当前验证码已失效，请重新获取"
+            )
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={"code": err_msg},
         )
     elif not rv.code_valid:
         raise HTTPException(
@@ -141,7 +165,32 @@ async def send_signup_code(
     body: SignUpSendCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> SendCodeResult:
-    return await send_auth_code(client, body.account, AuthVerifyType.SIGNUP)
+    login_settings = get_login_settings()
+    validate_limit = await login_settings.get(
+        "signup_code_validating_limit", client
+    )
+    ttl = None
+    if validate_limit and len(validate_limit) == 2:
+        ttl = validate_limit[1]
+
+    max_attempts = None
+    attempts_ttl = None
+    send_limit_enabled = await login_settings.get(
+        "signup_code_sending_limit_enabled", client
+    )
+    if send_limit_enabled:
+        limit = await login_settings.get("signup_code_sending_limit", client)
+        if limit and len(limit) > 1:
+            max_attempts = limit[0]
+            attempts_ttl = limit[1]
+    return await send_auth_code(
+        client,
+        body.account,
+        AuthVerifyType.SIGNUP,
+        ttl,
+        max_attempts,
+        attempts_ttl,
+    )
 
 
 @router.post(
@@ -157,8 +206,19 @@ async def sign_up_with_code(
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     client_info: dict = Depends(get_client_info),
 ) -> CreateUserResult | None:
+    login_settings = get_login_settings()
+    max_attempts = None
+    limit_enabled: bool = await login_settings.get(
+        "signup_code_validating_limit_enabled", client
+    )
+    if limit_enabled:
+        limit = await login_settings.get(
+            "signup_code_validating_limit", client
+        )
+        if limit and len(limit) > 1:
+            max_attempts = limit[0]
     await validate_auth_code(
-        client, body.account, AuthVerifyType.SIGNUP, body.code
+        client, body.account, AuthVerifyType.SIGNUP, body.code, max_attempts
     )
     code_type: AuthCodeType = body.code_type
     username: str = gen_random_string(8)
@@ -193,7 +253,30 @@ async def send_signin_code(
     body: SignInSendCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> SendCodeResult:
-    return await send_auth_code(client, body.account, AuthVerifyType.SIGNIN)
+    login_settings = get_login_settings()
+    limit = await login_settings.get("signin_code_validating_limit", client)
+    ttl = None
+    if limit and len(limit) == 2:
+        ttl = limit[1]
+
+    max_attempts = None
+    attempts_ttl = None
+    send_limit_enabled = await login_settings.get(
+        "signin_code_sending_limit_enabled", client
+    )
+    if send_limit_enabled:
+        limit = await login_settings.get("signin_code_sending_limit", client)
+        if limit and len(limit) > 1:
+            max_attempts = limit[0]
+            attempts_ttl = limit[1]
+    return await send_auth_code(
+        client,
+        body.account,
+        AuthVerifyType.SIGNIN,
+        ttl,
+        max_attempts,
+        attempts_ttl,
+    )
 
 
 @router.post(
@@ -209,8 +292,19 @@ async def sign_in_with_code(
     user: CreateUserResult = Depends(verify_account_when_sign_in_with_code),
     client_info: dict = Depends(get_client_info),
 ) -> CreateUserResult | None:
+    login_settings = get_login_settings()
+    max_attempts = None
+    limit_enabled: bool = await login_settings.get(
+        "signin_code_validating_limit_enabled", client
+    )
+    if limit_enabled:
+        limit = await login_settings.get(
+            "signin_code_validating_limit", client
+        )
+        if limit and len(limit) > 1:
+            max_attempts = limit[0]
     await validate_auth_code(
-        client, body.account, AuthVerifyType.SIGNIN, body.code
+        client, body.account, AuthVerifyType.SIGNIN, body.code, max_attempts
     )
     token = await create_access_token(client, response, user.id)
     return await sign_in(
