@@ -33,6 +33,21 @@ from ...query_api import CreateOrgTypeResult
             "   ",
             "该字段为必填项",
         ),
+        (
+            "code",
+            None,
+            "该字段不得为空",
+        ),
+        (
+            "code",
+            "",
+            "该字段为必填项",
+        ),
+        (
+            "code",
+            "   ",
+            "该字段为必填项",
+        ),
     ],
 )
 def test_create_org_type_validate_errors(
@@ -48,35 +63,46 @@ def test_create_org_type_validate_errors(
 
 
 def test_create_org_type(test_client: TestClient):
-    data: dict[str, str] = {"name": "集团"}
+    data: dict[str, str] = {"name": "集团", "code": "org_type"}
     resp = test_client.post("/v1/org_types", json=data)
     org_type = resp.json()
     assert resp.status_code == HTTPStatus.CREATED, org_type
     assert org_type["name"] == "集团"
+    assert org_type["code"] == "ORG_TYPE"
     assert not org_type["is_deleted"]
     assert not org_type["is_protected"]
     assert not org_type["description"]
 
     data["description"] = "集团描述"
     resp = test_client.post("/v1/org_types", json=data)
-    org_type = resp.json()
-    assert resp.status_code == HTTPStatus.CREATED, org_type
-    assert org_type["name"] == "集团"
-    assert org_type["description"] == "集团描述"
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.BAD_REQUEST, error
+    assert error["detail"]["errors"]["code"] == "ORG_TYPE 已被使用"
 
 
-@pytest.fixture
-def org_type(test_client: TestClient) -> CreateOrgTypeResult:
+def create_org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
     resp = test_client.post(
-        "/v1/org_types", json={"name": "集团", "description": "描述"}
+        "/v1/org_types",
+        json={
+            "name": faker.company_prefix(),
+            "code": faker.hexify("^" * 6, upper=True),
+            "description": faker.sentence(),
+        },
     )
     return CreateOrgTypeResult(**resp.json())
 
 
 @pytest.fixture
+def org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
+    return create_org_type(test_client, faker)
+
+
+@pytest.fixture
 async def default_org_type(edgedb_client: edgedb.AsyncIOClient):
     org_type = await edgedb_client.query_single("""\
-        SELECT OrganizationType FILTER .is_protected = true LIMIT 1""")
+        SELECT OrganizationType { code }
+        FILTER .is_protected = true LIMIT 1\
+    """)
     yield org_type
 
 
@@ -97,7 +123,12 @@ def test_update_org_type(
     assert resp.status_code == HTTPStatus.OK, rv
     assert CreateOrgTypeResult(**rv) == org_type
 
-    data = {"name": "    ", "description": "    ", "is_deleted": True}
+    data = {
+        "name": "    ",
+        "code": "    ",
+        "description": "    ",
+        "is_deleted": True,
+    }
     resp = test_client.put(f"/v1/org_types/{org_type.id}", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
@@ -105,11 +136,16 @@ def test_update_org_type(
     assert rv["description"] == org_type.description
     assert rv["is_deleted"]
 
-    data = {"name": "    合作商家", "description": "    商家描述"}
+    data = {
+        "name": "    合作商家",
+        "code": "   new_code",
+        "description": "    商家描述",
+    }
     resp = test_client.put(f"/v1/org_types/{org_type.id}", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["name"] == "合作商家"
+    assert rv["code"] == "NEW_CODE"
     assert rv["description"] == "商家描述"
 
     data["name"] = "很长的名字" * 5
@@ -120,6 +156,7 @@ def test_update_org_type(
 
     data = {
         "name": "默认内部组织",
+        "code": default_org_type.code,
         "description": "系统默认组织类型",
         "is_deleted": True,
     }
@@ -129,6 +166,15 @@ def test_update_org_type(
     assert rv["name"] == "默认内部组织"
     assert rv["description"] == "系统默认组织类型"
     assert not rv["is_deleted"]
+
+    data = {"code": default_org_type.code}
+    resp = test_client.put(f"/v1/org_types/{org_type.id}", json=data)
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.BAD_REQUEST, error
+    assert (
+        error["detail"]["errors"]["code"]
+        == f"{default_org_type.code} 已被使用"
+    )
 
 
 def test_get_org_type(test_client: TestClient, org_type: CreateOrgTypeResult):
@@ -180,6 +226,7 @@ def test_toggle_org_type_status(
     assert rv["org_types"][0] == {
         "id": str(org_type.id),
         "name": org_type.name,
+        "code": org_type.code,
         "is_deleted": True,
     }
 
@@ -194,6 +241,7 @@ def test_toggle_org_type_status(
     assert rv["org_types"][0] == {
         "id": str(org_type.id),
         "name": org_type.name,
+        "code": org_type.code,
         "is_deleted": False,
     }
 
@@ -231,9 +279,13 @@ def test_delete_org_types(
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert len(resp.json()["org_types"]) == 0
 
-    resp = test_client.post("/v1/org_types", json={"name": "orgType1"})
+    resp = test_client.post(
+        "/v1/org_types", json={"name": "orgType1", "code": "orgType1"}
+    )
     org_type1 = resp.json()
-    resp = test_client.post("/v1/org_types", json={"name": "orgType2"})
+    resp = test_client.post(
+        "/v1/org_types", json={"name": "orgType2", "code": "orgType2"}
+    )
     org_type2 = resp.json()
 
     data = {
@@ -241,11 +293,9 @@ def test_delete_org_types(
     }
     resp = test_client.request("DELETE", "/v1/org_types", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
-    assert resp.json()["org_types"] == [
-        {"id": str(org_type.id), "name": org_type.name},
-        {"id": org_type1["id"], "name": org_type1["name"]},
-        {"id": org_type2["id"], "name": org_type2["name"]},
-    ]
+    assert sorted(
+        org_type["id"] for org_type in resp.json()["org_types"]
+    ) == sorted([str(org_type.id), org_type1["id"], org_type2["id"]])
 
     data = {
         "ids": [str(default_org_type.id)],

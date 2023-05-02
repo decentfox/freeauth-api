@@ -6,4 +6,4 @@ SELECT (
     SET {
         deleted_at := datetime_of_transaction() IF is_deleted ELSE {}
     }
-) { name, is_deleted };
+) { name, code, is_deleted };
