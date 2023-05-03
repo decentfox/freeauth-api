@@ -9,20 +9,28 @@ WITH
             .id = parent[is Department].enterprise.id
         )
     ))
-SELECT (
-    INSERT Department {
-        name := <str>$name,
-        code := <optional str>$code,
-        description := <optional str>$description,
-        enterprise := enterprise,
-        parent := parent
-    }
-) {
-    name,
-    code,
-    description,
-    parent: {
+FOR _ IN (
+    SELECT true FILTER EXISTS parent
+) UNION (
+    SELECT (
+        INSERT Department {
+            name := <str>$name,
+            code := <optional str>$code,
+            description := <optional str>$description,
+            enterprise := enterprise,
+            parent := parent
+        }
+    ) {
         name,
-        code
+        code,
+        description,
+        parent: {
+            name,
+            code
+        },
+        enterprise: {
+            name,
+            code,
+        }
     }
-};
+);

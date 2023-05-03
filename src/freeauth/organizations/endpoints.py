@@ -10,32 +10,41 @@ from .. import get_edgedb_client
 from ..app import router
 from ..dataclasses import PaginatedData, QueryBody
 from ..query_api import (
+    CreateDepartmentResult,
     CreateEnterpriseResult,
     CreateOrgTypeResult,
-    DeleteEnterpriseResult,
+    DeleteOrganizationResult,
     DeleteOrgTypeResult,
     UpdateOrgTypeStatusResult,
+    create_department,
     create_enterprise,
     create_org_type,
-    delete_enterprise,
     delete_org_type,
+    delete_organization,
+    get_department_by_id_or_code,
     get_enterprise_by_id_or_code,
-    get_org_type_by_id,
+    get_org_type_by_id_or_code,
     query_org_types,
+    update_department,
     update_enterprise,
     update_org_type,
     update_org_type_status,
 )
 from .dataclasses import (
-    EnterpriseDeleteBody,
+    DepartmentPostOrPutBody,
     EnterprisePostBody,
     EnterprisePutBody,
+    OrganizationDeleteBody,
     OrgTypeDeleteBody,
     OrgTypePostBody,
     OrgTypePutBody,
     OrgTypeStatusBody,
 )
-from .dependencies import parse_id_or_code
+from .dependencies import (
+    parse_department_id_or_code,
+    parse_enterprise_id_or_code,
+    parse_org_type_id_or_code,
+)
 
 
 @router.post(
@@ -99,17 +108,19 @@ async def delete_org_types(
 
 
 @router.get(
-    "/org_types/{org_type_id}",
+    "/org_types/{id_or_code}",
     tags=["组织管理"],
     summary="获取组织类型信息",
     description="获取指定组织类型的信息",
 )
 async def get_org_type(
-    org_type_id: uuid.UUID,
+    id_or_code: uuid.UUID | str = Depends(parse_org_type_id_or_code),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateOrgTypeResult:
-    org_type: CreateOrgTypeResult | None = await get_org_type_by_id(
-        client, id=org_type_id
+    org_type: CreateOrgTypeResult | None = await get_org_type_by_id_or_code(
+        client,
+        id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
+        code=id_or_code if isinstance(id_or_code, str) else None,
     )
     if not org_type:
         raise HTTPException(
@@ -119,14 +130,14 @@ async def get_org_type(
 
 
 @router.put(
-    "/org_types/{org_type_id}",
+    "/org_types/{id_or_code}",
     tags=["组织管理"],
     summary="更新组织类型",
     description="更新指定组织类型的信息",
 )
 async def put_org_type(
-    org_type_id: uuid.UUID,
     body: OrgTypePutBody,
+    id_or_code: uuid.UUID | str = Depends(parse_org_type_id_or_code),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateOrgTypeResult:
     try:
@@ -136,7 +147,8 @@ async def put_org_type(
             code=body.code,
             description=body.description,
             is_deleted=body.is_deleted,
-            id=org_type_id,
+            id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
+            current_code=id_or_code if isinstance(id_or_code, str) else None,
         )
         if not org_type:
             raise HTTPException(
@@ -206,14 +218,23 @@ async def post_enterprise(
 )
 async def put_enterprise(
     body: EnterprisePutBody,
-    id_or_code: str | uuid.UUID = Depends(parse_id_or_code),
+    params: tuple[str | uuid.UUID, str | uuid.UUID | None] = Depends(
+        parse_enterprise_id_or_code
+    ),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateEnterpriseResult:
+    id_or_code, ot_id_or_code = params
     try:
         enterprise: CreateEnterpriseResult | None = await update_enterprise(
             client,
             id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
             current_code=id_or_code if isinstance(id_or_code, str) else None,
+            org_type_id=(
+                ot_id_or_code if isinstance(ot_id_or_code, uuid.UUID) else None
+            ),
+            org_type_code=(
+                ot_id_or_code if isinstance(ot_id_or_code, str) else None
+            ),
             name=body.name,
             code=body.code,
             tax_id=body.tax_id,
@@ -235,19 +256,19 @@ async def put_enterprise(
 
 
 @router.delete(
-    "/enterprises",
+    "/organizations",
     tags=["组织管理"],
-    summary="删除企业机构",
-    description="批量删除企业机构",
+    summary="删除企业机构或部门分支",
+    description="批量删除企业机构或部门分支",
 )
-async def delete_enterprises(
-    body: EnterpriseDeleteBody,
+async def delete_organizations(
+    body: OrganizationDeleteBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> dict[str, list[DeleteEnterpriseResult]]:
-    deleted_enterprises: list[DeleteEnterpriseResult] = (
-        await delete_enterprise(client, ids=body.ids)
+) -> dict[str, list[DeleteOrganizationResult]]:
+    deleted_organizations: list[DeleteOrganizationResult] = (
+        await delete_organization(client, ids=body.ids)
     )
-    return {"enterprises": deleted_enterprises}
+    return {"organizations": deleted_organizations}
 
 
 @router.get(
@@ -257,14 +278,23 @@ async def delete_enterprises(
     description="通过企业机构 ID 或 Code，获取指定企业机构的信息",
 )
 async def get_enterprise(
-    id_or_code: str | uuid.UUID = Depends(parse_id_or_code),
+    params: tuple[str | uuid.UUID, str | uuid.UUID | None] = Depends(
+        parse_enterprise_id_or_code
+    ),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateEnterpriseResult:
+    id_or_code, ot_id_or_code = params
     enterprise: CreateEnterpriseResult | None = (
         await get_enterprise_by_id_or_code(
             client,
             id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
             code=id_or_code if isinstance(id_or_code, str) else None,
+            org_type_id=(
+                ot_id_or_code if isinstance(ot_id_or_code, uuid.UUID) else None
+            ),
+            org_type_code=(
+                ot_id_or_code if isinstance(ot_id_or_code, str) else None
+            ),
         )
     )
     if not enterprise:
@@ -332,3 +362,109 @@ async def get_enterprises_in_org_type(
         per_page=body.per_page,
     )
     return PaginatedData.parse_raw(result)
+
+
+@router.post(
+    "/departments",
+    status_code=HTTPStatus.CREATED,
+    tags=["组织管理"],
+    summary="创建部门分支",
+    description="创建属于指定父部门或企业机构的部门分支",
+)
+async def post_department(
+    body: DepartmentPostOrPutBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> CreateDepartmentResult:
+    try:
+        department: CreateDepartmentResult | None = await create_department(
+            client,
+            name=body.name,
+            code=body.code,
+            description=body.description,
+            parent_id=body.parent_id,
+        )
+    except edgedb.errors.ConstraintViolationError:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail={"code": f"{body.code} 已被使用"},
+        )
+    if not department:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="上级部门或企业机构不存在"
+        )
+    return department
+
+
+@router.put(
+    "/departments/{id_or_code}",
+    tags=["组织管理"],
+    summary="更新部门分支",
+    description="通过部门 ID 或 Code，更新部门分支信息",
+)
+async def put_department(
+    body: DepartmentPostOrPutBody,
+    params: tuple[str | uuid.UUID, str | uuid.UUID | None] = Depends(
+        parse_department_id_or_code
+    ),
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> CreateDepartmentResult:
+    id_or_code, eid_or_code = params
+    try:
+        department: CreateDepartmentResult | None = await update_department(
+            client,
+            id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
+            current_code=id_or_code if isinstance(id_or_code, str) else None,
+            enterprise_id=(
+                eid_or_code if isinstance(eid_or_code, uuid.UUID) else None
+            ),
+            enterprise_code=(
+                eid_or_code if isinstance(eid_or_code, str) else None
+            ),
+            name=body.name,
+            code=body.code,
+            description=body.description,
+            parent_id=body.parent_id,
+        )
+        if not department:
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND, detail="部门不存在"
+            )
+    except edgedb.errors.ConstraintViolationError:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail={"code": f"{body.code} 已被使用"},
+        )
+    return department
+
+
+@router.get(
+    "/departments/{id_or_code}",
+    tags=["组织管理"],
+    summary="获取部门分支信息",
+    description="通过部门 ID 或 Code，获取指定部门分支的信息",
+)
+async def get_department(
+    params: tuple[str | uuid.UUID, str | uuid.UUID | None] = Depends(
+        parse_department_id_or_code
+    ),
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> CreateDepartmentResult:
+    id_or_code, eid_or_code = params
+    department: CreateDepartmentResult | None = (
+        await get_department_by_id_or_code(
+            client,
+            id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
+            code=id_or_code if isinstance(id_or_code, str) else None,
+            enterprise_id=(
+                eid_or_code if isinstance(eid_or_code, uuid.UUID) else None
+            ),
+            enterprise_code=(
+                eid_or_code if isinstance(eid_or_code, str) else None
+            ),
+        )
+    )
+    if not department:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="部门不存在"
+        )
+    return department

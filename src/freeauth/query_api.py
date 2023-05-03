@@ -4,14 +4,14 @@
 #     'src/freeauth/organizations/queries/create_enterprise.edgeql'
 #     'src/freeauth/organizations/queries/create_org_type.edgeql'
 #     'src/freeauth/users/queries/create_user.edgeql'
-#     'src/freeauth/organizations/queries/delete_department.edgeql'
-#     'src/freeauth/organizations/queries/delete_enterprise.edgeql'
 #     'src/freeauth/organizations/queries/delete_org_type.edgeql'
+#     'src/freeauth/organizations/queries/delete_organization.edgeql'
 #     'src/freeauth/users/queries/delete_user.edgeql'
+#     'src/freeauth/organizations/queries/get_department_by_id_or_code.edgeql'
 #     'src/freeauth/organizations/queries/get_enterprise_by_id_or_code.edgeql'
 #     'src/freeauth/settings/queries/get_login_setting.edgeql'
 #     'src/freeauth/settings/queries/get_login_setting_by_key.edgeql'
-#     'src/freeauth/organizations/queries/get_org_type_by_id.edgeql'
+#     'src/freeauth/organizations/queries/get_org_type_by_id_or_code.edgeql'
 #     'src/freeauth/auth/queries/get_user_by_account.edgeql'
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
 #     'src/freeauth/organizations/queries/query_org_types.edgeql'
@@ -96,6 +96,14 @@ class CreateDepartmentResult(NoPydanticValidation):
     code: str | None
     description: str | None
     parent: CreateDepartmentResultParent
+    enterprise: CreateDepartmentResultEnterprise
+
+
+@dataclasses.dataclass
+class CreateDepartmentResultEnterprise(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    code: str | None
 
 
 @dataclasses.dataclass
@@ -140,20 +148,15 @@ class CreateUserResult(NoPydanticValidation):
 
 
 @dataclasses.dataclass
-class DeleteDepartmentResult(NoPydanticValidation):
-    id: uuid.UUID
-
-
-@dataclasses.dataclass
-class DeleteEnterpriseResult(NoPydanticValidation):
-    id: uuid.UUID
-
-
-@dataclasses.dataclass
 class DeleteOrgTypeResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
     code: str
+
+
+@dataclasses.dataclass
+class DeleteOrganizationResult(NoPydanticValidation):
+    id: uuid.UUID
 
 
 @dataclasses.dataclass
@@ -265,7 +268,7 @@ async def create_department(
     name: str,
     code: str | None,
     description: str | None,
-) -> CreateDepartmentResult:
+) -> CreateDepartmentResult | None:
     return await executor.query_single(
         """\
         WITH
@@ -279,23 +282,31 @@ async def create_department(
                     .id = parent[is Department].enterprise.id
                 )
             ))
-        SELECT (
-            INSERT Department {
-                name := <str>$name,
-                code := <optional str>$code,
-                description := <optional str>$description,
-                enterprise := enterprise,
-                parent := parent
-            }
-        ) {
-            name,
-            code,
-            description,
-            parent: {
+        FOR _ IN (
+            SELECT true FILTER EXISTS parent
+        ) UNION (
+            SELECT (
+                INSERT Department {
+                    name := <str>$name,
+                    code := <optional str>$code,
+                    description := <optional str>$description,
+                    enterprise := enterprise,
+                    parent := parent
+                }
+            ) {
                 name,
-                code
+                code,
+                description,
+                parent: {
+                    name,
+                    code
+                },
+                enterprise: {
+                    name,
+                    code,
+                }
             }
-        };\
+        );\
         """,
         parent_id=parent_id,
         name=name,
@@ -423,35 +434,6 @@ async def create_user(
     )
 
 
-async def delete_department(
-    executor: edgedb.AsyncIOExecutor,
-    *,
-    ids: list[uuid.UUID],
-) -> list[DeleteDepartmentResult]:
-    return await executor.query(
-        """\
-        SELECT (
-            DELETE Department
-            FILTER .id in array_unpack(<array<uuid>>$ids)
-        );\
-        """,
-        ids=ids,
-    )
-
-
-async def delete_enterprise(
-    executor: edgedb.AsyncIOExecutor,
-    *,
-    ids: list[uuid.UUID],
-) -> list[DeleteEnterpriseResult]:
-    return await executor.query(
-        """\
-        DELETE Enterprise FILTER .id in array_unpack(<array<uuid>>$ids);\
-        """,
-        ids=ids,
-    )
-
-
 async def delete_org_type(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -463,6 +445,19 @@ async def delete_org_type(
             DELETE OrganizationType
             FILTER .id in array_unpack(<array<uuid>>$ids) AND NOT .is_protected
         ) { name, code };\
+        """,
+        ids=ids,
+    )
+
+
+async def delete_organization(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    ids: list[uuid.UUID],
+) -> list[DeleteOrganizationResult]:
+    return await executor.query(
+        """\
+        DELETE Organization FILTER .id in array_unpack(<array<uuid>>$ids);\
         """,
         ids=ids,
     )
@@ -483,21 +478,73 @@ async def delete_user(
     )
 
 
+async def get_department_by_id_or_code(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    id: uuid.UUID | None,
+    code: str | None,
+    enterprise_id: uuid.UUID | None,
+    enterprise_code: str | None,
+) -> CreateDepartmentResult | None:
+    return await executor.query_single(
+        """\
+        WITH
+            id := <optional uuid>$id,
+            code := <optional str>$code,
+            enterprise_id := <optional uuid>$enterprise_id,
+            enterprise_code := <optional str>$enterprise_code
+        SELECT assert_single(
+            (
+                SELECT Department {
+                    name,
+                    code,
+                    description,
+                    parent: {
+                        name,
+                        code
+                    },
+                    enterprise: {
+                        name,
+                        code,
+                    }
+                }
+                FILTER (
+                    .id = id IF EXISTS id ELSE (
+                        .code ?= code AND
+                        .enterprise.id = enterprise_id
+                    ) IF EXISTS enterprise_id ELSE (
+                        .code ?= code AND
+                        .enterprise.code = enterprise_code
+                    )
+                )
+            )
+        );\
+        """,
+        id=id,
+        code=code,
+        enterprise_id=enterprise_id,
+        enterprise_code=enterprise_code,
+    )
+
+
 async def get_enterprise_by_id_or_code(
     executor: edgedb.AsyncIOExecutor,
     *,
     id: uuid.UUID | None,
     code: str | None,
+    org_type_id: uuid.UUID | None,
+    org_type_code: str | None,
 ) -> CreateEnterpriseResult | None:
     return await executor.query_single(
         """\
         WITH
             id := <optional uuid>$id,
-            code := <optional str>$code
+            code := <optional str>$code,
+            org_type_id := <optional uuid>$org_type_id,
+            org_type_code := <optional str>$org_type_code
         SELECT assert_single(
             (
-                SELECT
-                Enterprise {
+                SELECT Enterprise {
                     name,
                     code,
                     tax_id,
@@ -506,12 +553,22 @@ async def get_enterprise_by_id_or_code(
                     contact_address,
                     contact_phone_num
                 }
-                FILTER .id = id IF EXISTS id ELSE .code ?= code
+                FILTER (
+                    .id = id IF EXISTS id ELSE (
+                        .code ?= code AND
+                        .org_type.id = org_type_id
+                    ) IF EXISTS org_type_id ELSE (
+                        .code ?= code AND
+                        .org_type.code = org_type_code
+                    )
+                )
             )
         );\
         """,
         id=id,
         code=code,
+        org_type_id=org_type_id,
+        org_type_code=org_type_code,
     )
 
 
@@ -538,24 +595,32 @@ async def get_login_setting_by_key(
     )
 
 
-async def get_org_type_by_id(
+async def get_org_type_by_id_or_code(
     executor: edgedb.AsyncIOExecutor,
     *,
-    id: uuid.UUID,
+    id: uuid.UUID | None,
+    code: str | None,
 ) -> CreateOrgTypeResult | None:
     return await executor.query_single(
         """\
-        SELECT
-            OrganizationType {
-                name,
-                code,
-                description,
-                is_deleted,
-                is_protected
-            }
-        FILTER .id = <uuid>$id;\
+        WITH
+            id := <optional uuid>$id,
+            code := <optional str>$code
+        SELECT assert_single(
+            (
+                SELECT OrganizationType {
+                    name,
+                    code,
+                    description,
+                    is_deleted,
+                    is_protected
+                }
+                FILTER .id = id IF EXISTS id ELSE .code = code
+            )
+        );\
         """,
         id=id,
+        code=code,
     )
 
 
@@ -801,8 +866,11 @@ async def sign_up(
 async def update_department(
     executor: edgedb.AsyncIOExecutor,
     *,
+    id: uuid.UUID | None,
+    current_code: str | None,
+    enterprise_id: uuid.UUID | None,
+    enterprise_code: str | None,
     parent_id: uuid.UUID,
-    id: uuid.UUID,
     name: str,
     code: str | None,
     description: str | None,
@@ -810,6 +878,10 @@ async def update_department(
     return await executor.query_single(
         """\
         WITH
+            id := <optional uuid>$id,
+            current_code := <optional str>$current_code,
+            enterprise_id := <optional uuid>$enterprise_id,
+            enterprise_code := <optional str>$enterprise_code,
             parent := (
                 SELECT Organization FILTER .id = <uuid>$parent_id
             ),
@@ -819,10 +891,21 @@ async def update_department(
                     .id = parent[is Enterprise].id IF parent_is_enterprise ELSE
                     .id = parent[is Department].enterprise.id
                 )
+            )),
+            department := assert_single((
+                SELECT Department
+                FILTER (
+                    .id = id IF EXISTS id ELSE (
+                        .code ?= current_code AND
+                        .enterprise.id = enterprise_id
+                    ) IF EXISTS enterprise_id ELSE (
+                        .code ?= current_code AND
+                        .enterprise.code = enterprise_code
+                    )
+                )
             ))
         SELECT (
-            UPDATE Department
-            FILTER .id = <uuid>$id
+            UPDATE department
             SET {
                 name := <str>$name,
                 code := <optional str>$code,
@@ -837,11 +920,18 @@ async def update_department(
             parent: {
                 name,
                 code
+            },
+            enterprise: {
+                name,
+                code,
             }
         };\
         """,
-        parent_id=parent_id,
         id=id,
+        current_code=current_code,
+        enterprise_id=enterprise_id,
+        enterprise_code=enterprise_code,
+        parent_id=parent_id,
         name=name,
         code=code,
         description=description,
@@ -853,6 +943,8 @@ async def update_enterprise(
     *,
     id: uuid.UUID | None,
     current_code: str | None,
+    org_type_id: uuid.UUID | None,
+    org_type_code: str | None,
     name: str,
     code: str | None,
     tax_id: str | None,
@@ -866,9 +958,18 @@ async def update_enterprise(
         WITH
             id := <optional uuid>$id,
             current_code := <optional str>$current_code,
+            org_type_id := <optional uuid>$org_type_id,
+            org_type_code := <optional str>$org_type_code,
             enterprise := assert_single((
-                SELECT Enterprise FILTER (
-                    .id = id IF EXISTS id ELSE .code ?= current_code
+                SELECT Enterprise
+                FILTER (
+                    .id = id IF EXISTS id ELSE (
+                        .code ?= current_code AND
+                        .org_type.id = org_type_id
+                    ) IF EXISTS org_type_id ELSE (
+                        .code ?= current_code AND
+                        .org_type.code = org_type_code
+                    )
                 )
             ))
         SELECT (
@@ -894,6 +995,8 @@ async def update_enterprise(
         """,
         id=id,
         current_code=current_code,
+        org_type_id=org_type_id,
+        org_type_code=org_type_code,
         name=name,
         code=code,
         tax_id=tax_id,
@@ -907,22 +1010,28 @@ async def update_enterprise(
 async def update_org_type(
     executor: edgedb.AsyncIOExecutor,
     *,
+    id: uuid.UUID | None,
+    current_code: str | None,
     name: str | None,
     code: str | None,
     description: str | None,
     is_deleted: bool | None,
-    id: uuid.UUID,
 ) -> CreateOrgTypeResult | None:
     return await executor.query_single(
         """\
         WITH
+            id := <optional uuid>$id,
+            current_code := <optional str>$current_code,
             name := <optional str>$name,
             code := <optional str>$code,
             description := <optional str>$description,
-            is_deleted := <optional bool>$is_deleted
+            is_deleted := <optional bool>$is_deleted,
+            org_type := assert_single((
+                SELECT OrganizationType
+                FILTER .id = id IF EXISTS id ELSE .code = code
+            ))
         SELECT (
-            UPDATE OrganizationType
-            FILTER .id = <uuid>$id
+            UPDATE org_type
             SET {
                 name := name ?? .name,
                 code := code ?? .code,
@@ -935,11 +1044,12 @@ async def update_org_type(
             }
         ) { name, code, description, is_deleted, is_protected };\
         """,
+        id=id,
+        current_code=current_code,
         name=name,
         code=code,
         description=description,
         is_deleted=is_deleted,
-        id=id,
     )
 
 

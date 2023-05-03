@@ -1,9 +1,18 @@
 WITH
     id := <optional uuid>$id,
     current_code := <optional str>$current_code,
+    org_type_id := <optional uuid>$org_type_id,
+    org_type_code := <optional str>$org_type_code,
     enterprise := assert_single((
-        SELECT Enterprise FILTER (
-            .id = id IF EXISTS id ELSE .code ?= current_code
+        SELECT Enterprise
+        FILTER (
+            .id = id IF EXISTS id ELSE (
+                .code ?= current_code AND
+                .org_type.id = org_type_id
+            ) IF EXISTS org_type_id ELSE (
+                .code ?= current_code AND
+                .org_type.code = org_type_code
+            )
         )
     ))
 SELECT (

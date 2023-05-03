@@ -38,7 +38,9 @@ module default {
     type Department extending Organization {
         property description -> str;
 
-        required link enterprise -> Enterprise;
+        required link enterprise -> Enterprise {
+            on target delete delete source;
+        };
         required link parent -> Organization {
             on target delete delete source;
         };

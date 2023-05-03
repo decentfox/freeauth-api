@@ -169,10 +169,56 @@ class EnterprisePostBody(EnterprisePutBody):
     )
 
 
-@dataclass(config=EnterpriseBodyConfig)
-class EnterpriseDeleteBody:
+class DepartmentBodyConfig:
+    anystr_strip_whitespace = True
+    error_msg_templates = {
+        "value_error.any_str.min_length": "该字段为必填项",
+        "value_error.missing": "该字段为必填项",
+        "type_error.none.not_allowed": "该字段不得为空",
+        "type_error.uuid": "上级部门ID格式错误",
+    }
+
+
+@dataclass(config=DepartmentBodyConfig)
+class DepartmentPostOrPutBody:
+    parent_id: uuid.UUID = Field(
+        ..., title="所属上级部门", description="部门 ID 或企业机构 ID"
+    )
+    code: str | None = Field(
+        None,
+        title="部门 Code",
+        description="部门分支的唯一标识符，同一企业机构下唯一，可用于获取部门信息",
+    )
+    name: str = Field(
+        ...,
+        title="部门名称",
+        description="部门名称",
+        min_length=1,
+    )
+    description: str | None = Field(
+        None,
+        title="部门描述",
+        description="部门描述",
+    )
+
+    @validator("code", pre=True)
+    def convert_to_uppercase(cls, v):
+        return v.upper() if v else v
+
+
+class OrganizationBodyConfig:
+    anystr_strip_whitespace = True
+    error_msg_templates = {
+        "value_error.missing": "该字段为必填项",
+        "type_error.none.not_allowed": "该字段不得为空",
+        "type_error.uuid": "企业机构或部门分支ID格式错误",
+    }
+
+
+@dataclass(config=OrganizationBodyConfig)
+class OrganizationDeleteBody:
     ids: list[uuid.UUID] = Field(
         ...,
-        title="企业机构 ID 列表",
-        description="待删除的企业机构 ID 列表",
+        title="企业机构或部门分支 ID 列表",
+        description="待删除的企业机构或部门分支 ID 列表",
     )

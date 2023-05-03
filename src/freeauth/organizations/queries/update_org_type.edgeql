@@ -1,11 +1,16 @@
 WITH
+    id := <optional uuid>$id,
+    current_code := <optional str>$current_code,
     name := <optional str>$name,
     code := <optional str>$code,
     description := <optional str>$description,
-    is_deleted := <optional bool>$is_deleted
+    is_deleted := <optional bool>$is_deleted,
+    org_type := assert_single((
+        SELECT OrganizationType
+        FILTER .id = id IF EXISTS id ELSE .code = code
+    ))
 SELECT (
-    UPDATE OrganizationType
-    FILTER .id = <uuid>$id
+    UPDATE org_type
     SET {
         name := name ?? .name,
         code := code ?? .code,

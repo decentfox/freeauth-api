@@ -3,7 +3,6 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import Any
 
-import edgedb
 import pytest
 from fastapi.testclient import TestClient
 
@@ -98,12 +97,9 @@ def org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
 
 
 @pytest.fixture
-async def default_org_type(edgedb_client: edgedb.AsyncIOClient):
-    org_type = await edgedb_client.query_single("""\
-        SELECT OrganizationType { code }
-        FILTER .is_protected = true LIMIT 1\
-    """)
-    yield org_type
+def default_org_type(test_client: TestClient) -> CreateOrgTypeResult:
+    resp = test_client.get("/v1/org_types/INNER")
+    return CreateOrgTypeResult(**resp.json())
 
 
 def test_update_org_type(
@@ -256,7 +252,10 @@ def test_toggle_org_type_status(
 
 
 def test_delete_org_types(
-    test_client: TestClient, org_type: CreateOrgTypeResult, default_org_type
+    test_client: TestClient,
+    org_type: CreateOrgTypeResult,
+    default_org_type,
+    faker,
 ):
     data: dict[str, Any] = {}
     resp = test_client.request("DELETE", "/v1/org_types", json=data)
@@ -279,23 +278,16 @@ def test_delete_org_types(
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert len(resp.json()["org_types"]) == 0
 
-    resp = test_client.post(
-        "/v1/org_types", json={"name": "orgType1", "code": "orgType1"}
-    )
-    org_type1 = resp.json()
-    resp = test_client.post(
-        "/v1/org_types", json={"name": "orgType2", "code": "orgType2"}
-    )
-    org_type2 = resp.json()
+    org_type1 = create_org_type(test_client, faker)
+    org_type2 = create_org_type(test_client, faker)
 
-    data = {
-        "ids": [str(org_type.id), org_type1["id"], org_type2["id"]],
-    }
+    ids = [str(org_type.id), str(org_type1.id), str(org_type2.id)]
+    data = {"ids": ids}
     resp = test_client.request("DELETE", "/v1/org_types", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert sorted(
         org_type["id"] for org_type in resp.json()["org_types"]
-    ) == sorted([str(org_type.id), org_type1["id"], org_type2["id"]])
+    ) == sorted(ids)
 
     data = {
         "ids": [str(default_org_type.id)],

@@ -171,17 +171,41 @@ def test_update_enterprise(
     # old code not found
     resp = test_client.put(f"/v1/enterprises/{old_code}", json=data)
     error = resp.json()
+    assert resp.status_code == HTTPStatus.BAD_REQUEST, error
+    assert (
+        error["detail"]["message"]
+        == "更新企业机构失败：缺少组织类型 ID 或 Code"
+    )
+
+    resp = test_client.put(
+        f"/v1/enterprises/{old_code}",
+        params={"org_type_id_or_code": str(org_type.id)},
+        json=data,
+    )
+    error = resp.json()
     assert resp.status_code == HTTPStatus.NOT_FOUND, error
     assert error["detail"]["message"] == "更新企业机构失败：企业机构不存在"
 
     # update by code
     data["code"] = faker.hexify("^" * 6, upper=True)
-    resp = test_client.put(f"/v1/enterprises/{enterprise.code}", json=data)
+    resp = test_client.put(
+        f"/v1/enterprises/{enterprise.code}",
+        params={"org_type_id_or_code": str(org_type.id)},
+        json=data,
+    )
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["id"] == str(enterprise.id)
     assert rv["code"] == data["code"]
     old_code, enterprise.code = enterprise.code, rv["code"]
+
+    resp = test_client.put(
+        f"/v1/enterprises/{enterprise.code}",
+        params={"org_type_id_or_code": org_type.code},
+        json=data,
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
 
     # same enterprise code for different org type
     new_org_type = create_org_type(test_client, faker)
@@ -209,22 +233,22 @@ def test_update_enterprise(
 
 def test_delete_enterprises(test_client: TestClient, faker):
     data: dict[str, list] = {}
-    resp = test_client.request("DELETE", "/v1/enterprises", json=data)
+    resp = test_client.request("DELETE", "/v1/organizations", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     error["detail"]["errors"]["ids"] = "该字段为必填项"
 
     data = {"ids": ["invalid_id"]}
-    resp = test_client.request("DELETE", "/v1/enterprises", json=data)
+    resp = test_client.request("DELETE", "/v1/organizations", json=data)
     error = resp.json()
-    assert error["detail"]["errors"]["ids.0"] == "企业机构ID格式错误"
+    assert error["detail"]["errors"]["ids.0"] == "企业机构或部门分支ID格式错误"
 
     data = {
         "ids": ["12345678-1234-5678-1234-567812345678"],
     }
-    resp = test_client.request("DELETE", "/v1/enterprises", json=data)
+    resp = test_client.request("DELETE", "/v1/organizations", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
-    assert len(resp.json()["enterprises"]) == 0
+    assert len(resp.json()["organizations"]) == 0
 
     org_type_1 = create_org_type(test_client, faker)
     org_type_2 = create_org_type(test_client, faker)
@@ -234,13 +258,15 @@ def test_delete_enterprises(test_client: TestClient, faker):
 
     ids = [str(e_1.id), str(e_2.id), str(e_3.id)]
     data = {"ids": ids}
-    resp = test_client.request("DELETE", "/v1/enterprises", json=data)
+    resp = test_client.request("DELETE", "/v1/organizations", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
-    assert sorted(e["id"] for e in resp.json()["enterprises"]) == sorted(ids)
+    assert sorted(e["id"] for e in resp.json()["organizations"]) == sorted(ids)
 
 
 def test_get_enterprise(
-    test_client: TestClient, enterprise: CreateEnterpriseResult
+    test_client: TestClient,
+    enterprise: CreateEnterpriseResult,
+    org_type: CreateOrgTypeResult,
 ):
     not_found_id = "12345678-1234-5678-1234-567812345678"
     resp = test_client.get(f"/v1/enterprises/{not_found_id}")
@@ -253,6 +279,17 @@ def test_get_enterprise(
     assert CreateEnterpriseResult(**resp.json()) == enterprise
 
     resp = test_client.get(f"/v1/enterprises/{enterprise.code}")
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.BAD_REQUEST, error
+    assert (
+        error["detail"]["message"]
+        == "获取企业机构信息失败：缺少组织类型 ID 或 Code"
+    )
+
+    resp = test_client.get(
+        f"/v1/enterprises/{enterprise.code}",
+        params={"org_type_id_or_code": str(org_type.id)},
+    )
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert CreateEnterpriseResult(**resp.json()) == enterprise
 

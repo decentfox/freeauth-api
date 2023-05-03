@@ -1,10 +1,11 @@
 WITH
     id := <optional uuid>$id,
-    code := <optional str>$code
+    code := <optional str>$code,
+    org_type_id := <optional uuid>$org_type_id,
+    org_type_code := <optional str>$org_type_code
 SELECT assert_single(
     (
-        SELECT
-        Enterprise {
+        SELECT Enterprise {
             name,
             code,
             tax_id,
@@ -13,6 +14,14 @@ SELECT assert_single(
             contact_address,
             contact_phone_num
         }
-        FILTER .id = id IF EXISTS id ELSE .code ?= code
+        FILTER (
+            .id = id IF EXISTS id ELSE (
+                .code ?= code AND
+                .org_type.id = org_type_id
+            ) IF EXISTS org_type_id ELSE (
+                .code ?= code AND
+                .org_type.code = org_type_code
+            )
+        )
     )
 );
