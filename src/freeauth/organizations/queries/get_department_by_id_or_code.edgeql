@@ -1,8 +1,7 @@
 WITH
     id := <optional uuid>$id,
     code := <optional str>$code,
-    enterprise_id := <optional uuid>$enterprise_id,
-    enterprise_code := <optional str>$enterprise_code
+    enterprise_id := <optional uuid>$enterprise_id
 SELECT assert_single(
     (
         SELECT Department {
@@ -22,10 +21,7 @@ SELECT assert_single(
             .id = id IF EXISTS id ELSE (
                 .code ?= code AND
                 .enterprise.id = enterprise_id
-            ) IF EXISTS enterprise_id ELSE (
-                .code ?= code AND
-                .enterprise.code = enterprise_code
-            )
+            ) IF EXISTS enterprise_id ELSE false
         )
     )
 );

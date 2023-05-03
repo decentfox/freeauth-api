@@ -43,22 +43,19 @@ def parse_enterprise_id_or_code(
 
 def parse_department_id_or_code(
     id_or_code: str = Path(title="部门 ID 或 Code"),
-    enterprise_id_or_code: str = Query(
+    enterprise_id: uuid.UUID = Query(
         None,
-        title="企业机构 ID 或 Code",
-        description="当通过部门 Code 调用接口时，需同时指定所属企业机构的 ID 或 Code",
+        title="企业机构 ID",
+        description="当通过部门 Code 调用接口时，需同时指定所属企业机构的 ID",
     ),
-) -> tuple[str | uuid.UUID, str | uuid.UUID | None]:
+) -> tuple[str | uuid.UUID, uuid.UUID | None]:
     try:
         return uuid.UUID(id_or_code), None
     except ValueError:
         pass
-    if not enterprise_id_or_code:
+    if not enterprise_id:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail="缺少企业机构 ID 或 Code",
+            detail="缺少企业机构 ID",
         )
-    try:
-        return id_or_code, uuid.UUID(enterprise_id_or_code)
-    except ValueError:
-        return id_or_code, enterprise_id_or_code
+    return id_or_code, enterprise_id

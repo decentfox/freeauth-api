@@ -98,7 +98,6 @@ async def test_delete_org_type(
             id=dept.id,
             code=None,
             enterprise_id=None,
-            enterprise_code=None,
         )
         assert not deleted_dept
 
@@ -130,7 +129,6 @@ async def test_delete_enterprise(
             id=dept.id,
             code=None,
             enterprise_id=None,
-            enterprise_code=None,
         )
         assert not deleted_dept
 
@@ -152,6 +150,5 @@ async def test_delete_department(
             id=dept.id,
             code=None,
             enterprise_id=None,
-            enterprise_code=None,
         )
         assert not deleted_dept

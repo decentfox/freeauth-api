@@ -126,10 +126,12 @@ def test_create_department(
 
 
 def create_department(
-    test_client: TestClient, enterprise: CreateEnterpriseResult, faker
+    test_client: TestClient,
+    parent: CreateEnterpriseResult | CreateDepartmentResult,
+    faker,
 ) -> CreateDepartmentResult:
     data: dict[str, str] = {
-        "parent_id": str(enterprise.id),
+        "parent_id": str(parent.id),
         "name": faker.company_prefix(),
         "code": faker.hexify("^" * 6, upper=True),
         "description": faker.sentence(),
@@ -184,14 +186,11 @@ def test_update_department(
     resp = test_client.put(f"/v1/departments/{old_code}", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.BAD_REQUEST, error
-    assert (
-        error["detail"]["message"]
-        == "更新部门分支失败：缺少企业机构 ID 或 Code"
-    )
+    assert error["detail"]["message"] == "更新部门分支失败：缺少企业机构 ID"
 
     resp = test_client.put(
         f"/v1/departments/{old_code}",
-        params={"enterprise_id_or_code": str(enterprise.id)},
+        params={"enterprise_id": str(enterprise.id)},
         json=data,
     )
     error = resp.json()
@@ -202,7 +201,7 @@ def test_update_department(
     data["code"] = faker.hexify("^" * 6, upper=True)
     resp = test_client.put(
         f"/v1/departments/{department.code}",
-        params={"enterprise_id_or_code": str(enterprise.id)},
+        params={"enterprise_id": str(enterprise.id)},
         json=data,
     )
     rv = resp.json()
@@ -213,7 +212,7 @@ def test_update_department(
 
     resp = test_client.put(
         f"/v1/departments/{department.code}",
-        params={"enterprise_id_or_code": enterprise.code},
+        params={"enterprise_id": str(enterprise.id)},
         json=data,
     )
     rv = resp.json()
@@ -271,13 +270,12 @@ def test_get_department(
     error = resp.json()
     assert resp.status_code == HTTPStatus.BAD_REQUEST, error
     assert (
-        error["detail"]["message"]
-        == "获取部门分支信息失败：缺少企业机构 ID 或 Code"
+        error["detail"]["message"] == "获取部门分支信息失败：缺少企业机构 ID"
     )
 
     resp = test_client.get(
         f"/v1/departments/{department.code}",
-        params={"enterprise_id_or_code": str(enterprise.id)},
+        params={"enterprise_id": str(enterprise.id)},
     )
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
@@ -288,3 +286,38 @@ def test_get_department(
         )
     )
     assert CreateDepartmentResult(**rv) == department
+
+
+def test_get_organization_tree_by_org_type(
+    test_client: TestClient, org_type: CreateOrgTypeResult, faker
+):
+    enterprise_1 = create_enterprise(test_client, org_type, faker)
+    enterprise_2 = create_enterprise(test_client, org_type, faker)
+
+    dept_in_e1 = []
+    for i in range(2):
+        dept = create_department(test_client, enterprise_1, faker)
+        children = []
+        for j in range(3):
+            children.append(create_department(test_client, dept, faker))
+        dept_in_e1.append(dept)
+
+    dept_in_e2 = []
+    for i in range(4):
+        dept_in_e2.append(create_department(test_client, enterprise_2, faker))
+
+    resp = test_client.get(
+        f"/v1/org_types/{org_type.code}/organization_tree",
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+
+    assert len(rv) == 2
+    assert len(rv[0]["children"]) == 2
+    assert len(rv[1]["children"]) == 4
+
+    for dept_ in rv[0]["children"]:
+        assert len(dept_["children"]) == 3
+
+    for dept_ in rv[1]["children"]:
+        assert len(dept_["children"]) == 0

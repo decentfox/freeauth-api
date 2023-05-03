@@ -12,6 +12,7 @@
 #     'src/freeauth/settings/queries/get_login_setting.edgeql'
 #     'src/freeauth/settings/queries/get_login_setting_by_key.edgeql'
 #     'src/freeauth/organizations/queries/get_org_type_by_id_or_code.edgeql'
+#     'src/freeauth/organizations/queries/get_organization_node.edgeql'
 #     'src/freeauth/auth/queries/get_user_by_account.edgeql'
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
 #     'src/freeauth/organizations/queries/query_org_types.edgeql'
@@ -170,6 +171,15 @@ class GetLoginSettingResult(NoPydanticValidation):
     id: uuid.UUID
     key: str
     value: str
+
+
+@dataclasses.dataclass
+class GetOrganizationNodeResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    code: str | None
+    description: str | None
+    has_children: bool
 
 
 @dataclasses.dataclass
@@ -484,15 +494,13 @@ async def get_department_by_id_or_code(
     id: uuid.UUID | None,
     code: str | None,
     enterprise_id: uuid.UUID | None,
-    enterprise_code: str | None,
 ) -> CreateDepartmentResult | None:
     return await executor.query_single(
         """\
         WITH
             id := <optional uuid>$id,
             code := <optional str>$code,
-            enterprise_id := <optional uuid>$enterprise_id,
-            enterprise_code := <optional str>$enterprise_code
+            enterprise_id := <optional uuid>$enterprise_id
         SELECT assert_single(
             (
                 SELECT Department {
@@ -512,10 +520,7 @@ async def get_department_by_id_or_code(
                     .id = id IF EXISTS id ELSE (
                         .code ?= code AND
                         .enterprise.id = enterprise_id
-                    ) IF EXISTS enterprise_id ELSE (
-                        .code ?= code AND
-                        .enterprise.code = enterprise_code
-                    )
+                    ) IF EXISTS enterprise_id ELSE false
                 )
             )
         );\
@@ -523,7 +528,6 @@ async def get_department_by_id_or_code(
         id=id,
         code=code,
         enterprise_id=enterprise_id,
-        enterprise_code=enterprise_code,
     )
 
 
@@ -621,6 +625,39 @@ async def get_org_type_by_id_or_code(
         """,
         id=id,
         code=code,
+    )
+
+
+async def get_organization_node(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    org_type_id: uuid.UUID | None,
+    org_type_code: str | None,
+    parent_id: uuid.UUID | None,
+) -> list[GetOrganizationNodeResult]:
+    return await executor.query(
+        """\
+        WITH
+            ot_id := <optional uuid>$org_type_id,
+            ot_code := <optional str>$org_type_code,
+            parent_id := <optional uuid>$parent_id
+        SELECT
+            Organization {
+                name,
+                code,
+                [IS Department].description,
+                has_children := EXISTS .children
+            }
+        FILTER (
+            [IS Department].parent.id = parent_id IF EXISTS parent_id ELSE
+            [IS Enterprise].org_type.id = ot_id IF EXISTS ot_id ELSE
+            [IS Enterprise].org_type.code = ot_code
+        )
+        ORDER BY .created_at;\
+        """,
+        org_type_id=org_type_id,
+        org_type_code=org_type_code,
+        parent_id=parent_id,
     )
 
 
@@ -869,7 +906,6 @@ async def update_department(
     id: uuid.UUID | None,
     current_code: str | None,
     enterprise_id: uuid.UUID | None,
-    enterprise_code: str | None,
     parent_id: uuid.UUID,
     name: str,
     code: str | None,
@@ -881,7 +917,6 @@ async def update_department(
             id := <optional uuid>$id,
             current_code := <optional str>$current_code,
             enterprise_id := <optional uuid>$enterprise_id,
-            enterprise_code := <optional str>$enterprise_code,
             parent := (
                 SELECT Organization FILTER .id = <uuid>$parent_id
             ),
@@ -898,10 +933,7 @@ async def update_department(
                     .id = id IF EXISTS id ELSE (
                         .code ?= current_code AND
                         .enterprise.id = enterprise_id
-                    ) IF EXISTS enterprise_id ELSE (
-                        .code ?= current_code AND
-                        .enterprise.code = enterprise_code
-                    )
+                    ) IF EXISTS enterprise_id ELSE false
                 )
             ))
         SELECT (
@@ -930,7 +962,6 @@ async def update_department(
         id=id,
         current_code=current_code,
         enterprise_id=enterprise_id,
-        enterprise_code=enterprise_code,
         parent_id=parent_id,
         name=name,
         code=code,

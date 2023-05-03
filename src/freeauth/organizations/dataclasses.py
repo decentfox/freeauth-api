@@ -5,6 +5,8 @@ import uuid
 from pydantic import Field, validator
 from pydantic.dataclasses import dataclass
 
+from ..query_api import GetOrganizationNodeResult
+
 
 class OrgTypeBodyConfig:
     anystr_strip_whitespace = True
@@ -222,3 +224,8 @@ class OrganizationDeleteBody:
         title="企业机构或部门分支 ID 列表",
         description="待删除的企业机构或部门分支 ID 列表",
     )
+
+
+@dataclass
+class OrganizationNode(GetOrganizationNodeResult):
+    children: list[OrganizationNode]

@@ -2,7 +2,6 @@ WITH
     id := <optional uuid>$id,
     current_code := <optional str>$current_code,
     enterprise_id := <optional uuid>$enterprise_id,
-    enterprise_code := <optional str>$enterprise_code,
     parent := (
         SELECT Organization FILTER .id = <uuid>$parent_id
     ),
@@ -19,10 +18,7 @@ WITH
             .id = id IF EXISTS id ELSE (
                 .code ?= current_code AND
                 .enterprise.id = enterprise_id
-            ) IF EXISTS enterprise_id ELSE (
-                .code ?= current_code AND
-                .enterprise.code = enterprise_code
-            )
+            ) IF EXISTS enterprise_id ELSE false
         )
     ))
 SELECT (

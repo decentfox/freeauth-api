@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from http import HTTPStatus
 
 import edgedb
@@ -15,6 +16,7 @@ from ..query_api import (
     CreateOrgTypeResult,
     DeleteOrganizationResult,
     DeleteOrgTypeResult,
+    GetOrganizationNodeResult,
     UpdateOrgTypeStatusResult,
     create_department,
     create_enterprise,
@@ -24,6 +26,7 @@ from ..query_api import (
     get_department_by_id_or_code,
     get_enterprise_by_id_or_code,
     get_org_type_by_id_or_code,
+    get_organization_node,
     query_org_types,
     update_department,
     update_enterprise,
@@ -35,6 +38,7 @@ from .dataclasses import (
     EnterprisePostBody,
     EnterprisePutBody,
     OrganizationDeleteBody,
+    OrganizationNode,
     OrgTypeDeleteBody,
     OrgTypePostBody,
     OrgTypePutBody,
@@ -403,23 +407,18 @@ async def post_department(
 )
 async def put_department(
     body: DepartmentPostOrPutBody,
-    params: tuple[str | uuid.UUID, str | uuid.UUID | None] = Depends(
+    params: tuple[str | uuid.UUID, uuid.UUID | None] = Depends(
         parse_department_id_or_code
     ),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateDepartmentResult:
-    id_or_code, eid_or_code = params
+    id_or_code, enterprise_id = params
     try:
         department: CreateDepartmentResult | None = await update_department(
             client,
             id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
             current_code=id_or_code if isinstance(id_or_code, str) else None,
-            enterprise_id=(
-                eid_or_code if isinstance(eid_or_code, uuid.UUID) else None
-            ),
-            enterprise_code=(
-                eid_or_code if isinstance(eid_or_code, str) else None
-            ),
+            enterprise_id=enterprise_id,
             name=body.name,
             code=body.code,
             description=body.description,
@@ -444,23 +443,18 @@ async def put_department(
     description="通过部门 ID 或 Code，获取指定部门分支的信息",
 )
 async def get_department(
-    params: tuple[str | uuid.UUID, str | uuid.UUID | None] = Depends(
+    params: tuple[str | uuid.UUID, uuid.UUID | None] = Depends(
         parse_department_id_or_code
     ),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateDepartmentResult:
-    id_or_code, eid_or_code = params
+    id_or_code, enterprise_id = params
     department: CreateDepartmentResult | None = (
         await get_department_by_id_or_code(
             client,
             id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
             code=id_or_code if isinstance(id_or_code, str) else None,
-            enterprise_id=(
-                eid_or_code if isinstance(eid_or_code, uuid.UUID) else None
-            ),
-            enterprise_code=(
-                eid_or_code if isinstance(eid_or_code, str) else None
-            ),
+            enterprise_id=enterprise_id,
         )
     )
     if not department:
@@ -468,3 +462,35 @@ async def get_department(
             status_code=HTTPStatus.NOT_FOUND, detail="部门不存在"
         )
     return department
+
+
+@router.get(
+    "/org_types/{id_or_code}/organization_tree",
+    tags=["组织管理"],
+    summary="获取指定组织类型下的组织树",
+    description="通过组织类型 ID 或 Code，获取组织树信息",
+)
+async def get_organization_tree_by_org_type(
+    id_or_code: uuid.UUID | str = Depends(parse_org_type_id_or_code),
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> list[OrganizationNode]:
+    async def get_child_nodes(
+        parent_id: uuid.UUID | None = None,
+    ) -> list[OrganizationNode]:
+        children: list[OrganizationNode] = []
+        nodes: list[GetOrganizationNodeResult] = await get_organization_node(
+            client,
+            org_type_id=(
+                id_or_code if isinstance(id_or_code, uuid.UUID) else None
+            ),
+            org_type_code=id_or_code if isinstance(id_or_code, str) else None,
+            parent_id=parent_id,
+        )
+        for child in nodes:
+            node = OrganizationNode(children=[], **asdict(child))
+            if node.has_children:
+                node.children = await get_child_nodes(node.id)
+            children.append(node)
+        return children
+
+    return await get_child_nodes()
