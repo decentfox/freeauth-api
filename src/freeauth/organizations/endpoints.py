@@ -350,6 +350,7 @@ async def get_enterprises_in_org_type(
                 last := math::ceil(total / per_page),
                 rows := array_agg((
                     SELECT enterprises {{
+                        id,
                         name,
                         code,
                         tax_id,
