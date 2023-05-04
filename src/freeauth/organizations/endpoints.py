@@ -14,6 +14,7 @@ from ..query_api import (
     CreateDepartmentResult,
     CreateEnterpriseResult,
     CreateOrgTypeResult,
+    CreateUserResult,
     DeleteOrganizationResult,
     DeleteOrgTypeResult,
     GetOrganizationNodeResult,
@@ -27,6 +28,7 @@ from ..query_api import (
     get_enterprise_by_id_or_code,
     get_org_type_by_id_or_code,
     get_organization_node,
+    organization_add_member,
     query_org_types,
     update_department,
     update_enterprise,
@@ -39,6 +41,7 @@ from .dataclasses import (
     EnterprisePutBody,
     OrganizationDeleteBody,
     OrganizationNode,
+    OrganizationUserBody,
     OrgTypeDeleteBody,
     OrgTypePostBody,
     OrgTypePutBody,
@@ -467,7 +470,7 @@ async def get_department(
 @router.get(
     "/org_types/{id_or_code}/organization_tree",
     tags=["组织管理"],
-    summary="获取指定组织类型下的组织树",
+    summary="获取组织树",
     description="通过组织类型 ID 或 Code，获取组织树信息",
 )
 async def get_organization_tree_by_org_type(
@@ -494,3 +497,18 @@ async def get_organization_tree_by_org_type(
         return children
 
     return await get_child_nodes()
+
+
+@router.post(
+    "/organizations/members",
+    tags=["组织管理"],
+    summary="添加成员",
+    description="添加成员到一个或多个部门分支、企业机构中，支持添加多个成员",
+)
+async def add_members_to_organizations(
+    body: OrganizationUserBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> list[CreateUserResult]:
+    return await organization_add_member(
+        client, user_ids=body.user_ids, organization_ids=body.organization_ids
+    )

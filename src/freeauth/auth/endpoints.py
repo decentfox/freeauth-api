@@ -17,9 +17,9 @@ from ..config import get_config
 from ..query_api import (
     AuthCodeType,
     AuthVerifyType,
-    CreateUserResult,
     GetUserByAccountResult,
     SendCodeResult,
+    SignInResult,
     ValidateCodeResult,
     send_code,
     sign_in,
@@ -205,7 +205,7 @@ async def sign_up_with_code(
     response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     client_info: dict = Depends(get_client_info),
-) -> CreateUserResult | None:
+) -> SignInResult | None:
     login_settings = get_login_settings()
     max_attempts = None
     limit_enabled: bool = await login_settings.get(
@@ -289,9 +289,11 @@ async def sign_in_with_code(
     body: SignInCodeBody,
     response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-    user: CreateUserResult = Depends(verify_account_when_sign_in_with_code),
+    user: GetUserByAccountResult = Depends(
+        verify_account_when_sign_in_with_code
+    ),
     client_info: dict = Depends(get_client_info),
-) -> CreateUserResult | None:
+) -> SignInResult | None:
     login_settings = get_login_settings()
     max_attempts = None
     limit_enabled: bool = await login_settings.get(
@@ -329,7 +331,7 @@ async def sign_in_with_pwd(
         verify_account_when_sign_in_with_pwd
     ),
     client_info: dict = Depends(get_client_info),
-) -> CreateUserResult | None:
+) -> SignInResult | None:
     if user.hashed_password != get_password_hash(body.password):
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,

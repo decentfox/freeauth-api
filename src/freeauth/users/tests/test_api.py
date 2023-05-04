@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any, Dict, List
@@ -7,7 +8,12 @@ from typing import Any, Dict, List
 import pytest
 from fastapi.testclient import TestClient
 
-from ...query_api import CreateUserResult
+from ...query_api import (
+    CreateDepartmentResult,
+    CreateEnterpriseResult,
+    CreateOrgTypeResult,
+    CreateUserResult,
+)
 
 
 def create_user(
@@ -16,6 +22,7 @@ def create_user(
     username: str | None = None,
     email: str | None = None,
     mobile: str | None = None,
+    organization_ids: list[int] | None = None,
 ) -> CreateUserResult:
     resp = test_client.post(
         "/v1/users",
@@ -24,6 +31,7 @@ def create_user(
             username=username,
             email=email,
             mobile=mobile,
+            organization_ids=organization_ids,
         ),
     )
     user = resp.json()
@@ -152,6 +160,52 @@ def test_create_user_empty_string(
     assert user[field] is None
 
 
+@pytest.fixture
+def org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
+    from ...organizations.tests.test_org_type_api import create_org_type
+
+    return create_org_type(test_client, faker)
+
+
+@pytest.fixture
+def enterprise(
+    test_client: TestClient, org_type: CreateOrgTypeResult, faker
+) -> CreateEnterpriseResult:
+    from ...organizations.tests.test_enterprise_api import create_enterprise
+
+    return create_enterprise(test_client, org_type, faker)
+
+
+@pytest.fixture
+def department(
+    test_client: TestClient, enterprise: CreateEnterpriseResult, faker
+) -> CreateDepartmentResult:
+    from ...organizations.tests.test_department_api import create_department
+
+    return create_department(test_client, enterprise, faker)
+
+
+def test_create_user_with_organizations(
+    test_client: TestClient,
+    enterprise: CreateEnterpriseResult,
+    department: CreateDepartmentResult,
+    faker,
+):
+    resp = test_client.post(
+        "/v1/users",
+        json=dict(
+            name=faker.name(),
+            username=faker.user_name(),
+            mobile=faker.phone_number(),
+            email=faker.email(),
+            organization_ids=[str(enterprise.id), str(department.id)],
+        ),
+    )
+    user = resp.json()
+    assert resp.status_code == HTTPStatus.CREATED, user
+    assert len(user["departments"]) == 2
+
+
 def test_toggle_user_status(test_client: TestClient, user: CreateUserResult):
     data: Dict = {}
     resp = test_client.put("/v1/users/status", json=data)
@@ -166,7 +220,7 @@ def test_toggle_user_status(test_client: TestClient, user: CreateUserResult):
     }
     resp = test_client.put("/v1/users/status", json=data)
     error = resp.json()
-    assert error["detail"]["errors"]["user_ids.0"] == "用户ID格式错误"
+    assert error["detail"]["errors"]["user_ids.0"] == "ID格式错误"
 
     data: Dict = {
         "user_ids": ["12345678-1234-5678-1234-567812345678"],
@@ -210,7 +264,7 @@ def test_delete_users(test_client: TestClient, user: CreateUserResult):
     }
     resp = test_client.request("DELETE", "/v1/users", json=data)
     error = resp.json()
-    assert error["detail"]["errors"]["user_ids.0"] == "用户ID格式错误"
+    assert error["detail"]["errors"]["user_ids.0"] == "ID格式错误"
 
     data: Dict = {
         "user_ids": ["12345678-1234-5678-1234-567812345678"],
@@ -344,6 +398,27 @@ def test_update_user_strip_whitespace(
     updated_user = resp.json()
     assert resp.status_code == HTTPStatus.OK, updated_user
     assert data[field] != updated_user[field] == db_value
+
+
+def test_update_user_with_organizations(
+    test_client: TestClient,
+    user: CreateUserResult,
+    department: CreateDepartmentResult,
+    faker,
+):
+    resp = test_client.put(
+        f"/v1/users/{user.id}",
+        json=dict(
+            name=faker.name(),
+            username=faker.user_name(),
+            mobile=faker.phone_number(),
+            email=faker.email(),
+            organization_ids=[str(department.id), str(uuid.uuid4())],
+        ),
+    )
+    updated_user = resp.json()
+    assert resp.status_code == HTTPStatus.OK, updated_user
+    assert len(updated_user["departments"]) == 1
 
 
 def test_get_user(test_client: TestClient, user: CreateUserResult):

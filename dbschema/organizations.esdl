@@ -19,6 +19,16 @@ module default {
         property code_upper := str_upper(.code);
 
         multi link children := .<parent[is Department];
+        multi link directly_users := .<org_branches[is User];
+        multi link users := (
+            SELECT DISTINCT (
+                (
+                    SELECT .directly_users
+                ) UNION (
+                    SELECT .children.directly_users
+                )
+            )
+        );
     }
 
     type Enterprise extending Organization {

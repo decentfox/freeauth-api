@@ -19,7 +19,7 @@ class UserBodyConfig(BaseModelConfig):
         "value_error.str.regex": "仅支持中国大陆11位手机号",
         "value_error.missing": "该字段为必填项",
         "type_error.none.not_allowed": "该字段不得为空",
-        "type_error.uuid": "用户ID格式错误",
+        "type_error.uuid": "ID格式错误",
     }
 
 
@@ -45,6 +45,11 @@ class UserPostBody:
         title="手机号",
         description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
         regex=MOBILE_REGEX,
+    )
+    organization_ids: list[uuid.UUID] | None = Field(
+        None,
+        title="直属部门 ID 列表",
+        description="可设置一个或多个部门分支或企业机构 ID",
     )
 
     @validator("*", pre=True)
@@ -86,7 +91,12 @@ class UserPutBody:
         None,
         title="手机号",
         description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
-        regex=r"^1[0-9]{10}$",
+        regex=MOBILE_REGEX,
+    )
+    organization_ids: list[uuid.UUID] | None = Field(
+        None,
+        title="直属部门 ID 列表",
+        description="可设置一个或多个部门分支或企业机构 ID",
     )
 
 

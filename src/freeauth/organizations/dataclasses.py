@@ -5,6 +5,7 @@ import uuid
 from pydantic import Field, validator
 from pydantic.dataclasses import dataclass
 
+from ..dataclasses import BaseModelConfig
 from ..query_api import GetOrganizationNodeResult
 
 
@@ -208,16 +209,7 @@ class DepartmentPostOrPutBody:
         return v.upper() if v else v
 
 
-class OrganizationBodyConfig:
-    anystr_strip_whitespace = True
-    error_msg_templates = {
-        "value_error.missing": "该字段为必填项",
-        "type_error.none.not_allowed": "该字段不得为空",
-        "type_error.uuid": "企业机构或部门分支ID格式错误",
-    }
-
-
-@dataclass(config=OrganizationBodyConfig)
+@dataclass(config=BaseModelConfig)
 class OrganizationDeleteBody:
     ids: list[uuid.UUID] = Field(
         ...,
@@ -229,3 +221,19 @@ class OrganizationDeleteBody:
 @dataclass
 class OrganizationNode(GetOrganizationNodeResult):
     children: list[OrganizationNode]
+
+
+@dataclass(config=BaseModelConfig)
+class OrganizationUserBody:
+    organization_ids: list[uuid.UUID] = Field(
+        ...,
+        title="直属部门 ID 列表",
+        description="可设置一个或多个部门分支或企业机构 ID",
+        min_items=1,
+    )
+    user_ids: list[uuid.UUID] = Field(
+        ...,
+        title="用户 ID 列表",
+        description="待删除的企业机构或部门分支 ID 列表",
+        min_items=1,
+    )

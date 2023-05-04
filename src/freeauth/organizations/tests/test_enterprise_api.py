@@ -241,7 +241,7 @@ def test_delete_enterprises(test_client: TestClient, faker):
     data = {"ids": ["invalid_id"]}
     resp = test_client.request("DELETE", "/v1/organizations", json=data)
     error = resp.json()
-    assert error["detail"]["errors"]["ids.0"] == "企业机构或部门分支ID格式错误"
+    assert error["detail"]["errors"]["ids.0"] == "ID格式错误"
 
     data = {
         "ids": ["12345678-1234-5678-1234-567812345678"],

@@ -15,6 +15,7 @@
 #     'src/freeauth/organizations/queries/get_organization_node.edgeql'
 #     'src/freeauth/auth/queries/get_user_by_account.edgeql'
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
+#     'src/freeauth/organizations/queries/organization_add_member.edgeql'
 #     'src/freeauth/organizations/queries/query_org_types.edgeql'
 #     'src/freeauth/auth/queries/send_code.edgeql'
 #     'src/freeauth/auth/queries/sign_in.edgeql'
@@ -143,9 +144,17 @@ class CreateUserResult(NoPydanticValidation):
     username: str | None
     email: str | None
     mobile: str | None
+    departments: list[CreateUserResultDepartmentsItem]
     is_deleted: bool
     created_at: datetime.datetime
     last_login_at: datetime.datetime | None
+
+
+@dataclasses.dataclass
+class CreateUserResultDepartmentsItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
 
 
 @dataclasses.dataclass
@@ -198,6 +207,18 @@ class SendCodeResult(NoPydanticValidation):
     verify_type: AuthVerifyType
     expired_at: datetime.datetime
     ttl: int
+
+
+@dataclasses.dataclass
+class SignInResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str | None
+    username: str | None
+    email: str | None
+    mobile: str | None
+    is_deleted: bool
+    created_at: datetime.datetime
+    last_login_at: datetime.datetime | None
 
 
 @dataclasses.dataclass
@@ -414,6 +435,7 @@ async def create_user(
     email: str | None,
     mobile: str | None,
     hashed_password: str | None,
+    organization_ids: list[uuid.UUID] | None,
 ) -> CreateUserResult:
     return await executor.query_single(
         """\
@@ -422,18 +444,33 @@ async def create_user(
             username := <optional str>$username,
             email := <optional str>$email,
             mobile := <optional str>$mobile,
-            hashed_password := <optional str>$hashed_password
+            hashed_password := <optional str>$hashed_password,
+            organization_ids := <optional array<uuid>>$organization_ids
         select (
             insert User {
                 name := name,
                 username := username,
                 email := email,
                 mobile := mobile,
-                hashed_password := hashed_password
+                hashed_password := hashed_password,
+                org_branches := (
+                    SELECT Organization
+                    FILTER .id IN array_unpack(
+                        organization_ids ?? <array<uuid>>[]
+                    )
+                )
             }
         ) {
-            id, name, username, email, mobile,
-            is_deleted, created_at, last_login_at
+            name,
+            username,
+            email,
+            mobile,
+            departments := (
+                SELECT .org_branches { code, name }
+            ),
+            is_deleted,
+            created_at,
+            last_login_at
         };\
         """,
         name=name,
@@ -441,6 +478,7 @@ async def create_user(
         email=email,
         mobile=mobile,
         hashed_password=hashed_password,
+        organization_ids=organization_ids,
     )
 
 
@@ -480,9 +518,9 @@ async def delete_user(
 ) -> list[DeleteUserResult]:
     return await executor.query(
         """\
-        select (
-            delete User filter .id in array_unpack(<array<uuid>>$user_ids)
-        ) {id, name} order by .created_at desc;\
+        SELECT (
+            DELETE User FILTER .id in array_unpack(<array<uuid>>$user_ids)
+        ) { name } ORDER BY .created_at DESC;\
         """,
         user_ids=user_ids,
     )
@@ -698,12 +736,57 @@ async def get_user_by_id(
         """\
         SELECT
             User {
-                id, name, username, email, mobile,
-                is_deleted, created_at, last_login_at
+                name,
+                username,
+                email,
+                mobile,
+                departments := (
+                    SELECT .org_branches { code, name }
+                ),
+                is_deleted,
+                created_at,
+                last_login_at
             }
         FILTER .id = <uuid>$id;\
         """,
         id=id,
+    )
+
+
+async def organization_add_member(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    user_ids: list[uuid.UUID],
+    organization_ids: list[uuid.UUID],
+) -> list[CreateUserResult]:
+    return await executor.query(
+        """\
+        WITH
+            user_ids := <array<uuid>>$user_ids,
+            organization_ids := <array<uuid>>$organization_ids
+        SELECT (
+            UPDATE User FILTER .id in array_unpack(user_ids)
+            SET {
+                org_branches += (
+                    SELECT Organization
+                    FILTER .id IN array_unpack(organization_ids)
+                )
+            }
+        ) {
+            name,
+            username,
+            email,
+            mobile,
+            departments := (
+                SELECT .org_branches { code, name }
+            ),
+            is_deleted,
+            created_at,
+            last_login_at
+        };\
+        """,
+        user_ids=user_ids,
+        organization_ids=organization_ids,
     )
 
 
@@ -803,7 +886,7 @@ async def sign_in(
     client_info: str,
     id: uuid.UUID,
     access_token: str,
-) -> CreateUserResult | None:
+) -> SignInResult | None:
     return await executor.query_single(
         """\
         WITH
@@ -834,8 +917,13 @@ async def sign_in(
                 }
             )
         SELECT user {
-            id, name, username, email, mobile,
-            is_deleted, created_at, last_login_at
+            name,
+            username,
+            email,
+            mobile,
+            is_deleted,
+            created_at,
+            last_login_at
         };\
         """,
         client_info=client_info,
@@ -853,7 +941,7 @@ async def sign_up(
     mobile: str | None,
     hashed_password: str,
     client_info: str,
-) -> CreateUserResult:
+) -> SignInResult:
     return await executor.query_single(
         """\
         WITH
@@ -887,8 +975,13 @@ async def sign_up(
                 }
             )
         SELECT user {
-            id, name, username, email, mobile,
-            is_deleted, created_at, last_login_at
+            name,
+            username,
+            email,
+            mobile,
+            is_deleted,
+            created_at,
+            last_login_at
         };\
         """,
         name=name,
@@ -1114,32 +1207,49 @@ async def update_user(
     username: str | None,
     email: str | None,
     mobile: str | None,
+    organization_ids: list[uuid.UUID] | None,
     id: uuid.UUID,
 ) -> CreateUserResult | None:
     return await executor.query_single(
         """\
-        with
+        WITH
             name := <optional str>$name,
             username := <optional str>$username,
             email := <optional str>$email,
-            mobile := <optional str>$mobile
-        select (
-            update User filter .id = <uuid>$id
-            set {
+            mobile := <optional str>$mobile,
+            organization_ids := <optional array<uuid>>$organization_ids
+        SELECT (
+            UPDATE User FILTER .id = <uuid>$id
+            SET {
                 name := name,
                 username := username,
                 email := email,
                 mobile := mobile,
+                org_branches := (
+                    SELECT Organization
+                    FILTER .id IN array_unpack(
+                        organization_ids ?? <array<uuid>>[]
+                    )
+                )
             }
         ) {
-            id, name, username, email, mobile,
-            is_deleted, created_at, last_login_at
+            name,
+            username,
+            email,
+            mobile,
+            departments := (
+                SELECT .org_branches { code, name }
+            ),
+            is_deleted,
+            created_at,
+            last_login_at
         };\
         """,
         name=name,
         username=username,
         email=email,
         mobile=mobile,
+        organization_ids=organization_ids,
         id=id,
     )
 
@@ -1152,17 +1262,18 @@ async def update_user_status(
 ) -> list[UpdateUserStatusResult]:
     return await executor.query(
         """\
-        with
+        WITH
             user_ids := <array<uuid>>$user_ids,
             is_deleted := <bool>$is_deleted
-        select (
-            update User filter .id in array_unpack(user_ids)
-            set {
+        SELECT (
+            UPDATE User FILTER .id in array_unpack(user_ids)
+            SET {
                 deleted_at := datetime_of_transaction() if is_deleted else {}
             }
         ) {
-            id, name, is_deleted
-        } order by .created_at desc;\
+            name,
+            is_deleted
+        } ORDER BY .created_at DESC;\
         """,
         user_ids=user_ids,
         is_deleted=is_deleted,

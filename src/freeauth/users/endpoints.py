@@ -58,6 +58,7 @@ async def post_user(
             email=user.email,
             mobile=user.mobile,
             hashed_password=get_password_hash(password),
+            organization_ids=user.organization_ids,
         )
     except edgedb.errors.ConstraintViolationError as e:
         field = str(e).split(" ")[0]
@@ -110,21 +111,26 @@ async def put_user(
     user_id: uuid.UUID,
     user: UserPutBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-):
+) -> CreateUserResult:
     try:
-        updated_user = await update_user(
+        updated_user: CreateUserResult | None = await update_user(
             client,
             name=user.name,
             username=user.username,
             email=user.email,
             mobile=user.mobile,
             id=user_id,
+            organization_ids=user.organization_ids,
         )
     except edgedb.errors.ConstraintViolationError as e:
         field = str(e).split(" ")[0]
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail={field: f"{getattr(user, field)} 已被使用"},
+        )
+    if not updated_user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
         )
     return updated_user
 
@@ -138,7 +144,7 @@ async def put_user(
 async def get_user(
     user_id: uuid.UUID,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-):
+) -> CreateUserResult:
     user: CreateUserResult | None = await get_user_by_id(client, id=user_id)
     if not user:
         raise HTTPException(
@@ -188,6 +194,9 @@ async def query_users(
                     username,
                     email,
                     mobile,
+                    departments := (
+                        SELECT .org_branches {{ code, name }}
+                    ),
                     is_deleted,
                     created_at,
                     last_login_at

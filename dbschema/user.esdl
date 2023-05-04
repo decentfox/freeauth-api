@@ -18,6 +18,10 @@ module default {
         };
         property last_login_at -> datetime;
 
+        multi link org_branches -> Organization {
+            on target delete allow;
+        };
+
         index on (.username);
         index on (.email);
         index on (.mobile);

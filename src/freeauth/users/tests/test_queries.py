@@ -23,6 +23,7 @@ async def user(edgedb_client: edgedb.AsyncIOClient) -> CreateUserResult:
         email="user@example.com",
         mobile="13800000000",
         hashed_password="password",
+        organization_ids=None,
     )
     return user
 
@@ -51,6 +52,7 @@ async def test_create_user(
         email=email,
         mobile=mobile,
         hashed_password=hashed_password,
+        organization_ids=None,
     )
     assert user.id is not None
     assert user.name == name, user.username == username
@@ -83,6 +85,7 @@ async def test_create_user_existing(
             email=new_email,
             mobile=new_mobile,
             hashed_password="password",
+            organization_ids=None,
         )
 
     assert f"{field} violates exclusivity constraint" in str(e.value)
@@ -123,6 +126,7 @@ async def test_update_user(
         email=email,
         mobile=mobile,
         id=user.id,
+        organization_ids=None,
     )
     assert updated_user is not None
     assert updated_user.id == user.id

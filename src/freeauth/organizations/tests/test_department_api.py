@@ -11,9 +11,12 @@ from ...query_api import (
     CreateDepartmentResultParent,
     CreateEnterpriseResult,
     CreateOrgTypeResult,
+    CreateUserResult,
 )
 from .test_enterprise_api import create_enterprise
 from .test_org_type_api import create_org_type
+
+# from typing import cast
 
 
 @pytest.mark.parametrize(
@@ -321,3 +324,90 @@ def test_get_organization_tree_by_org_type(
 
     for dept_ in rv[1]["children"]:
         assert len(dept_["children"]) == 0
+
+
+def create_user(
+    test_client: TestClient, faker, organization_ids: list[str] | None = None
+):
+    resp = test_client.post(
+        "/v1/users",
+        json=dict(
+            name=faker.name(),
+            username=faker.user_name(),
+            mobile=faker.phone_number(),
+            email=faker.email(),
+            organization_ids=organization_ids,
+        ),
+    )
+    user = resp.json()
+    assert resp.status_code == HTTPStatus.CREATED, user
+    return CreateUserResult(**user)
+
+
+def test_add_members_to_organizations(test_client: TestClient, faker):
+    resp = test_client.post("/v1/organizations/members", json={})
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert error["detail"]["errors"]["user_ids"] == "该字段为必填项"
+    assert error["detail"]["errors"]["organization_ids"] == "该字段为必填项"
+
+    resp = test_client.post(
+        "/v1/organizations/members",
+        json={"user_ids": [], "organization_ids": []},
+    )
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert error["detail"]["errors"]["user_ids"] == "请至少选择一项"
+    assert error["detail"]["errors"]["organization_ids"] == "请至少选择一项"
+
+    org_type_1 = create_org_type(test_client, faker)
+    org_type_2 = create_org_type(test_client, faker)
+    enterprise_1_1 = create_enterprise(test_client, org_type_1, faker)
+    enterprise_1_2 = create_enterprise(test_client, org_type_1, faker)
+    enterprise_2_1 = create_enterprise(test_client, org_type_2, faker)
+    dept_1_1_1 = create_department(test_client, enterprise_1_1, faker)
+    dept_1_1_2 = create_department(test_client, enterprise_1_1, faker)
+    dept_1_1_1_1 = create_department(test_client, dept_1_1_1, faker)
+    dept_2_1_1 = create_department(test_client, enterprise_2_1, faker)
+
+    user_1 = create_user(test_client, faker)
+    user_2 = create_user(
+        test_client,
+        faker,
+        organization_ids=[
+            str(enterprise_1_2.id),
+            str(dept_2_1_1.id),
+            str(enterprise_2_1.id),
+            str(dept_1_1_1.id),
+        ],
+    )
+    user_3 = create_user(
+        test_client,
+        faker,
+        organization_ids=[str(dept_1_1_1.id), str(dept_1_1_1_1.id)],
+    )
+
+    organization_ids: list[CreateEnterpriseResult | CreateDepartmentResult] = [
+        enterprise_1_1,
+        enterprise_1_2,
+        dept_1_1_2,
+        dept_2_1_1,
+        dept_1_1_1_1,
+    ]
+    resp = test_client.post(
+        "/v1/organizations/members",
+        json={
+            "user_ids": [str(u.id) for u in (user_1, user_2, user_3)],
+            "organization_ids": [str(o.id) for o in organization_ids],
+        },
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+
+    for user in rv:
+        if user["id"] == str(user_1.id):
+            assert len(user["departments"]) == 5
+        elif user["id"] == str(user_2.id):
+            assert len(user["departments"]) == 7
+        else:
+            assert len(user["departments"]) == 6

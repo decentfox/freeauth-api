@@ -12,6 +12,8 @@ class BaseModelConfig:
     error_msg_templates = {
         "value_error.missing": "该字段为必填项",
         "type_error.none.not_allowed": "该字段不得为空",
+        "type_error.uuid": "ID格式错误",
+        "value_error.list.min_items": "请至少选择一项",
     }
 
 
