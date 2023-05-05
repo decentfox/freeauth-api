@@ -15,7 +15,7 @@ WITH
     ),
     audit_log := (
         INSERT auth::AuditLog {
-            client_ip := <str>client_info.client_ip,
+            client_ip := client_info.client_ip,
             event_type := <auth::AuditEventType>'SignIn',
             status_code := <int16>200,
             raw_ua := <str>client_info.user_agent['raw_ua'],

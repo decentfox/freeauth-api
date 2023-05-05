@@ -10,24 +10,18 @@ WITH
         SELECT auth::VerifyRecord
         FILTER (
             EXISTS max_attempts
-            AND EXISTS attempts_ttl
-            AND EXISTS attempts_ttl
             AND .account = account
             AND .code_type  = code_type
             AND .verify_type = verify_type
             AND .created_at >= (
                 datetime_of_transaction() -
-                <cal::relative_duration>(
-                    <str>attempts_ttl ++ ' minutes'
-                )
+                cal::to_relative_duration(minutes := attempts_ttl)
             )
         )
     ),
 FOR _ IN (
-    SELECT true FILTER (
-        true IF NOT EXISTS max_attempts ELSE
-        count(sent_records) < max_attempts
-    )
+    SELECT true FILTER
+        (count(sent_records) < max_attempts) ?? true
 ) UNION (
     SELECT (
         INSERT auth::VerifyRecord {
@@ -37,7 +31,7 @@ FOR _ IN (
             code := code,
             expired_at := (
                 datetime_of_transaction() +
-                <cal::relative_duration>(<str>ttl ++ ' seconds')
+                cal::to_relative_duration(seconds := ttl)
             )
         }
     ) {

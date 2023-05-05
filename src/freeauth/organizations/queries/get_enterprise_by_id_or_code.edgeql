@@ -14,14 +14,10 @@ SELECT assert_single(
             contact_address,
             contact_phone_num
         }
-        FILTER (
-            .id = id IF EXISTS id ELSE (
-                .code ?= code AND
-                .org_type.id = org_type_id
-            ) IF EXISTS org_type_id ELSE (
-                .code ?= code AND
-                .org_type.code = org_type_code
-            )
+        FILTER
+            (.id = id) ??
+            (.code ?= code AND .org_type.id = org_type_id) ??
+            (.code ?= code AND .org_type.code = org_type_code)
         )
     )
 );

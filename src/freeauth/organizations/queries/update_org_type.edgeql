@@ -7,7 +7,7 @@ WITH
     is_deleted := <optional bool>$is_deleted,
     org_type := assert_single((
         SELECT OrganizationType
-        FILTER .id = id IF EXISTS id ELSE .code = code
+        FILTER (.id = id) ?? (.code = code)
     ))
 SELECT (
     UPDATE org_type

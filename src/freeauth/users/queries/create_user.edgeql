@@ -14,9 +14,7 @@ select (
         hashed_password := hashed_password,
         org_branches := (
             SELECT Organization
-            FILTER .id IN array_unpack(
-                organization_ids ?? <array<uuid>>[]
-            )
+            FILTER .id IN array_unpack(organization_ids)
         )
     }
 ) {

@@ -7,19 +7,17 @@ WITH
     ),
     parent_is_enterprise := EXISTS parent[is Enterprise],
     enterprise := assert_single((
-        SELECT Enterprise FILTER (
-            .id = parent[is Enterprise].id IF parent_is_enterprise ELSE
-            .id = parent[is Department].enterprise.id
+        SELECT Enterprise FILTER .id = (
+            parent[is Enterprise].id IF parent_is_enterprise ELSE
+            parent[is Department].enterprise.id
         )
     )),
     department := assert_single((
         SELECT Department
-        FILTER (
-            .id = id IF EXISTS id ELSE (
-                .code ?= current_code AND
-                .enterprise.id = enterprise_id
-            ) IF EXISTS enterprise_id ELSE false
-        )
+        FILTER
+            (.id = id) ??
+            (.code ?= current_code AND .enterprise.id = enterprise_id) ??
+            false
     ))
 SELECT (
     UPDATE department

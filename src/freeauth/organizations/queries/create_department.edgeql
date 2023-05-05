@@ -2,11 +2,10 @@ WITH
     parent := (
         SELECT Organization FILTER .id = <uuid>$parent_id
     ),
-    parent_is_enterprise := EXISTS parent[is Enterprise],
     enterprise := assert_single((
         SELECT Enterprise FILTER (
-            .id = parent[is Enterprise].id IF parent_is_enterprise ELSE
-            .id = parent[is Department].enterprise.id
+            .id =
+            parent[is Enterprise].id ?? parent[is Department].enterprise.id
         )
     ))
 FOR _ IN (

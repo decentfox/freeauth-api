@@ -17,11 +17,8 @@ SELECT assert_single(
                 code,
             }
         }
-        FILTER (
-            .id = id IF EXISTS id ELSE (
-                .code ?= code AND
-                .enterprise.id = enterprise_id
-            ) IF EXISTS enterprise_id ELSE false
-        )
+        FILTER
+            (.id = id) ??
+            (.code ?= code AND .enterprise.id = enterprise_id)
     )
 );

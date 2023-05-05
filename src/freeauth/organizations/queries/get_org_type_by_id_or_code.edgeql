@@ -10,6 +10,6 @@ SELECT assert_single(
             is_deleted,
             is_protected
         }
-        FILTER .id = id IF EXISTS id ELSE .code = code
+        FILTER (.id = id) ?? (.code = code)
     )
 );

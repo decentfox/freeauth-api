@@ -12,8 +12,8 @@ SELECT
         has_children := EXISTS .children
     }
 FILTER (
-    [IS Department].parent.id = parent_id IF EXISTS parent_id ELSE
-    [IS Enterprise].org_type.id = ot_id IF EXISTS ot_id ELSE
-    [IS Enterprise].org_type.code = ot_code
+    [IS Department].parent.id ?= parent_id IF EXISTS parent_id ELSE
+    [IS Enterprise].org_type.id ?= ot_id IF EXISTS ot_id ELSE
+    ([IS Enterprise].org_type.code = ot_code)
 )
 ORDER BY .created_at;

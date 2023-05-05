@@ -5,15 +5,11 @@ WITH
     org_type_code := <optional str>$org_type_code,
     enterprise := assert_single((
         SELECT Enterprise
-        FILTER (
-            .id = id IF EXISTS id ELSE (
-                .code ?= current_code AND
-                .org_type.id = org_type_id
-            ) IF EXISTS org_type_id ELSE (
-                .code ?= current_code AND
-                .org_type.code = org_type_code
-            )
-        )
+        FILTER
+            (.id = id) ??
+            (.code ?= current_code AND .org_type.id = org_type_id) ??
+            (.code ?= current_code AND .org_type.code = org_type_code) ??
+            false
     ))
 SELECT (
     UPDATE enterprise

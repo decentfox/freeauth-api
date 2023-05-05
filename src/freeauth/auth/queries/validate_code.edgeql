@@ -10,10 +10,7 @@ WITH
             AND .code_type  = code_type
             AND .verify_type = verify_type
             AND .consumable
-            AND (
-                true IF NOT EXISTS max_attempts ELSE
-                .incorrect_attempts <= max_attempts
-            )
+            AND (.incorrect_attempts <= max_attempts) ?? true
         ORDER BY .created_at DESC
         LIMIT 1
     ),

@@ -13,9 +13,7 @@ SELECT (
         mobile := mobile,
         org_branches := (
             SELECT Organization
-            FILTER .id IN array_unpack(
-                organization_ids ?? <array<uuid>>[]
-            )
+            FILTER .id IN array_unpack(organization_ids)
         )
     }
 ) {
