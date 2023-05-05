@@ -51,8 +51,10 @@ async def query_audit_logs(
             last := math::ceil(total / per_page),
             rows := array_agg((
                 SELECT audit_logs {{
+                    id,
                     event_type,
                     user: {{
+                        id,
                         username,
                         email,
                         mobile,

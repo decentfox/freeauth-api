@@ -5,7 +5,8 @@ import uuid
 from pydantic import Field, validator
 from pydantic.dataclasses import dataclass
 
-from ..dataclasses import BaseModelConfig
+from ..dataclasses import FilterItem  # noqa
+from ..dataclasses import BaseModelConfig, QueryBody
 from ..query_api import GetOrganizationNodeResult
 
 
@@ -234,6 +235,15 @@ class OrganizationUserBody:
     user_ids: list[uuid.UUID] = Field(
         ...,
         title="用户 ID 列表",
-        description="待删除的企业机构或部门分支 ID 列表",
+        description="待添加的用户 ID 列表",
         min_items=1,
+    )
+
+
+@dataclass(config=BaseModelConfig)
+class OrganizationUserQueryBody(QueryBody):
+    include_sub_members: bool = Field(
+        True,
+        title="是否包含子部门下的成员",
+        description="默认为 true，设为 false 代表仅查询直属成员",
     )

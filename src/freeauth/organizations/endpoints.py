@@ -42,6 +42,7 @@ from .dataclasses import (
     OrganizationDeleteBody,
     OrganizationNode,
     OrganizationUserBody,
+    OrganizationUserQueryBody,
     OrgTypeDeleteBody,
     OrgTypePostBody,
     OrgTypePutBody,
@@ -315,7 +316,7 @@ async def get_enterprise(
     "/org_types/{org_type_id}/enterprises/query",
     tags=["组织管理"],
     summary="获取指定组织类型下的企业机构列表",
-    description="分页获取，支持关键字搜索、排序及条件过滤",
+    description="分页获取，支持关键字搜索、排序",
 )
 async def get_enterprises_in_org_type(
     org_type_id: uuid.UUID,
@@ -512,3 +513,72 @@ async def add_members_to_organizations(
     return await organization_add_member(
         client, user_ids=body.user_ids, organization_ids=body.organization_ids
     )
+
+
+@router.post(
+    "/organizations/{org_id}/members",
+    tags=["组织管理"],
+    summary="获取组织成员列表",
+    description="获取指定部门分支或企业机构下包含的成员，分页获取，支持关键字搜索、排序",
+)
+async def get_members_in_organization(
+    body: OrganizationUserQueryBody,
+    org_id: uuid.UUID,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> PaginatedData:
+    result = await client.query_single_json(
+        f"""\
+            WITH
+                page := <optional int64>$page ?? 1,
+                per_page := <optional int64>$per_page ?? 20,
+                q := <optional str>$q,
+                include_sub_members := <bool>$include_sub_members,
+                organization := (
+                    SELECT Organization FILTER .id = <uuid>$org_id
+                ),
+                users := (
+                    SELECT (
+                        organization.users
+                        IF include_sub_members ELSE
+                        organization.directly_users
+                    ) FILTER (
+                        true IF not EXISTS q ELSE
+                        .name ?? '' ILIKE q OR
+                        .username ?? '' ILIKE q OR
+                        .mobile ?? '' ILIKE q OR
+                        .email ?? '' ILIKE q
+                    )
+                ),
+                total := count(users)
+            SELECT (
+                total := total,
+                per_page := per_page,
+                page := page,
+                last := math::ceil(total / per_page),
+                rows := array_agg((
+                    SELECT users {{
+                        id,
+                        name,
+                        username,
+                        email,
+                        mobile,
+                        departments := (
+                            SELECT .org_branches {{ code, name }}
+                        ),
+                        is_deleted,
+                        created_at,
+                        last_login_at
+                    }}
+                    ORDER BY {body.ordering_expr}
+                    OFFSET (page - 1) * per_page
+                    LIMIT per_page
+                ))
+            );\
+            """,
+        q=f"%{body.q}%" if body.q else None,
+        page=body.page,
+        per_page=body.per_page,
+        include_sub_members=body.include_sub_members,
+        org_id=org_id,
+    )
+    return PaginatedData.parse_raw(result)

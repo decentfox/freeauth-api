@@ -384,11 +384,10 @@ def test_add_members_to_organizations(test_client: TestClient, faker):
     user_3 = create_user(
         test_client,
         faker,
-        organization_ids=[str(dept_1_1_1.id), str(dept_1_1_1_1.id)],
+        organization_ids=[str(enterprise_1_1.id), str(dept_1_1_1_1.id)],
     )
 
     organization_ids: list[CreateEnterpriseResult | CreateDepartmentResult] = [
-        enterprise_1_1,
         enterprise_1_2,
         dept_1_1_2,
         dept_2_1_1,
@@ -406,8 +405,24 @@ def test_add_members_to_organizations(test_client: TestClient, faker):
 
     for user in rv:
         if user["id"] == str(user_1.id):
-            assert len(user["departments"]) == 5
+            assert len(user["departments"]) == 4
         elif user["id"] == str(user_2.id):
-            assert len(user["departments"]) == 7
-        else:
             assert len(user["departments"]) == 6
+        else:
+            assert len(user["departments"]) == 5
+
+    resp = test_client.post(
+        f"/v1/organizations/{enterprise_1_1.id}/members", json={}
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 3
+
+    resp = test_client.post(
+        f"/v1/organizations/{enterprise_1_1.id}/members",
+        json={"include_sub_members": False},
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 1
+    assert rv["rows"][0]["id"] == str(user_3.id)

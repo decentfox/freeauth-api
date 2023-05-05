@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, List
+from typing import Any
 
 from pydantic import BaseModel, Field
 from pydantic.dataclasses import dataclass
@@ -62,7 +62,7 @@ class QueryBody:
         description="支持搜索用户姓名、用户名、手机号、邮箱",
         example="张三",
     )
-    order_by: List[str] | None = Field(
+    order_by: list[str] | None = Field(
         None,
         title="排序字段",
         description=(
@@ -71,7 +71,7 @@ class QueryBody:
         ),
         example='["username", "-created_at"]',
     )
-    filter_by: List[FilterItem] | None = Field(
+    filter_by: list[FilterItem] | None = Field(
         None,
         title="筛选条件",
         description=(
