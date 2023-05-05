@@ -7,6 +7,8 @@ SELECT
         name,
         code,
         [IS Department].description,
+        parent_id := [IS Department].parent.id,
+        is_enterprise := Organization is Enterprise,
         has_children := EXISTS .children
     }
 FILTER (
