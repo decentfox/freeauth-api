@@ -12,7 +12,7 @@ select (
         email := email,
         mobile := mobile,
         hashed_password := hashed_password,
-        org_branches := (
+        directly_organizations := (
             SELECT Organization
             FILTER .id IN array_unpack(organization_ids)
         )
@@ -23,7 +23,7 @@ select (
     email,
     mobile,
     departments := (
-        SELECT .org_branches { code, name }
+        SELECT .directly_organizations { code, name }
     ),
     is_deleted,
     created_at,

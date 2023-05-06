@@ -5,7 +5,7 @@ SELECT
         email,
         mobile,
         departments := (
-            SELECT .org_branches { code, name }
+            SELECT .directly_organizations { code, name }
         ),
         is_deleted,
         created_at,

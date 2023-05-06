@@ -18,9 +18,12 @@ module default {
         };
         property last_login_at -> datetime;
 
-        multi link org_branches -> Organization {
+        multi link directly_organizations -> Organization {
             on target delete allow;
         };
+        multi link organizations := (
+            .directly_organizations.<ancestors[is Department]
+        );
 
         index on (.username);
         index on (.email);

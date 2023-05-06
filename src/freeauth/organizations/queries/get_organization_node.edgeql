@@ -9,7 +9,7 @@ SELECT
         [IS Department].description,
         parent_id := [IS Department].parent.id,
         is_enterprise := Organization is Enterprise,
-        has_children := EXISTS .children
+        has_children := EXISTS .directly_children
     }
 FILTER (
     [IS Department].parent.id ?= parent_id IF EXISTS parent_id ELSE

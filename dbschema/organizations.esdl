@@ -18,14 +18,15 @@ module default {
         property code -> str;
         property code_upper := str_upper(.code);
 
-        multi link children := .<parent[is Department];
-        multi link directly_users := .<org_branches[is User];
+        multi link directly_children := .<parent[is Department];
+        multi link children := .<ancestors[is Department];
+        multi link directly_users := .<directly_organizations[is User];
         multi link users := (
             SELECT DISTINCT (
                 (
                     SELECT .directly_users
                 ) UNION (
-                    SELECT .children.directly_users
+                    SELECT .<ancestors[is Department].directly_users
                 )
             )
         );
@@ -52,6 +53,9 @@ module default {
             on target delete delete source;
         };
         required link parent -> Organization {
+            on target delete delete source;
+        };
+        multi link ancestors -> Organization {
             on target delete delete source;
         };
 

@@ -4,7 +4,7 @@ WITH
 SELECT (
     UPDATE User FILTER .id in array_unpack(user_ids)
     SET {
-        org_branches += (
+        directly_organizations += (
             SELECT Organization
             FILTER .id IN array_unpack(organization_ids)
         )
@@ -15,7 +15,7 @@ SELECT (
     email,
     mobile,
     departments := (
-        SELECT .org_branches { code, name }
+        SELECT .directly_organizations { code, name }
     ),
     is_deleted,
     created_at,

@@ -15,9 +15,10 @@ resetdb:
 	edgedb query "create database tmp"
 	edgedb -d tmp query "drop database edgedb" "create database edgedb"
 	edgedb query "drop database tmp"
-	edgedb migrate
+	edgedb restore local_data.dump
 
 db:
+	edgedb dump local_data.dump
 	edgedb migration create
 
 up:

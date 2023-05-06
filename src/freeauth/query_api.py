@@ -325,7 +325,14 @@ async def create_department(
                     code := <optional str>$code,
                     description := <optional str>$description,
                     enterprise := enterprise,
-                    parent := parent
+                    parent := parent,
+                    ancestors := (
+                        SELECT DISTINCT (
+                            SELECT
+                                .parent UNION
+                                .parent[is Department].ancestors
+                        )
+                    )
                 }
             ) {
                 name,
@@ -456,7 +463,7 @@ async def create_user(
                 email := email,
                 mobile := mobile,
                 hashed_password := hashed_password,
-                org_branches := (
+                directly_organizations := (
                     SELECT Organization
                     FILTER .id IN array_unpack(organization_ids)
                 )
@@ -467,7 +474,7 @@ async def create_user(
             email,
             mobile,
             departments := (
-                SELECT .org_branches { code, name }
+                SELECT .directly_organizations { code, name }
             ),
             is_deleted,
             created_at,
@@ -679,7 +686,7 @@ async def get_organization_node(
                 [IS Department].description,
                 parent_id := [IS Department].parent.id,
                 is_enterprise := Organization is Enterprise,
-                has_children := EXISTS .children
+                has_children := EXISTS .directly_children
             }
         FILTER (
             [IS Department].parent.id ?= parent_id IF EXISTS parent_id ELSE
@@ -736,7 +743,7 @@ async def get_user_by_id(
                 email,
                 mobile,
                 departments := (
-                    SELECT .org_branches { code, name }
+                    SELECT .directly_organizations { code, name }
                 ),
                 is_deleted,
                 created_at,
@@ -762,7 +769,7 @@ async def organization_add_member(
         SELECT (
             UPDATE User FILTER .id in array_unpack(user_ids)
             SET {
-                org_branches += (
+                directly_organizations += (
                     SELECT Organization
                     FILTER .id IN array_unpack(organization_ids)
                 )
@@ -773,7 +780,7 @@ async def organization_add_member(
             email,
             mobile,
             departments := (
-                SELECT .org_branches { code, name }
+                SELECT .directly_organizations { code, name }
             ),
             is_deleted,
             created_at,
@@ -1026,7 +1033,14 @@ async def update_department(
                 code := <optional str>$code,
                 description := <optional str>$description,
                 enterprise := enterprise,
-                parent := parent
+                parent := parent,
+                ancestors := (
+                    SELECT DISTINCT (
+                        SELECT
+                            .parent UNION
+                            .parent[is Department].ancestors
+                    )
+                )
             }
         ) {
             name,
@@ -1214,7 +1228,7 @@ async def update_user(
                 username := username,
                 email := email,
                 mobile := mobile,
-                org_branches := (
+                directly_organizations := (
                     SELECT Organization
                     FILTER .id IN array_unpack(organization_ids)
                 )
@@ -1225,7 +1239,7 @@ async def update_user(
             email,
             mobile,
             departments := (
-                SELECT .org_branches { code, name }
+                SELECT .directly_organizations { code, name }
             ),
             is_deleted,
             created_at,

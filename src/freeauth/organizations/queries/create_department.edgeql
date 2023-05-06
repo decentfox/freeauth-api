@@ -19,7 +19,14 @@ FOR _ IN (
             code := <optional str>$code,
             description := <optional str>$description,
             enterprise := enterprise,
-            parent := parent
+            parent := parent,
+            ancestors := (
+                SELECT DISTINCT (
+                    SELECT
+                        .parent UNION
+                        .parent[is Department].ancestors
+                )
+            )
         }
     ) {
         name,
