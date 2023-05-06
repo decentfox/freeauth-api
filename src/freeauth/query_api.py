@@ -308,11 +308,12 @@ async def create_department(
             parent := (
                 SELECT Organization FILTER .id = <uuid>$parent_id
             ),
-            parent_is_enterprise := EXISTS parent[is Enterprise],
             enterprise := assert_single((
                 SELECT Enterprise FILTER (
-                    .id = parent[is Enterprise].id IF parent_is_enterprise ELSE
-                    .id = parent[is Department].enterprise.id
+                    .id = (
+                        parent[is Enterprise].id ??
+                        parent[is Department].enterprise.id
+                    )
                 )
             ))
         FOR _ IN (
@@ -457,9 +458,7 @@ async def create_user(
                 hashed_password := hashed_password,
                 org_branches := (
                     SELECT Organization
-                    FILTER .id IN array_unpack(
-                        organization_ids ?? <array<uuid>>[]
-                    )
+                    FILTER .id IN array_unpack(organization_ids)
                 )
             }
         ) {
@@ -556,12 +555,9 @@ async def get_department_by_id_or_code(
                         code,
                     }
                 }
-                FILTER (
-                    .id = id IF EXISTS id ELSE (
-                        .code ?= code AND
-                        .enterprise.id = enterprise_id
-                    ) IF EXISTS enterprise_id ELSE false
-                )
+                FILTER
+                    (.id = id) ??
+                    (.code ?= code AND .enterprise.id = enterprise_id)
             )
         );\
         """,
@@ -597,15 +593,10 @@ async def get_enterprise_by_id_or_code(
                     contact_address,
                     contact_phone_num
                 }
-                FILTER (
-                    .id = id IF EXISTS id ELSE (
-                        .code ?= code AND
-                        .org_type.id = org_type_id
-                    ) IF EXISTS org_type_id ELSE (
-                        .code ?= code AND
-                        .org_type.code = org_type_code
-                    )
-                )
+                FILTER
+                    (.id = id) ??
+                    (.code ?= code AND .org_type.id = org_type_id) ??
+                    (.code ?= code AND .org_type.code = org_type_code)
             )
         );\
         """,
@@ -659,7 +650,7 @@ async def get_org_type_by_id_or_code(
                     is_deleted,
                     is_protected
                 }
-                FILTER .id = id IF EXISTS id ELSE .code = code
+                FILTER (.id = id) ?? (.code = code)
             )
         );\
         """,
@@ -691,9 +682,9 @@ async def get_organization_node(
                 has_children := EXISTS .children
             }
         FILTER (
-            [IS Department].parent.id = parent_id IF EXISTS parent_id ELSE
-            [IS Enterprise].org_type.id = ot_id IF EXISTS ot_id ELSE
-            [IS Enterprise].org_type.code = ot_code
+            [IS Department].parent.id ?= parent_id IF EXISTS parent_id ELSE
+            [IS Enterprise].org_type.id ?= ot_id IF EXISTS ot_id ELSE
+            ([IS Enterprise].org_type.code = ot_code)
         )
         ORDER BY .created_at;\
         """,
@@ -834,24 +825,18 @@ async def send_code(
                 SELECT auth::VerifyRecord
                 FILTER (
                     EXISTS max_attempts
-                    AND EXISTS attempts_ttl
-                    AND EXISTS attempts_ttl
                     AND .account = account
                     AND .code_type  = code_type
                     AND .verify_type = verify_type
                     AND .created_at >= (
                         datetime_of_transaction() -
-                        <cal::relative_duration>(
-                            <str>attempts_ttl ++ ' minutes'
-                        )
+                        cal::to_relative_duration(minutes := attempts_ttl)
                     )
                 )
             ),
         FOR _ IN (
-            SELECT true FILTER (
-                true IF NOT EXISTS max_attempts ELSE
-                count(sent_records) < max_attempts
-            )
+            SELECT true FILTER
+                (count(sent_records) < max_attempts) ?? true
         ) UNION (
             SELECT (
                 INSERT auth::VerifyRecord {
@@ -861,7 +846,7 @@ async def send_code(
                     code := code,
                     expired_at := (
                         datetime_of_transaction() +
-                        <cal::relative_duration>(<str>ttl ++ ' seconds')
+                        cal::to_relative_duration(seconds := ttl)
                     )
                 }
             ) {
@@ -910,9 +895,9 @@ async def sign_in(
             ),
             audit_log := (
                 INSERT auth::AuditLog {
-                    client_ip := <str>client_info.client_ip,
+                    client_ip := client_info.client_ip,
                     event_type := <auth::AuditEventType>'SignIn',
-                    status_code := <int16>200,
+                    status_code := 200,
                     raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
@@ -968,9 +953,9 @@ async def sign_up(
             ),
             audit_log := (
                 INSERT auth::AuditLog {
-                    client_ip := <str>client_info.client_ip,
+                    client_ip := client_info.client_ip,
                     event_type := <auth::AuditEventType>'SignUp',
-                    status_code := <int16>200,
+                    status_code := 200,
                     raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
@@ -1019,19 +1004,20 @@ async def update_department(
             ),
             parent_is_enterprise := EXISTS parent[is Enterprise],
             enterprise := assert_single((
-                SELECT Enterprise FILTER (
-                    .id = parent[is Enterprise].id IF parent_is_enterprise ELSE
-                    .id = parent[is Department].enterprise.id
+                SELECT Enterprise FILTER .id = (
+                    parent[is Enterprise].id IF parent_is_enterprise ELSE
+                    parent[is Department].enterprise.id
                 )
             )),
             department := assert_single((
                 SELECT Department
-                FILTER (
-                    .id = id IF EXISTS id ELSE (
+                FILTER
+                    (.id = id) ??
+                    (
                         .code ?= current_code AND
                         .enterprise.id = enterprise_id
-                    ) IF EXISTS enterprise_id ELSE false
-                )
+                    ) ??
+                    false
             ))
         SELECT (
             UPDATE department
@@ -1090,15 +1076,14 @@ async def update_enterprise(
             org_type_code := <optional str>$org_type_code,
             enterprise := assert_single((
                 SELECT Enterprise
-                FILTER (
-                    .id = id IF EXISTS id ELSE (
-                        .code ?= current_code AND
-                        .org_type.id = org_type_id
-                    ) IF EXISTS org_type_id ELSE (
+                FILTER
+                    (.id = id) ??
+                    (.code ?= current_code AND .org_type.id = org_type_id) ??
+                    (
                         .code ?= current_code AND
                         .org_type.code = org_type_code
-                    )
-                )
+                    ) ??
+                    false
             ))
         SELECT (
             UPDATE enterprise
@@ -1156,7 +1141,7 @@ async def update_org_type(
             is_deleted := <optional bool>$is_deleted,
             org_type := assert_single((
                 SELECT OrganizationType
-                FILTER .id = id IF EXISTS id ELSE .code = code
+                FILTER (.id = id) ?? (.code = code)
             ))
         SELECT (
             UPDATE org_type
@@ -1231,9 +1216,7 @@ async def update_user(
                 mobile := mobile,
                 org_branches := (
                     SELECT Organization
-                    FILTER .id IN array_unpack(
-                        organization_ids ?? <array<uuid>>[]
-                    )
+                    FILTER .id IN array_unpack(organization_ids)
                 )
             }
         ) {
@@ -1332,10 +1315,7 @@ async def validate_code(
                     AND .code_type  = code_type
                     AND .verify_type = verify_type
                     AND .consumable
-                    AND (
-                        true IF NOT EXISTS max_attempts ELSE
-                        .incorrect_attempts <= max_attempts
-                    )
+                    AND (.incorrect_attempts <= max_attempts) ?? true
                 ORDER BY .created_at DESC
                 LIMIT 1
             ),

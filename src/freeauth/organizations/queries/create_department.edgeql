@@ -4,8 +4,10 @@ WITH
     ),
     enterprise := assert_single((
         SELECT Enterprise FILTER (
-            .id =
-            parent[is Enterprise].id ?? parent[is Department].enterprise.id
+            .id = (
+                parent[is Enterprise].id ??
+                parent[is Department].enterprise.id
+            )
         )
     ))
 FOR _ IN (

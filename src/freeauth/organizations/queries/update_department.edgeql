@@ -16,7 +16,10 @@ WITH
         SELECT Department
         FILTER
             (.id = id) ??
-            (.code ?= current_code AND .enterprise.id = enterprise_id) ??
+            (
+                .code ?= current_code AND
+                .enterprise.id = enterprise_id
+            ) ??
             false
     ))
 SELECT (

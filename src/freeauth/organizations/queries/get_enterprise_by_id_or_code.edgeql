@@ -18,6 +18,5 @@ SELECT assert_single(
             (.id = id) ??
             (.code ?= code AND .org_type.id = org_type_id) ??
             (.code ?= code AND .org_type.code = org_type_code)
-        )
     )
 );

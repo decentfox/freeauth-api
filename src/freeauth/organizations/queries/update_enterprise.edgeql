@@ -8,7 +8,10 @@ WITH
         FILTER
             (.id = id) ??
             (.code ?= current_code AND .org_type.id = org_type_id) ??
-            (.code ?= current_code AND .org_type.code = org_type_code) ??
+            (
+                .code ?= current_code AND
+                .org_type.code = org_type_code
+            ) ??
             false
     ))
 SELECT (
