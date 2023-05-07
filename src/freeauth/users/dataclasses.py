@@ -101,6 +101,7 @@ class UserOrganizationBody:
         ...,
         title="直属部门 ID 列表",
         description="可设置一个或多个部门分支或企业机构 ID",
+        min_items=1,
     )
 
 
