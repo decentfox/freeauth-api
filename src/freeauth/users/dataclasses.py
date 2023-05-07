@@ -111,6 +111,11 @@ class UserResignationBody:
         title="用户 ID 列表",
         description="待离职的用户 ID 列表",
     )
+    is_deleted: bool | None = Field(
+        None,
+        title="是否禁用",
+        description="true 为禁用用户，false 为启用用户",
+    )
 
 
 @dataclass(config=UserBodyConfig)
