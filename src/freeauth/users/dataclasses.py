@@ -93,10 +93,23 @@ class UserPutBody:
         description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
         regex=MOBILE_REGEX,
     )
-    organization_ids: list[uuid.UUID] | None = Field(
-        None,
+
+
+@dataclass(config=BaseModelConfig)
+class UserOrganizationBody:
+    organization_ids: list[uuid.UUID] = Field(
+        ...,
         title="直属部门 ID 列表",
         description="可设置一个或多个部门分支或企业机构 ID",
+    )
+
+
+@dataclass(config=BaseModelConfig)
+class UserResignationBody:
+    user_ids: list[uuid.UUID] = Field(
+        ...,
+        title="用户 ID 列表",
+        description="待离职的用户 ID 列表",
     )
 
 

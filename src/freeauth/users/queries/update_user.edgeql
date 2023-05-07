@@ -2,19 +2,14 @@ WITH
     name := <optional str>$name,
     username := <optional str>$username,
     email := <optional str>$email,
-    mobile := <optional str>$mobile,
-    organization_ids := <optional array<uuid>>$organization_ids
+    mobile := <optional str>$mobile
 SELECT (
     UPDATE User FILTER .id = <uuid>$id
     SET {
         name := name,
         username := username,
         email := email,
-        mobile := mobile,
-        directly_organizations := (
-            SELECT Organization
-            FILTER .id IN array_unpack(organization_ids)
-        )
+        mobile := mobile
     }
 ) {
     name,

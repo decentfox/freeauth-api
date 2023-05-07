@@ -17,6 +17,7 @@
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
 #     'src/freeauth/organizations/queries/organization_add_member.edgeql'
 #     'src/freeauth/organizations/queries/query_org_types.edgeql'
+#     'src/freeauth/users/queries/resign_user.edgeql'
 #     'src/freeauth/auth/queries/send_code.edgeql'
 #     'src/freeauth/auth/queries/sign_in.edgeql'
 #     'src/freeauth/auth/queries/sign_up.edgeql'
@@ -25,6 +26,7 @@
 #     'src/freeauth/organizations/queries/update_org_type.edgeql'
 #     'src/freeauth/organizations/queries/update_org_type_status.edgeql'
 #     'src/freeauth/users/queries/update_user.edgeql'
+#     'src/freeauth/users/queries/update_user_organization.edgeql'
 #     'src/freeauth/users/queries/update_user_status.edgeql'
 #     'src/freeauth/settings/queries/upsert_login_setting.edgeql'
 #     'src/freeauth/auth/queries/validate_code.edgeql'
@@ -807,6 +809,25 @@ async def query_org_types(
     )
 
 
+async def resign_user(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    user_ids: list[uuid.UUID],
+) -> list[DeleteUserResult]:
+    return await executor.query(
+        """\
+        SELECT (
+            UPDATE User FILTER .id in array_unpack(<array<uuid>>$user_ids)
+            SET {
+                directly_organizations := {},
+                deleted_at := datetime_of_transaction()
+            }
+        ) { name } ORDER BY .created_at DESC;\
+        """,
+        user_ids=user_ids,
+    )
+
+
 async def send_code(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -1210,7 +1231,6 @@ async def update_user(
     username: str | None,
     email: str | None,
     mobile: str | None,
-    organization_ids: list[uuid.UUID] | None,
     id: uuid.UUID,
 ) -> CreateUserResult | None:
     return await executor.query_single(
@@ -1219,19 +1239,14 @@ async def update_user(
             name := <optional str>$name,
             username := <optional str>$username,
             email := <optional str>$email,
-            mobile := <optional str>$mobile,
-            organization_ids := <optional array<uuid>>$organization_ids
+            mobile := <optional str>$mobile
         SELECT (
             UPDATE User FILTER .id = <uuid>$id
             SET {
                 name := name,
                 username := username,
                 email := email,
-                mobile := mobile,
-                directly_organizations := (
-                    SELECT Organization
-                    FILTER .id IN array_unpack(organization_ids)
-                )
+                mobile := mobile
             }
         ) {
             name,
@@ -1250,8 +1265,41 @@ async def update_user(
         username=username,
         email=email,
         mobile=mobile,
-        organization_ids=organization_ids,
         id=id,
+    )
+
+
+async def update_user_organization(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    id: uuid.UUID,
+    organization_ids: list[uuid.UUID],
+) -> CreateUserResult | None:
+    return await executor.query_single(
+        """\
+        SELECT (
+            UPDATE User FILTER .id = <uuid>$id
+            SET {
+                directly_organizations := (
+                    SELECT Organization
+                    FILTER .id IN array_unpack(<array<uuid>>$organization_ids)
+                )
+            }
+        ) {
+            name,
+            username,
+            email,
+            mobile,
+            departments := (
+                SELECT .directly_organizations { code, name }
+            ),
+            is_deleted,
+            created_at,
+            last_login_at
+        };\
+        """,
+        id=id,
+        organization_ids=organization_ids,
     )
 
 

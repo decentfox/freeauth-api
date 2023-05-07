@@ -564,7 +564,11 @@ async def get_members_in_organization(
                         email,
                         mobile,
                         departments := (
-                            SELECT .directly_organizations {{ code, name }}
+                            SELECT .directly_organizations {{
+                                id,
+                                code,
+                                name
+                            }}
                         ),
                         is_deleted,
                         created_at,

@@ -22,7 +22,7 @@ def create_user(
     username: str | None = None,
     email: str | None = None,
     mobile: str | None = None,
-    organization_ids: list[int] | None = None,
+    organization_ids: list[str] | None = None,
 ) -> CreateUserResult:
     resp = test_client.post(
         "/v1/users",
@@ -251,7 +251,11 @@ def test_toggle_user_status(test_client: TestClient, user: CreateUserResult):
     ]
 
 
-def test_delete_users(test_client: TestClient, user: CreateUserResult):
+def test_delete_users(
+    test_client: TestClient,
+    user: CreateUserResult,
+    department: CreateDepartmentResult,
+):
     data: Dict = {}
     resp = test_client.request("DELETE", "/v1/users", json=data)
     error = resp.json()
@@ -275,7 +279,10 @@ def test_delete_users(test_client: TestClient, user: CreateUserResult):
 
     resp = test_client.post("/v1/users", json={"username": "user1"})
     user1 = resp.json()
-    resp = test_client.post("/v1/users", json={"username": "user2"})
+    resp = test_client.post(
+        "/v1/users",
+        json={"username": "user2", "organization_ids": [str(department.id)]},
+    )
     user2 = resp.json()
 
     data: Dict = {
@@ -400,25 +407,67 @@ def test_update_user_strip_whitespace(
     assert data[field] != updated_user[field] == db_value
 
 
-def test_update_user_with_organizations(
+def test_update_user_organizations(
     test_client: TestClient,
     user: CreateUserResult,
     department: CreateDepartmentResult,
-    faker,
 ):
+    resp = test_client.put(f"/v1/users/{user.id}/organizations", json={})
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert error["detail"]["errors"]["organization_ids"] == "该字段为必填项"
+
+    not_found_id = uuid.uuid4()
+    ids = [str(department.id), str(uuid.uuid4())]
     resp = test_client.put(
-        f"/v1/users/{user.id}",
-        json=dict(
-            name=faker.name(),
-            username=faker.user_name(),
-            mobile=faker.phone_number(),
-            email=faker.email(),
-            organization_ids=[str(department.id), str(uuid.uuid4())],
-        ),
+        f"/v1/users/{not_found_id}/organizations",
+        json=dict(organization_ids=ids),
+    )
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.NOT_FOUND, error
+    assert error["detail"]["message"] == "变更部门失败：用户不存在"
+
+    resp = test_client.put(
+        f"/v1/users/{user.id}/organizations",
+        json=dict(organization_ids=ids),
     )
     updated_user = resp.json()
     assert resp.status_code == HTTPStatus.OK, updated_user
     assert len(updated_user["departments"]) == 1
+
+
+def test_resign_user(
+    test_client: TestClient,
+    enterprise: CreateEnterpriseResult,
+    department: CreateDepartmentResult,
+    faker,
+):
+    users = []
+    for _ in range(3):
+        users.append(
+            create_user(
+                test_client,
+                name=faker.name(),
+                username=faker.user_name(),
+                mobile=faker.phone_number(),
+                email=faker.email(),
+                organization_ids=[str(enterprise.id), str(department.id)],
+            )
+        )
+    resp = test_client.post(
+        "/v1/users/resign",
+        json=dict(user_ids=[str(u.id) for u in users]),
+    )
+    resigned_user = resp.json()
+    assert resp.status_code == HTTPStatus.OK, resigned_user
+    assert len(resigned_user) == 3
+
+    for user in users:
+        resp = test_client.get(f"/v1/users/{user.id}")
+        rv = resp.json()
+        assert resp.status_code == HTTPStatus.OK, rv
+        assert rv["is_deleted"]
+        assert not rv["departments"]
 
 
 def test_get_user(test_client: TestClient, user: CreateUserResult):

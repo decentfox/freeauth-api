@@ -126,7 +126,6 @@ async def test_update_user(
         email=email,
         mobile=mobile,
         id=user.id,
-        organization_ids=None,
     )
     assert updated_user is not None
     assert updated_user.id == user.id

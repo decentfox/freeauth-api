@@ -17,14 +17,18 @@ from ..query_api import (
     create_user,
     delete_user,
     get_user_by_id,
+    resign_user,
     update_user,
+    update_user_organization,
     update_user_status,
 )
 from ..utils import gen_random_string, get_password_hash
 from .dataclasses import (
     UserDeleteBody,
+    UserOrganizationBody,
     UserPostBody,
     UserPutBody,
+    UserResignationBody,
     UserStatusBody,
 )
 
@@ -120,7 +124,6 @@ async def put_user(
             email=user.email,
             mobile=user.mobile,
             id=user_id,
-            organization_ids=user.organization_ids,
         )
     except edgedb.errors.ConstraintViolationError as e:
         field = str(e).split(" ")[0]
@@ -133,6 +136,41 @@ async def put_user(
             status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
         )
     return updated_user
+
+
+@router.put(
+    "/users/{user_id}/organizations",
+    tags=["组织管理"],
+    summary="变更部门",
+    description="变更指定用户的直属部门或企业机构",
+)
+async def update_member_organizations(
+    user_id: uuid.UUID,
+    body: UserOrganizationBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> CreateUserResult | None:
+    user: CreateUserResult | None = await update_user_organization(
+        client, id=user_id, organization_ids=body.organization_ids
+    )
+    if not user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
+        )
+    return user
+
+
+@router.post(
+    "/users/resign",
+    tags=["组织管理"],
+    summary="办理离职",
+    description="支持批量为多个成员办理离职",
+)
+async def resign_users(
+    body: UserResignationBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> list[DeleteUserResult]:
+    user_ids: List[uuid.UUID] = body.user_ids
+    return await resign_user(client, user_ids=user_ids)
 
 
 @router.get(

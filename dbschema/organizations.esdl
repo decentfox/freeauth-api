@@ -17,6 +17,7 @@ module default {
         required property name -> str;
         property code -> str;
         property code_upper := str_upper(.code);
+        required property hierarchy := count([is Department].ancestors);
 
         multi link directly_children := .<parent[is Department];
         multi link children := .<ancestors[is Department];
