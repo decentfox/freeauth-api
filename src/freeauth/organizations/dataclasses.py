@@ -10,20 +10,7 @@ from ..dataclasses import BaseModelConfig, QueryBody
 from ..query_api import GetOrganizationNodeResult
 
 
-class OrgTypeBodyConfig:
-    anystr_strip_whitespace = True
-    error_msg_templates = {
-        "value_error.any_str.min_length": "该字段为必填项",
-        "value_error.any_str.max_length": (
-            "最大支持的长度为{limit_value}个字符"
-        ),
-        "value_error.missing": "该字段为必填项",
-        "type_error.none.not_allowed": "该字段不得为空",
-        "type_error.uuid": "组织类型ID格式错误",
-    }
-
-
-@dataclass(config=OrgTypeBodyConfig)
+@dataclass(config=BaseModelConfig)
 class OrgTypePostBody:
     name: str = Field(
         ...,
@@ -49,7 +36,7 @@ class OrgTypePostBody:
         return v.upper() if v else v
 
 
-@dataclass(config=OrgTypeBodyConfig)
+@dataclass(config=BaseModelConfig)
 class OrgTypePutBody:
     name: str | None = Field(
         None,
@@ -84,7 +71,7 @@ class OrgTypePutBody:
         return v.upper() if v else v
 
 
-@dataclass(config=OrgTypeBodyConfig)
+@dataclass(config=BaseModelConfig)
 class OrgTypeStatusBody:
     ids: list[uuid.UUID] = Field(
         ...,
@@ -99,7 +86,7 @@ class OrgTypeStatusBody:
     )
 
 
-@dataclass(config=OrgTypeBodyConfig)
+@dataclass(config=BaseModelConfig)
 class OrgTypeDeleteBody:
     ids: list[uuid.UUID] = Field(
         ...,
@@ -173,17 +160,7 @@ class EnterprisePostBody(EnterprisePutBody):
     )
 
 
-class DepartmentBodyConfig:
-    anystr_strip_whitespace = True
-    error_msg_templates = {
-        "value_error.any_str.min_length": "该字段为必填项",
-        "value_error.missing": "该字段为必填项",
-        "type_error.none.not_allowed": "该字段不得为空",
-        "type_error.uuid": "上级部门ID格式错误",
-    }
-
-
-@dataclass(config=DepartmentBodyConfig)
+@dataclass(config=BaseModelConfig)
 class DepartmentPostOrPutBody:
     parent_id: uuid.UUID = Field(
         ..., title="所属上级部门", description="部门 ID 或企业机构 ID"

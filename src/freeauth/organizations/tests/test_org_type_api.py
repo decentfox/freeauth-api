@@ -201,7 +201,7 @@ def test_toggle_org_type_status(
     }
     resp = test_client.put("/v1/org_types/status", json=data)
     error = resp.json()
-    assert error["detail"]["errors"]["ids.0"] == "组织类型ID格式错误"
+    assert error["detail"]["errors"]["ids.0"] == "ID格式错误"
 
     data = {
         "ids": ["12345678-1234-5678-1234-567812345678"],
@@ -269,7 +269,7 @@ def test_delete_org_types(
     }
     resp = test_client.request("DELETE", "/v1/org_types", json=data)
     error = resp.json()
-    assert error["detail"]["errors"]["ids.0"] == "组织类型ID格式错误"
+    assert error["detail"]["errors"]["ids.0"] == "ID格式错误"
 
     data = {
         "ids": ["12345678-1234-5678-1234-567812345678"],

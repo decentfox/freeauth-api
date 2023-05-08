@@ -3,9 +3,11 @@
 #     'src/freeauth/organizations/queries/create_department.edgeql'
 #     'src/freeauth/organizations/queries/create_enterprise.edgeql'
 #     'src/freeauth/organizations/queries/create_org_type.edgeql'
+#     'src/freeauth/roles/queries/create_role.edgeql'
 #     'src/freeauth/users/queries/create_user.edgeql'
 #     'src/freeauth/organizations/queries/delete_org_type.edgeql'
 #     'src/freeauth/organizations/queries/delete_organization.edgeql'
+#     'src/freeauth/roles/queries/delete_role.edgeql'
 #     'src/freeauth/users/queries/delete_user.edgeql'
 #     'src/freeauth/organizations/queries/get_department_by_id_or_code.edgeql'
 #     'src/freeauth/organizations/queries/get_enterprise_by_id_or_code.edgeql'
@@ -13,6 +15,7 @@
 #     'src/freeauth/settings/queries/get_login_setting_by_key.edgeql'
 #     'src/freeauth/organizations/queries/get_org_type_by_id_or_code.edgeql'
 #     'src/freeauth/organizations/queries/get_organization_node.edgeql'
+#     'src/freeauth/roles/queries/get_role_by_id_or_code.edgeql'
 #     'src/freeauth/auth/queries/get_user_by_account.edgeql'
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
 #     'src/freeauth/organizations/queries/organization_add_member.edgeql'
@@ -25,6 +28,8 @@
 #     'src/freeauth/organizations/queries/update_enterprise.edgeql'
 #     'src/freeauth/organizations/queries/update_org_type.edgeql'
 #     'src/freeauth/organizations/queries/update_org_type_status.edgeql'
+#     'src/freeauth/roles/queries/update_role.edgeql'
+#     'src/freeauth/roles/queries/update_role_status.edgeql'
 #     'src/freeauth/users/queries/update_user.edgeql'
 #     'src/freeauth/users/queries/update_user_organization.edgeql'
 #     'src/freeauth/users/queries/update_user_status.edgeql'
@@ -133,10 +138,31 @@ class CreateEnterpriseResult(NoPydanticValidation):
 class CreateOrgTypeResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
-    code: str
+    code: str | None
     description: str | None
     is_deleted: bool
     is_protected: bool
+
+
+@dataclasses.dataclass
+class CreateRoleResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    code: str | None
+    description: str | None
+    organizations: list[CreateRoleResultOrganizationsItem]
+    is_deleted: bool
+    created_at: datetime.datetime
+
+
+@dataclasses.dataclass
+class CreateRoleResultOrganizationsItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
+    is_org_type: bool
+    is_enterprise: bool
+    is_department: bool
 
 
 @dataclasses.dataclass
@@ -163,11 +189,16 @@ class CreateUserResultDepartmentsItem(NoPydanticValidation):
 class DeleteOrgTypeResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
-    code: str
+    code: str | None
 
 
 @dataclasses.dataclass
 class DeleteOrganizationResult(NoPydanticValidation):
+    id: uuid.UUID
+
+
+@dataclasses.dataclass
+class DeleteRoleResult(NoPydanticValidation):
     id: uuid.UUID
 
 
@@ -229,7 +260,15 @@ class SignInResult(NoPydanticValidation):
 class UpdateOrgTypeStatusResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
-    code: str
+    code: str | None
+    is_deleted: bool
+
+
+@dataclasses.dataclass
+class UpdateRoleStatusResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    code: str | None
     is_deleted: bool
 
 
@@ -439,6 +478,50 @@ async def create_org_type(
     )
 
 
+async def create_role(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    name: str,
+    code: str | None,
+    description: str | None,
+    organization_ids: list[uuid.UUID] | None,
+) -> CreateRoleResult:
+    return await executor.query_single(
+        """\
+        SELECT (
+            INSERT Role {
+                name := <str>$name,
+                code := <optional str>$code,
+                description := <optional str>$description,
+                organizations := (
+                    SELECT Organization
+                    FILTER .id IN array_unpack(
+                        <optional array<uuid>>$organization_ids
+                    )
+                )
+            }
+        ) {
+            name,
+            code,
+            description,
+            organizations: {
+                code,
+                name,
+                is_org_type := EXISTS [is OrganizationType],
+                is_enterprise := EXISTS [is Enterprise],
+                is_department := EXISTS [is Department]
+            },
+            is_deleted,
+            created_at
+        };\
+        """,
+        name=name,
+        code=code,
+        description=description,
+        organization_ids=organization_ids,
+    )
+
+
 async def create_user(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -516,6 +599,19 @@ async def delete_organization(
     return await executor.query(
         """\
         DELETE Organization FILTER .id in array_unpack(<array<uuid>>$ids);\
+        """,
+        ids=ids,
+    )
+
+
+async def delete_role(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    ids: list[uuid.UUID],
+) -> list[DeleteRoleResult]:
+    return await executor.query(
+        """\
+        DELETE Role FILTER .id in array_unpack(<array<uuid>>$ids);\
         """,
         ids=ids,
     )
@@ -703,6 +799,42 @@ async def get_organization_node(
     )
 
 
+async def get_role_by_id_or_code(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    id: uuid.UUID | None,
+    code: str | None,
+) -> CreateRoleResult | None:
+    return await executor.query_single(
+        """\
+        WITH
+            id := <optional uuid>$id,
+            code := <optional str>$code
+        SELECT assert_single(
+            (
+                SELECT Role {
+                    name,
+                    code,
+                    description,
+                    organizations: {
+                        code,
+                        name,
+                        is_org_type := EXISTS [is OrganizationType],
+                        is_enterprise := EXISTS [is Enterprise],
+                        is_department := EXISTS [is Department]
+                    },
+                    is_deleted,
+                    created_at
+                }
+                FILTER (.id = id) ?? (.code_upper = str_upper(code))
+            )
+        );\
+        """,
+        id=id,
+        code=code,
+    )
+
+
 async def get_user_by_account(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -822,8 +954,9 @@ async def resign_user(
             UPDATE User FILTER .id in array_unpack(<array<uuid>>$user_ids)
             SET {
                 directly_organizations := {},
-                deleted_at := datetime_of_transaction() IF is_deleted
-                ELSE .deleted_at
+                deleted_at := (
+                    datetime_of_transaction() IF is_deleted ELSE .deleted_at
+                )
             }
         ) { name } ORDER BY .created_at DESC;\
         """,
@@ -1225,6 +1358,94 @@ async def update_org_type_status(
         """,
         is_deleted=is_deleted,
         ids=ids,
+    )
+
+
+async def update_role(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    id: uuid.UUID | None,
+    current_code: str | None,
+    is_deleted: bool | None,
+    organization_ids: list[uuid.UUID] | None,
+    name: str,
+    code: str | None,
+    description: str | None,
+) -> CreateRoleResult | None:
+    return await executor.query_single(
+        """\
+        WITH
+            id := <optional uuid>$id,
+            current_code := <optional str>$current_code,
+            is_deleted := <optional bool>$is_deleted,
+            organization_ids := <optional array<uuid>>$organization_ids,
+            role := assert_single((
+                SELECT Role
+                FILTER
+                    (.id = id) ??
+                    (.code_upper ?= str_upper(current_code)) ??
+                    false
+            ))
+        SELECT (
+            UPDATE role
+            SET {
+                name := <str>$name,
+                code := <optional str>$code,
+                description := <optional str>$description,
+                deleted_at := (
+                    .deleted_at IF NOT EXISTS is_deleted ELSE
+                    datetime_of_transaction() IF is_deleted ELSE {}
+                ),
+                organizations := (
+                    SELECT Organization
+                    FILTER .id IN array_unpack(organization_ids)
+                )
+            }
+        ) {
+            name,
+            code,
+            description,
+            organizations: {
+                code,
+                name,
+                is_org_type := EXISTS [is OrganizationType],
+                is_enterprise := EXISTS [is Enterprise],
+                is_department := EXISTS [is Department]
+            },
+            is_deleted,
+            created_at
+        };\
+        """,
+        id=id,
+        current_code=current_code,
+        is_deleted=is_deleted,
+        organization_ids=organization_ids,
+        name=name,
+        code=code,
+        description=description,
+    )
+
+
+async def update_role_status(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    ids: list[uuid.UUID],
+    is_deleted: bool,
+) -> list[UpdateRoleStatusResult]:
+    return await executor.query(
+        """\
+        SELECT (
+            UPDATE Role
+            FILTER .id in array_unpack(<array<uuid>>$ids)
+            SET {
+                deleted_at := (
+                    datetime_of_transaction() IF <bool>$is_deleted ELSE {}
+                )
+            }
+        ) { name, code, is_deleted };\
+        """,
+        ids=ids,
+        is_deleted=is_deleted,
     )
 
 

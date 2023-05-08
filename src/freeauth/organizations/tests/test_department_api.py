@@ -16,8 +16,6 @@ from ...query_api import (
 from .test_enterprise_api import create_enterprise
 from .test_org_type_api import create_org_type
 
-# from typing import cast
-
 
 @pytest.mark.parametrize(
     "field,value,msg",
@@ -30,7 +28,7 @@ from .test_org_type_api import create_org_type
         (
             "parent_id",
             "",
-            "上级部门ID格式错误",
+            "ID格式错误",
         ),
         (
             "name",

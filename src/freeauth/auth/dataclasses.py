@@ -10,15 +10,7 @@ from ..query_api import AuthCodeType
 from ..utils import MOBILE_REGEX
 
 
-class AuthBodyConfig(BaseModelConfig):
-    error_msg_templates = {
-        "type_error.enum": "不是有效的枚举值",
-        "value_error.missing": "该字段为必填项",
-        "type_error.none.not_allowed": "该字段不得为空",
-    }
-
-
-@dataclass(config=AuthBodyConfig)
+@dataclass(config=BaseModelConfig)
 class SignUpSendCodeBody:
     code_type: AuthCodeType = Field(..., title="验证码类型")
     account: str = Field(
@@ -43,7 +35,7 @@ class SignUpSendCodeBody:
         return v
 
 
-@dataclass(config=AuthBodyConfig)
+@dataclass(config=BaseModelConfig)
 class SignUpBody(SignUpSendCodeBody):
     code: str = Field(
         ...,
@@ -52,7 +44,7 @@ class SignUpBody(SignUpSendCodeBody):
     )
 
 
-@dataclass(config=AuthBodyConfig)
+@dataclass(config=BaseModelConfig)
 class SignInSendCodeBody:
     account: str = Field(
         ...,
@@ -70,7 +62,7 @@ class SignInSendCodeBody:
         return v
 
 
-@dataclass(config=AuthBodyConfig)
+@dataclass(config=BaseModelConfig)
 class SignInCodeBody(SignInSendCodeBody):
     code: str = Field(
         ...,
@@ -79,7 +71,7 @@ class SignInCodeBody(SignInSendCodeBody):
     )
 
 
-@dataclass(config=AuthBodyConfig)
+@dataclass(config=BaseModelConfig)
 class SignInPwdBody:
     account: str = Field(
         ...,

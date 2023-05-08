@@ -1,12 +1,9 @@
 module default {
-    type OrganizationType extending SoftDeletable {
-        required property name -> str;
+    type OrganizationType extending Organization, SoftDeletable {
         property description -> str;
         required property is_protected -> bool {
             default := false
         };
-        required property code -> str;
-        required property code_upper := str_upper(.code);
 
         multi link enterprises := .<org_type[is Enterprise];
 

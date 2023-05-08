@@ -10,10 +10,15 @@ from pydantic.dataclasses import dataclass
 class BaseModelConfig:
     anystr_strip_whitespace = True
     error_msg_templates = {
-        "value_error.missing": "该字段为必填项",
+        "type_error.enum": "不是有效的枚举值",
         "type_error.none.not_allowed": "该字段不得为空",
         "type_error.uuid": "ID格式错误",
+        "value_error.any_str.min_length": "该字段为必填项",
+        "value_error.any_str.max_length": (
+            "最大支持的长度为{limit_value}个字符"
+        ),
         "value_error.list.min_items": "请至少选择一项",
+        "value_error.missing": "该字段为必填项",
     }
 
 
