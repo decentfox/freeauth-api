@@ -113,9 +113,9 @@ class UserResignationBody:
         description="待离职的用户 ID 列表",
     )
     is_deleted: bool | None = Field(
-        None,
+        False,
         title="是否禁用",
-        description="true 为禁用用户，false 为启用用户",
+        description="true 为禁用用户，false 保持不变",
     )
 
 
