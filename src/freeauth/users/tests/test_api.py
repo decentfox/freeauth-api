@@ -462,6 +462,50 @@ def test_resign_user(
     assert resp.status_code == HTTPStatus.OK, resigned_user
     assert len(resigned_user) == 3
 
+    disabled_user = users[0]
+    data: Dict[str, Any] = {
+        "user_ids": [str(disabled_user.id)],
+        "is_deleted": True,
+    }
+    resp = test_client.put("/v1/users/status", json=data)
+
+    for user in users:
+        resp = test_client.get(f"/v1/users/{user.id}")
+        rv = resp.json()
+        assert resp.status_code == HTTPStatus.OK, rv
+        if user.id == disabled_user.id:
+            assert rv["is_deleted"]
+        else:
+            assert not rv["is_deleted"]
+        assert not rv["departments"]
+
+
+def test_resign_and_disable_user(
+    test_client: TestClient,
+    enterprise: CreateEnterpriseResult,
+    department: CreateDepartmentResult,
+    faker,
+):
+    users = []
+    for _ in range(3):
+        users.append(
+            create_user(
+                test_client,
+                name=faker.name(),
+                username=faker.user_name(),
+                mobile=faker.phone_number(),
+                email=faker.email(),
+                organization_ids=[str(enterprise.id), str(department.id)],
+            )
+        )
+    resp = test_client.post(
+        "/v1/users/resign",
+        json=dict(user_ids=[str(u.id) for u in users], is_deleted=True),
+    )
+    resigned_user = resp.json()
+    assert resp.status_code == HTTPStatus.OK, resigned_user
+    assert len(resigned_user) == 3
+
     for user in users:
         resp = test_client.get(f"/v1/users/{user.id}")
         rv = resp.json()

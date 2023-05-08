@@ -101,6 +101,7 @@ class UserOrganizationBody:
         ...,
         title="直属部门 ID 列表",
         description="可设置一个或多个部门分支或企业机构 ID",
+        min_items=1,
     )
 
 
@@ -110,6 +111,11 @@ class UserResignationBody:
         ...,
         title="用户 ID 列表",
         description="待离职的用户 ID 列表",
+    )
+    is_deleted: bool | None = Field(
+        False,
+        title="是否禁用",
+        description="true 为禁用用户，false 保持不变",
     )
 
 

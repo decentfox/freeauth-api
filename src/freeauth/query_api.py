@@ -812,18 +812,22 @@ async def query_org_types(
 async def resign_user(
     executor: edgedb.AsyncIOExecutor,
     *,
+    is_deleted: bool | None,
     user_ids: list[uuid.UUID],
 ) -> list[DeleteUserResult]:
     return await executor.query(
         """\
         SELECT (
+            WITH is_deleted := <optional bool>$is_deleted,
             UPDATE User FILTER .id in array_unpack(<array<uuid>>$user_ids)
             SET {
                 directly_organizations := {},
-                deleted_at := datetime_of_transaction()
+                deleted_at := datetime_of_transaction() IF is_deleted
+                ELSE .deleted_at
             }
         ) { name } ORDER BY .created_at DESC;\
         """,
+        is_deleted=is_deleted,
         user_ids=user_ids,
     )
 

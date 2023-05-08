@@ -170,7 +170,8 @@ async def resign_users(
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[DeleteUserResult]:
     user_ids: List[uuid.UUID] = body.user_ids
-    return await resign_user(client, user_ids=user_ids)
+    is_deleted: bool | None = body.is_deleted
+    return await resign_user(client, user_ids=user_ids, is_deleted=is_deleted)
 
 
 @router.get(
