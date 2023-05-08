@@ -279,6 +279,11 @@ class UpdateUserStatusResult(NoPydanticValidation):
     is_deleted: bool
 
 
+@dataclasses.dataclass
+class UpsertLoginSettingResult(NoPydanticValidation):
+    id: uuid.UUID
+
+
 class ValidateCodeResult(typing.NamedTuple):
     code_required: bool
     code_found: bool
@@ -1557,25 +1562,21 @@ async def update_user_status(
 async def upsert_login_setting(
     executor: edgedb.AsyncIOExecutor,
     *,
-    key: str,
-    value: str,
-) -> GetLoginSettingResult:
-    return await executor.query_single(
+    configs: str,
+) -> list[UpsertLoginSettingResult]:
+    return await executor.query(
         """\
-        WITH
-            key := <str>$key,
-            value := <str>$value
-        SELECT (
+        FOR x IN json_object_unpack(<json>$configs)
+        UNION (
             INSERT LoginSetting {
-                key := key,
-                value := value
+                key := x.0,
+                value := to_str(x.1)
             } UNLESS CONFLICT ON (.key) ELSE (
-                UPDATE LoginSetting SET { value := value}
+                UPDATE LoginSetting SET { value := to_str(x.1)}
             )
-        ) { key, value };\
+        );\
         """,
-        key=key,
-        value=value,
+        configs=configs,
     )
 
 

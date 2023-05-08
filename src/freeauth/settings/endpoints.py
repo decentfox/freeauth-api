@@ -1,16 +1,26 @@
 from __future__ import annotations
 
+import re
 from http import HTTPStatus
 from typing import Any
 
 import edgedb
-from fastapi import Depends, HTTPException
+from fastapi import Body, Depends, HTTPException
 
 from .. import get_edgedb_client
 from ..app import router
 from . import get_login_settings
-from .dataclasses import LoginSettingBody
 from .dependencies import get_setting_keys
+
+
+async def _get_login_configs(client: edgedb.AsyncIOClient, keys):
+    settings = get_login_settings()
+    ret = {}
+    for key in keys:
+        value = await settings.get(key, client)
+        camel_key = re.sub(r"_(\w)", lambda m: m.group(1).upper(), key)
+        ret[camel_key] = value
+    return ret
 
 
 @router.get(
@@ -23,30 +33,35 @@ async def get_login_configs(
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     keys: list[str] = Depends(get_setting_keys),
 ) -> dict[str, Any]:
-    settings = get_login_settings()
-    ret = {}
-    for key in keys:
-        value = await settings.get(key, client)
-        ret[key] = value
-    return ret
+    return await _get_login_configs(client, keys)
 
 
 @router.put(
-    "/login_settings/{key}",
+    "/login_settings",
     tags=["登录配置"],
     summary="更新登录配置项",
-    description="更新指定登录配置项",
+    description="更新一个或多个登录配置项值",
 )
-async def put_config(
-    key: str,
-    body: LoginSettingBody,
+async def put_login_configs(
+    body: dict[str, Any] = Body(
+        ...,
+        title="登录配置项键值",
+        description="登录配置项键值，支持任意 JSON 可解析的格式的配置值",
+    ),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     keys: list[str] = Depends(get_setting_keys),
 ) -> dict[str, Any]:
-    if key not in keys:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail="系统不支持该登录配置项",
-        )
+    configs = {}
+    for key in body.keys():
+        snake_key = re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
+
+        if snake_key not in keys:
+            raise HTTPException(
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                detail=f"系统不支持登录配置项 {key}",
+            )
+
+        configs[snake_key] = body[key]
     settings = get_login_settings()
-    return await settings.set(key, body.value, client)
+    await settings.patch(configs, client)
+    return await _get_login_configs(client, keys)

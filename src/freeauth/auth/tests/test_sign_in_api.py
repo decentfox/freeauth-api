@@ -14,14 +14,13 @@ from ...users.tests.test_api import create_user
 
 @pytest.fixture(autouse=True)
 def login_settings_for_signup(test_client: TestClient):
-    # enable all signup modes
+    # enable all signup & signin modes
     test_client.put(
-        "/v1/login_settings/code_signin_modes",
-        json={"value": ["mobile", "email"]},
-    )
-    test_client.put(
-        "/v1/login_settings/pwd_signin_modes",
-        json={"value": ["username", "mobile", "email"]},
+        "/v1/login_settings",
+        json={
+            "codeSigninModes": ["mobile", "email"],
+            "pwdSigninModes": ["username", "mobile", "email"],
+        },
     )
 
 
@@ -131,13 +130,17 @@ def test_validate_sign_in_code_failed(
     if data.get("account") == "13800000000":
         if data.get("code") == config.demo_code:
             test_client.put(
-                "/v1/login_settings/signin_code_validating_limit",
-                json={"value": [3, -1]},
+                "/v1/login_settings",
+                json={
+                    "signinCodeValidatingLimit": [3, -1],
+                },
             )
         test_client.post("/v1/sign_in/code", json={"account": data["account"]})
         test_client.put(
-            "/v1/login_settings/signin_code_validating_limit",
-            json={"value": [3, 10]},
+            "/v1/login_settings",
+            json={
+                "signinCodeValidatingLimit": [3, 10],
+            },
         )
 
     resp = test_client.post("/v1/sign_in/verify", json=data)

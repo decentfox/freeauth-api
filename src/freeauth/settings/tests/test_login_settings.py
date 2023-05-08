@@ -47,7 +47,7 @@ def test_signup_modes(
 ):
     get_login_settings.cache_clear()
     resp = test_client.put(
-        "/v1/login_settings/signup_modes", json={"value": signup_modes}
+        "/v1/login_settings", json={"signupModes": signup_modes}
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
@@ -91,8 +91,8 @@ def test_code_signin_modes(
 ):
     get_login_settings.cache_clear()
     resp = test_client.put(
-        "/v1/login_settings/code_signin_modes",
-        json={"value": code_signin_modes},
+        "/v1/login_settings",
+        json={"codeSigninModes": code_signin_modes},
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
@@ -135,8 +135,8 @@ def test_pwd_signin_modes(
 ):
     get_login_settings.cache_clear()
     resp = test_client.put(
-        "/v1/login_settings/pwd_signin_modes",
-        json={"value": pwd_signin_modes},
+        "/v1/login_settings",
+        json={"pwdSigninModes": pwd_signin_modes},
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
@@ -163,8 +163,8 @@ def test_pwd_signin_modes(
 def test_jwt_token_ttl(test_client: TestClient, jwt_token_ttl: int):
     get_login_settings.cache_clear()
     resp = test_client.put(
-        "/v1/login_settings/jwt_token_ttl",
-        json={"value": jwt_token_ttl},
+        "/v1/login_settings",
+        json={"jwtTokenTtl": jwt_token_ttl},
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
@@ -231,8 +231,8 @@ def test_code_validating_limit(
         )
     get_login_settings.cache_clear()
     resp = test_client.put(
-        f"/v1/login_settings/{limit_type}_code_validating_limit_enabled",
-        json={"value": False},
+        "/v1/login_settings",
+        json={f"{limit_type}CodeValidatingLimitEnabled": False},
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
@@ -255,13 +255,13 @@ def test_code_validating_limit(
         assert error["detail"]["errors"]["code"] == "验证码错误，请重新输入"
 
     resp = test_client.put(
-        f"/v1/login_settings/{limit_type}_code_validating_limit_enabled",
-        json={"value": True},
+        "/v1/login_settings",
+        json={f"{limit_type}CodeValidatingLimitEnabled": True},
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
     resp = test_client.put(
-        f"/v1/login_settings/{limit_type}_code_validating_limit",
-        json={"value": [2, 5]},
+        "/v1/login_settings",
+        json={f"{limit_type}CodeValidatingLimit": [2, 5]},
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
@@ -307,8 +307,8 @@ def test_code_sending_limit(
         )
     get_login_settings.cache_clear()
     resp = test_client.put(
-        f"/v1/login_settings/{limit_type}_code_sending_limit_enabled",
-        json={"value": False},
+        "/v1/login_settings",
+        json={f"{limit_type}CodeSendingLimitEnabled": False},
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
@@ -317,13 +317,13 @@ def test_code_sending_limit(
         assert resp.status_code == HTTPStatus.OK, resp.json()
 
     resp = test_client.put(
-        f"/v1/login_settings/{limit_type}_code_sending_limit_enabled",
-        json={"value": True},
+        "/v1/login_settings",
+        json={f"{limit_type}CodeSendingLimitEnabled": True},
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
     resp = test_client.put(
-        f"/v1/login_settings/{limit_type}_code_sending_limit",
-        json={"value": [3, 5]},
+        "/v1/login_settings",
+        json={f"{limit_type}CodeSendingLimit": [3, 5]},
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 

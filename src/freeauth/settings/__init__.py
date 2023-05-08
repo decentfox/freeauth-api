@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
+from typing import Any
 
 import edgedb
 
@@ -100,12 +101,12 @@ class LoginSettings:
                 self._cache[key] = value
         return value
 
-    async def set(self, key: str, value, client: edgedb.AsyncIOClient):
-        item: GetLoginSettingResult = await upsert_login_setting(
-            client, key=key, value=json.dumps(value)
-        )
-        self._cache[item.key] = value
-        return {key: value}
+    async def patch(
+        self, configs: dict[str, Any], client: edgedb.AsyncIOClient
+    ):
+        await upsert_login_setting(client, configs=json.dumps(configs))
+        for key, value in configs.items():
+            self._cache[key] = value
 
 
 @lru_cache()

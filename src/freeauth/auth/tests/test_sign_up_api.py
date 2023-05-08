@@ -19,7 +19,10 @@ from ...utils import gen_random_string
 def login_settings_for_signup(test_client: TestClient):
     # enable all signup modes
     test_client.put(
-        "/v1/login_settings/signup_modes", json={"value": ["mobile", "email"]}
+        "/v1/login_settings",
+        json={
+            "signupModes": ["mobile", "email"],
+        },
     )
 
 
@@ -172,16 +175,20 @@ def test_validate_sign_up_code_failed(
     if data.get("account") in config.demo_accounts:
         if data.get("code") == config.demo_code:
             test_client.put(
-                "/v1/login_settings/signup_code_validating_limit",
-                json={"value": [3, -1]},
+                "/v1/login_settings",
+                json={
+                    "signupCodeValidatingLimit": [3, -1],
+                },
             )
         test_client.post(
             "/v1/sign_up/code",
             json={"account": data["account"], "code_type": data["code_type"]},
         )
         test_client.put(
-            "/v1/login_settings/signup_code_validating_limit",
-            json={"value": [3, 10]},
+            "/v1/login_settings",
+            json={
+                "signupCodeValidatingLimit": [3, 10],
+            },
         )
 
     resp = test_client.post("/v1/sign_up/verify", json=data)
