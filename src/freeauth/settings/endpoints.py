@@ -10,14 +10,12 @@ from fastapi import Body, Depends, HTTPException
 from .. import get_edgedb_client
 from ..app import router
 from . import get_login_settings
-from .dependencies import get_setting_keys
 
 
-async def _get_login_configs(client: edgedb.AsyncIOClient, keys):
-    settings = get_login_settings()
+async def load_login_configs(client: edgedb.AsyncIOClient):
+    settings = await get_login_settings().get_all(client)
     ret = {}
-    for key in keys:
-        value = await settings.get(key, client)
+    for key, value in settings.items():
         camel_key = re.sub(r"_(\w)", lambda m: m.group(1).upper(), key)
         ret[camel_key] = value
     return ret
@@ -31,9 +29,8 @@ async def _get_login_configs(client: edgedb.AsyncIOClient, keys):
 )
 async def get_login_configs(
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-    keys: list[str] = Depends(get_setting_keys),
 ) -> dict[str, Any]:
-    return await _get_login_configs(client, keys)
+    return await load_login_configs(client)
 
 
 @router.put(
@@ -49,8 +46,9 @@ async def put_login_configs(
         description="登录配置项键值，支持任意 JSON 可解析的格式的配置值",
     ),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-    keys: list[str] = Depends(get_setting_keys),
 ) -> dict[str, Any]:
+    settings = get_login_settings()
+    keys = settings.get_keys()
     configs = {}
     for key in body.keys():
         snake_key = re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
@@ -62,6 +60,5 @@ async def put_login_configs(
             )
 
         configs[snake_key] = body[key]
-    settings = get_login_settings()
     await settings.patch(configs, client)
-    return await _get_login_configs(client, keys)
+    return await load_login_configs(client)

@@ -35,19 +35,17 @@ class LoginSettings:
     signup_code_validating_limit_enabled: bool = (
         False  # 是否限制注册验证码尝试次数
     )
-    signup_code_validating_limit: list[int] = [
-        3,
-        10,
-    ]  # 次/分钟，同一注册验证码在指定周期内允许输入错误的次数
+    # 同一注册验证码在指定周期内允许输入错误的次数，3次/10分钟
+    signup_code_validating_max_attempts: int = 3
+    signup_code_validating_interval: int = 10
     signup_code_sending_limit_enabled: bool = (
         False  # 是否限制注册验证码发送次数
     )
-    signup_code_sending_limit: list[int] = [
-        5,
-        60,
-    ]  # 次/分钟，同一账号在指定周期内允许获取注册验证码的次数
+    # 同一账号在指定周期内允许获取注册验证码的次数，5次/60分钟
+    signup_code_sending_max_attempts: int = 5
+    signup_code_sending_interval: int = 60
     change_pwd_after_first_login_enabled: bool = (
-        False  # 注册后首次登录是否强制要求设置用户名及密码
+        False  # 注册后首次登录是否强制要求修改密码
     )
 
     # Signin
@@ -58,17 +56,15 @@ class LoginSettings:
     signin_code_validating_limit_enabled: bool = (
         False  # 是否限制登录验证码尝试次数
     )
-    signin_code_validating_limit: list[int] = [
-        3,
-        10,
-    ]  # 次/分钟，同一登录验证码在指定周期内允许输入错误的次数
+    # 同一登录验证码在指定周期内允许输入错误的次数，3次/10分钟
+    signin_code_validating_max_attempts: int = 3
+    signin_code_validating_interval: int = 10
     signin_code_sending_limit_enabled: bool = (
         False  # 是否限制登录验证码发送次数
     )
-    signin_code_sending_limit: list[int] = [
-        5,
-        60,
-    ]  # 次/分钟，同一账号在指定周期内允许获取登录验证码的次数
+    # 同一账号在指定周期内允许获取登录验证码的次数，5次/60分钟
+    signin_code_sending_max_attempts: int = 5
+    signin_code_sending_interval: int = 60
     pwd_signin_modes: list[str] = [
         # "username",  # 支持用户名登录
         # "mobile",  # 支持手机号登录
@@ -80,26 +76,40 @@ class LoginSettings:
         self._cache = {}
         self._empty = True
 
+    def get_keys(self):
+        return [
+            x
+            for x in dir(self)
+            if not callable(getattr(self, x)) and not x.startswith("_")
+        ]
+
     async def get(self, key: str, client: edgedb.AsyncIOClient, load_all=True):
-        default_val = getattr(self.__class__, key, None)
         if load_all and self._empty:
-            self._empty = False
-            items: list[GetLoginSettingResult] = await get_login_setting(
-                client
-            )
-            for item_in_db in items:
-                self._cache[item_in_db.key] = json.loads(item_in_db.value)
+            await self.get_all(client)
+
         value = self._cache.get(key, _None)
         if value is _None:
             item: GetLoginSettingResult | None = None
             if self._empty:
                 item = await get_login_setting_by_key(client, key=key)
             if item is None:
-                value = default_val
+                value = getattr(self, key, None)
             else:
                 value = json.loads(item.value)
                 self._cache[key] = value
         return value
+
+    async def get_all(self, client: edgedb.AsyncIOClient):
+        if self._empty:
+            self._empty = False
+            for key in self.get_keys():
+                self._cache[key] = getattr(self, key, None)
+            items: list[GetLoginSettingResult] = await get_login_setting(
+                client
+            )
+            for item_in_db in items:
+                self._cache[item_in_db.key] = json.loads(item_in_db.value)
+        return self._cache
 
     async def patch(
         self, configs: dict[str, Any], client: edgedb.AsyncIOClient

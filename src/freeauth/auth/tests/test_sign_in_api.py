@@ -20,6 +20,7 @@ def login_settings_for_signup(test_client: TestClient):
         json={
             "codeSigninModes": ["mobile", "email"],
             "pwdSigninModes": ["username", "mobile", "email"],
+            "signinCodeValidatingLimitEnabled": True,
         },
     )
 
@@ -132,14 +133,14 @@ def test_validate_sign_in_code_failed(
             test_client.put(
                 "/v1/login_settings",
                 json={
-                    "signinCodeValidatingLimit": [3, -1],
+                    "signinCodeValidatingInterval": -1,
                 },
             )
         test_client.post("/v1/sign_in/code", json={"account": data["account"]})
         test_client.put(
             "/v1/login_settings",
             json={
-                "signinCodeValidatingLimit": [3, 10],
+                "signinCodeValidatingInterval": 10,
             },
         )
 

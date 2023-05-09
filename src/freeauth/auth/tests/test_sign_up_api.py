@@ -22,6 +22,7 @@ def login_settings_for_signup(test_client: TestClient):
         "/v1/login_settings",
         json={
             "signupModes": ["mobile", "email"],
+            "signupCodeValidatingLimitEnabled": True,
         },
     )
 
@@ -177,7 +178,7 @@ def test_validate_sign_up_code_failed(
             test_client.put(
                 "/v1/login_settings",
                 json={
-                    "signupCodeValidatingLimit": [3, -1],
+                    "signupCodeValidatingInterval": -1,
                 },
             )
         test_client.post(
@@ -187,7 +188,7 @@ def test_validate_sign_up_code_failed(
         test_client.put(
             "/v1/login_settings",
             json={
-                "signupCodeValidatingLimit": [3, 10],
+                "signupCodeValidatingInterval": 10,
             },
         )
 

@@ -165,31 +165,27 @@ async def send_signup_code(
     body: SignUpSendCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> SendCodeResult:
-    login_settings = get_login_settings()
-    validate_limit = await login_settings.get(
-        "signup_code_validating_limit", client
-    )
-    ttl = None
-    if validate_limit and len(validate_limit) == 2:
-        ttl = validate_limit[1]
-
-    max_attempts = None
-    attempts_ttl = None
-    send_limit_enabled = await login_settings.get(
-        "signup_code_sending_limit_enabled", client
-    )
-    if send_limit_enabled:
-        limit = await login_settings.get("signup_code_sending_limit", client)
-        if limit and len(limit) > 1:
-            max_attempts = limit[0]
-            attempts_ttl = limit[1]
+    settings = await get_login_settings().get_all(client)
+    sending_limit_enabled = settings["signup_code_sending_limit_enabled"]
     return await send_auth_code(
         client,
-        body.account,
-        AuthVerifyType.SIGNUP,
-        ttl,
-        max_attempts,
-        attempts_ttl,
+        account=body.account,
+        verify_type=AuthVerifyType.SIGNUP,
+        ttl=(
+            settings["signup_code_validating_interval"]
+            if settings["signup_code_validating_limit_enabled"]
+            else None
+        ),
+        max_attempts=(
+            settings["signup_code_sending_max_attempts"]
+            if sending_limit_enabled
+            else None
+        ),
+        attempts_ttl=(
+            settings["signup_code_sending_interval"]
+            if sending_limit_enabled
+            else None
+        ),
     )
 
 
@@ -206,19 +202,17 @@ async def sign_up_with_code(
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     client_info: dict = Depends(get_client_info),
 ) -> SignInResult | None:
-    login_settings = get_login_settings()
-    max_attempts = None
-    limit_enabled: bool = await login_settings.get(
-        "signup_code_validating_limit_enabled", client
-    )
-    if limit_enabled:
-        limit = await login_settings.get(
-            "signup_code_validating_limit", client
-        )
-        if limit and len(limit) > 1:
-            max_attempts = limit[0]
+    settings = await get_login_settings().get_all(client)
     await validate_auth_code(
-        client, body.account, AuthVerifyType.SIGNUP, body.code, max_attempts
+        client,
+        account=body.account,
+        verify_type=AuthVerifyType.SIGNUP,
+        code=body.code,
+        max_attempts=(
+            settings["signup_code_validating_max_attempts"]
+            if settings["signup_code_validating_limit_enabled"]
+            else None
+        ),
     )
     code_type: AuthCodeType = body.code_type
     username: str = gen_random_string(8)
@@ -253,29 +247,27 @@ async def send_signin_code(
     body: SignInSendCodeBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> SendCodeResult:
-    login_settings = get_login_settings()
-    limit = await login_settings.get("signin_code_validating_limit", client)
-    ttl = None
-    if limit and len(limit) == 2:
-        ttl = limit[1]
-
-    max_attempts = None
-    attempts_ttl = None
-    send_limit_enabled = await login_settings.get(
-        "signin_code_sending_limit_enabled", client
-    )
-    if send_limit_enabled:
-        limit = await login_settings.get("signin_code_sending_limit", client)
-        if limit and len(limit) > 1:
-            max_attempts = limit[0]
-            attempts_ttl = limit[1]
+    settings = await get_login_settings().get_all(client)
+    sending_limit_enabled = settings["signin_code_sending_limit_enabled"]
     return await send_auth_code(
         client,
-        body.account,
-        AuthVerifyType.SIGNIN,
-        ttl,
-        max_attempts,
-        attempts_ttl,
+        account=body.account,
+        verify_type=AuthVerifyType.SIGNIN,
+        ttl=(
+            settings["signin_code_validating_interval"]
+            if settings["signin_code_validating_limit_enabled"]
+            else None
+        ),
+        max_attempts=(
+            settings["signin_code_sending_max_attempts"]
+            if sending_limit_enabled
+            else None
+        ),
+        attempts_ttl=(
+            settings["signin_code_sending_interval"]
+            if sending_limit_enabled
+            else None
+        ),
     )
 
 
@@ -294,19 +286,17 @@ async def sign_in_with_code(
     ),
     client_info: dict = Depends(get_client_info),
 ) -> SignInResult | None:
-    login_settings = get_login_settings()
-    max_attempts = None
-    limit_enabled: bool = await login_settings.get(
-        "signin_code_validating_limit_enabled", client
-    )
-    if limit_enabled:
-        limit = await login_settings.get(
-            "signin_code_validating_limit", client
-        )
-        if limit and len(limit) > 1:
-            max_attempts = limit[0]
+    settings = await get_login_settings().get_all(client)
     await validate_auth_code(
-        client, body.account, AuthVerifyType.SIGNIN, body.code, max_attempts
+        client,
+        account=body.account,
+        verify_type=AuthVerifyType.SIGNIN,
+        code=body.code,
+        max_attempts=(
+            settings["signin_code_validating_max_attempts"]
+            if settings["signin_code_validating_limit_enabled"]
+            else None
+        ),
     )
     token = await create_access_token(client, response, user.id)
     return await sign_in(

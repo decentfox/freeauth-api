@@ -261,7 +261,10 @@ def test_code_validating_limit(
     assert resp.status_code == HTTPStatus.OK, resp.json()
     resp = test_client.put(
         "/v1/login_settings",
-        json={f"{limit_type}CodeValidatingLimit": [2, 5]},
+        json={
+            f"{limit_type}CodeValidatingMaxAttempts": 2,
+            f"{limit_type}CodeValidatingInterval": 5,
+        },
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
@@ -323,7 +326,10 @@ def test_code_sending_limit(
     assert resp.status_code == HTTPStatus.OK, resp.json()
     resp = test_client.put(
         "/v1/login_settings",
-        json={f"{limit_type}CodeSendingLimit": [3, 5]},
+        json={
+            f"{limit_type}CodeSendingMaxAttempts": 3,
+            f"{limit_type}CodeSendingInterval": 5,
+        },
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
