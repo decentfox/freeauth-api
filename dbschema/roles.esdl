@@ -9,6 +9,8 @@ module default {
             on target delete allow;
         };
 
+        multi link users := .<roles[is User];
+
         constraint exclusive on (.code_upper);
     }
 }
