@@ -22,9 +22,7 @@ FOR _ IN (
             parent := parent,
             ancestors := (
                 SELECT DISTINCT (
-                    SELECT
-                        .parent UNION
-                        .parent[is Department].ancestors
+                    SELECT .parent UNION .parent.ancestors
                 )
             )
         }

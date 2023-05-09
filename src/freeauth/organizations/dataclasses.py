@@ -224,3 +224,12 @@ class OrganizationUserQueryBody(QueryBody):
         title="是否包含子部门下的成员",
         description="默认为 true，设为 false 代表仅查询直属成员",
     )
+
+
+@dataclass(config=BaseModelConfig)
+class EnterpriseQueryBody(QueryBody):
+    org_type_id: uuid.UUID | None = Field(
+        None,
+        title="组织类型 ID",
+        description="支持过滤指定组织类型下的企业机构",
+    )

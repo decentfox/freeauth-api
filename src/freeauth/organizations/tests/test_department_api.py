@@ -410,6 +410,13 @@ def test_add_members_to_organizations(test_client: TestClient, faker):
             assert len(user["departments"]) == 5
 
     resp = test_client.post(
+        f"/v1/organizations/{org_type_1.id}/members", json={}
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 3
+
+    resp = test_client.post(
         f"/v1/organizations/{enterprise_1_1.id}/members", json={}
     )
     rv = resp.json()

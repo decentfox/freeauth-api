@@ -12,20 +12,23 @@ from ..dataclasses import PaginatedData, QueryBody
 from ..query_api import (
     CreateRoleResult,
     DeleteRoleResult,
+    QueryOrganizationRolesResult,
     UpdateRoleStatusResult,
     create_role,
     delete_role,
     get_role_by_id_or_code,
+    query_organization_roles,
     update_role,
     update_role_status,
 )
 from .dataclasses import (
+    OrganizationRoleQueryBody,
     RoleDeleteBody,
     RolePostBody,
     RolePutBody,
     RoleStatusBody,
 )
-from .dependencies import parse_role_id_or_code
+from .dependencies import parse_role_id_or_code, validate_organization_ids
 
 FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
 
@@ -36,6 +39,7 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
     tags=["角色管理"],
     summary="创建角色",
     description="创建新角色",
+    dependencies=[Depends(validate_organization_ids)],
 )
 async def post_role(
     body: RolePostBody,
@@ -112,6 +116,7 @@ async def get_role(
     tags=["角色管理"],
     summary="更新角色",
     description="更新指定角色的信息",
+    dependencies=[Depends(validate_organization_ids)],
 )
 async def put_role(
     body: RolePutBody,
@@ -202,3 +207,23 @@ async def get_roles(
         per_page=body.per_page,
     )
     return PaginatedData.parse_raw(result)
+
+
+@router.post(
+    "/organizations/{org_id}/roles/query",
+    tags=["角色管理"],
+    summary="获取可用角色列表",
+    description="包含全局角色和归属于指定组织分支的角色",
+)
+async def get_organization_roles(
+    org_id: uuid.UUID,
+    body: OrganizationRoleQueryBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> list[QueryOrganizationRolesResult]:
+    return await query_organization_roles(
+        client,
+        org_id=org_id,
+        q=f"%{body.q}%" if body.q else None,
+        role_type=body.role_type,
+        is_deleted=body.is_deleted,
+    )

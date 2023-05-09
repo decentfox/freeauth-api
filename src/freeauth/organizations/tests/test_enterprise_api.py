@@ -309,24 +309,25 @@ def test_query_enterprises_in_org_type(test_client: TestClient, faker):
         )
 
     data: dict = {}
-    resp = test_client.post(
-        f"/v1/org_types/{org_type_1.id}/enterprises/query", json=data
-    )
+    resp = test_client.post("/v1/enterprises/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 6
+
+    data["org_type_id"] = str(org_type_1.id)
+    resp = test_client.post("/v1/enterprises/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 2
 
-    resp = test_client.post(
-        f"/v1/org_types/{org_type_2.id}/enterprises/query", json=data
-    )
+    data["org_type_id"] = str(org_type_2.id)
+    resp = test_client.post("/v1/enterprises/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 4
 
     data["order_by"] = ["-code"]
-    resp = test_client.post(
-        f"/v1/org_types/{org_type_2.id}/enterprises/query", json=data
-    )
+    resp = test_client.post("/v1/enterprises/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert sorted(
@@ -334,9 +335,7 @@ def test_query_enterprises_in_org_type(test_client: TestClient, faker):
     ) == [e["code"] for e in rv["rows"]]
 
     data["q"] = enterprises_in_ot2[0].code
-    resp = test_client.post(
-        f"/v1/org_types/{org_type_2.id}/enterprises/query", json=data
-    )
+    resp = test_client.post("/v1/enterprises/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 1

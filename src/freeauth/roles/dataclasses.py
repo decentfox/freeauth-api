@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import uuid
+from enum import Enum
 
-from pydantic import Field
+from pydantic import Field, validator
 from pydantic.dataclasses import dataclass
 
 from ..dataclasses import BaseModelConfig
@@ -31,6 +32,10 @@ class RolePostBody:
         title="归属对象 ID 列表",
         description="可设置一个或多个组织类型、部门分支或企业机构 ID",
     )
+
+    @validator("code", pre=True)
+    def convert_to_uppercase(cls, v):
+        return v.upper() if v else v
 
 
 @dataclass(config=BaseModelConfig)
@@ -63,4 +68,32 @@ class RoleDeleteBody:
         ...,
         title="角色 ID 列表",
         description="待删除的角色 ID 列表",
+    )
+
+
+class RoleTypeEnum(str, Enum):
+    global_role = "global"
+    org_type = "org_type"
+    enterprise = "enterprise"
+    department = "department"
+
+
+@dataclass(config=BaseModelConfig)
+class OrganizationRoleQueryBody:
+    q: str | None = Field(
+        None,
+        title="搜索关键字",
+        description="支持搜索角色名称、角色代码、角色描述",
+    )
+    role_type: RoleTypeEnum | None = Field(
+        None,
+        title="角色类型",
+        description="支持按角色类型进行过滤",
+    )
+    is_deleted: bool | None = Field(
+        None,
+        title="角色是否禁用",
+        description=(
+            "支持按角色状态进行过滤，true 代表已禁用的角色，false 代表已启用的角色"
+        ),
     )

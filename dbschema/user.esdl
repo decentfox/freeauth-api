@@ -22,7 +22,7 @@ module default {
             on target delete allow;
         };
         multi link organizations := (
-            .directly_organizations.<ancestors[is Department]
+            .directly_organizations.<ancestors[is Organization]
         );
 
         index on (.username);

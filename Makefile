@@ -8,8 +8,11 @@ lint:
 	poetry run flake8 src
 	poetry run mypy src
 
-test:
+testdb:
 	poetry run pytest --reset-db
+
+test:
+	poetry run pytest -s
 
 resetdb:
 	edgedb query "create database tmp"

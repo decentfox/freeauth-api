@@ -14,20 +14,23 @@ module default {
         required property name -> str;
         property code -> str;
         property code_upper := str_upper(.code);
-        required property hierarchy := count([is Department].ancestors);
+        required property hierarchy := count(.ancestors);
 
         multi link directly_children := .<parent[is Department];
-        multi link children := .<ancestors[is Department];
+        multi link children := .<ancestors[is Organization];
         multi link directly_users := .<directly_organizations[is User];
         multi link users := (
             SELECT DISTINCT (
                 (
                     SELECT .directly_users
                 ) UNION (
-                    SELECT .<ancestors[is Department].directly_users
+                    SELECT .<ancestors[is Organization].directly_users
                 )
             )
         );
+        multi link ancestors -> Organization {
+            on target delete delete source;
+        };
     }
 
     type Enterprise extending Organization {
@@ -51,9 +54,6 @@ module default {
             on target delete delete source;
         };
         required link parent -> Organization {
-            on target delete delete source;
-        };
-        multi link ancestors -> Organization {
             on target delete delete source;
         };
 

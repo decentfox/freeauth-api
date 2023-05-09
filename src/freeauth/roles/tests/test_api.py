@@ -86,12 +86,25 @@ def test_create_role(
         ],
     }
     resp = test_client.post("/v1/roles", json=data)
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert (
+        error["detail"]["errors"]["organization_ids"]
+        == f'"{enterprise.name}"、'
+        f'"{department.name}"已包含在其他所属对象中，无需重复设置'
+    )
+
+    from ...organizations.tests.test_enterprise_api import create_enterprise
+
+    enterprise_2 = create_enterprise(test_client, org_type, faker)
+    data["organization_ids"] = [str(enterprise_2.id), str(department.id)]
+    resp = test_client.post("/v1/roles", json=data)
     role = resp.json()
     assert resp.status_code == HTTPStatus.CREATED, role
     assert role["name"] == data["name"]
-    assert role["code"] == data["code"]
+    assert role["code"] == data["code"].upper()
     assert not role["is_deleted"]
-    assert len(role["organizations"]) == 3
+    assert len(role["organizations"]) == 2
 
     data["code"] = role["code"].upper()
     resp = test_client.post("/v1/roles", json=data)
@@ -278,9 +291,8 @@ def test_delete_roles(test_client: TestClient, faker):
     assert sorted(role["id"] for role in rv) == sorted(ids)
 
 
-def test_get_roles(
-    test_client: TestClient, org_type, enterprise, department, faker
-):
+@pytest.fixture
+def roles(test_client: TestClient, org_type, enterprise, department, faker):
     roles = []
     for _ in range(2):
         roles.append(create_role(test_client, faker))
@@ -302,7 +314,10 @@ def test_get_roles(
                 test_client, faker, organization_ids=[str(department.id)]
             )
         )
+    return roles
 
+
+def test_get_roles(test_client: TestClient, roles, org_type):
     data: dict[str, Any] = dict(
         per_page=3,
     )
@@ -328,3 +343,79 @@ def test_get_roles(
     assert rv["total"] == 2
     assert rv["rows"][0]["organizations"][0]["name"] == org_type.name
     assert rv["rows"][1]["organizations"][0]["name"] == org_type.name
+
+
+def test_get_organization_roles(
+    test_client: TestClient, roles, org_type, enterprise, department
+):
+    data: dict[str, Any] = dict()
+    resp = test_client.post(
+        f"/v1/organizations/{org_type.id}/roles/query", json=data
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv) == 4
+
+    resp = test_client.post(
+        f"/v1/organizations/{enterprise.id}/roles/query", json=data
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv) == 6
+
+    resp = test_client.post(
+        f"/v1/organizations/{department.id}/roles/query", json=data
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv) == 8
+
+    data["q"] = roles[0].name
+    resp = test_client.post(
+        f"/v1/organizations/{org_type.id}/roles/query", json=data
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv) == 1
+    assert rv[0]["name"] == roles[0].name
+
+    data["role_type"] = "global"
+    resp = test_client.post(
+        f"/v1/organizations/{org_type.id}/roles/query", json=data
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv) == 1
+    assert rv[0]["name"] == roles[0].name
+
+    data["is_deleted"] = True
+    resp = test_client.post(
+        f"/v1/organizations/{org_type.id}/roles/query", json=data
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv) == 0
+
+    data = {"role_type": "org_type"}
+    resp = test_client.post(
+        f"/v1/organizations/{department.id}/roles/query", json=data
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv) == 2
+
+    data = {"role_type": "enterprise"}
+    resp = test_client.post(
+        f"/v1/organizations/{department.id}/roles/query", json=data
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv) == 2
+
+    data = {"role_type": "enterprise"}
+    resp = test_client.post(
+        f"/v1/organizations/{org_type.id}/roles/query", json=data
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv) == 0

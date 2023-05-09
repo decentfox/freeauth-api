@@ -14,7 +14,8 @@ FOR _ IN (
             bank_account_number := <optional str>$bank_account_number,
             contact_address := <optional str>$contact_address,
             contact_phone_num := <optional str>$contact_phone_num,
-            org_type := org_type
+            org_type := org_type,
+            ancestors := ( SELECT org_type )
         }
     ) {
         name,

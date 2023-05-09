@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException
 
 from .. import get_edgedb_client
 from ..app import router
-from ..dataclasses import PaginatedData, QueryBody
+from ..dataclasses import PaginatedData
 from ..query_api import (
     CreateDepartmentResult,
     CreateEnterpriseResult,
@@ -39,6 +39,7 @@ from .dataclasses import (
     DepartmentPostOrPutBody,
     EnterprisePostBody,
     EnterprisePutBody,
+    EnterpriseQueryBody,
     OrganizationDeleteBody,
     OrganizationNode,
     OrganizationUserBody,
@@ -313,14 +314,13 @@ async def get_enterprise(
 
 
 @router.post(
-    "/org_types/{org_type_id}/enterprises/query",
+    "/enterprises/query",
     tags=["组织管理"],
-    summary="获取指定组织类型下的企业机构列表",
-    description="分页获取，支持关键字搜索、排序",
+    summary="获取企业机构列表",
+    description="分页获取，支持关键字搜索、排序，支持过滤指定组织类型下的企业机构",
 )
 async def get_enterprises_in_org_type(
-    org_type_id: uuid.UUID,
-    body: QueryBody,
+    body: EnterpriseQueryBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
     result = await client.query_single_json(
@@ -329,6 +329,7 @@ async def get_enterprises_in_org_type(
                 page := <optional int64>$page ?? 1,
                 per_page := <optional int64>$per_page ?? 20,
                 q := <optional str>$q,
+                org_type_id := <optional uuid>$org_type_id,
                 enterprises := (
                     SELECT Enterprise
                     FILTER (
@@ -340,7 +341,10 @@ async def get_enterprises_in_org_type(
                         .bank_account_number ?? '' ILIKE q OR
                         .contact_address ?? '' ILIKE q OR
                         .contact_phone_num ?? '' ILIKE q
-                    ) AND .org_type.id = <uuid>'{org_type_id}'
+                    ) AND (
+                        true IF not EXISTS org_type_id ELSE
+                        .org_type.id = org_type_id
+                    )
                 ),
                 total := count(enterprises)
 
@@ -369,6 +373,7 @@ async def get_enterprises_in_org_type(
         q=f"%{body.q}%" if body.q else None,
         page=body.page,
         per_page=body.per_page,
+        org_type_id=body.org_type_id,
     )
     return PaginatedData.parse_raw(result)
 
