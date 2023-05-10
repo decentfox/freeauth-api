@@ -70,6 +70,12 @@ class LoginSettings:
         # "mobile",  # 支持手机号登录
         # "email",  # 支持邮箱登录
     ]  # 密码登录方式，`[]` 代表不支持密码登录
+    signin_pwd_validating_limit_enabled: bool = (
+        False  # 是否限制登录密码尝试次数
+    )
+    # 同一登录密码在指定周期内允许输入错误的次数，5次/1440分钟（1天）
+    signin_pwd_validating_max_attempts: int = 5
+    signin_pwd_validating_interval: int = 1440
     jwt_token_ttl: int = 0  # 分钟，默认关闭浏览器即过期
 
     def __init__(self):
@@ -108,7 +114,8 @@ class LoginSettings:
                 client
             )
             for item_in_db in items:
-                self._cache[item_in_db.key] = json.loads(item_in_db.value)
+                if item_in_db.key in self._cache:
+                    self._cache[item_in_db.key] = json.loads(item_in_db.value)
         return self._cache
 
     async def patch(
