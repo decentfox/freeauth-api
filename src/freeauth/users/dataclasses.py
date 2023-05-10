@@ -106,6 +106,15 @@ class UserOrganizationBody:
 
 
 @dataclass(config=BaseModelConfig)
+class UserRoleBody:
+    role_ids: list[uuid.UUID] = Field(
+        ...,
+        title="角色 ID 列表",
+        description="可设置一个或多个角色，或清空",
+    )
+
+
+@dataclass(config=BaseModelConfig)
 class UserResignationBody:
     user_ids: list[uuid.UUID] = Field(
         ...,

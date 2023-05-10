@@ -25,6 +25,10 @@ module default {
             .directly_organizations.<ancestors[is Organization]
         );
 
+        multi link roles -> Role {
+            on target delete allow;
+        };
+
         index on (.username);
         index on (.email);
         index on (.mobile);

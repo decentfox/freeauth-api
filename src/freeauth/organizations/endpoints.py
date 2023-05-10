@@ -362,7 +362,10 @@ async def get_enterprises_in_org_type(
                         issuing_bank,
                         bank_account_number,
                         contact_address,
-                        contact_phone_num
+                        contact_phone_num,
+                        org_type := (
+                            SELECT .org_type {{id, code, name}}
+                        )
                     }}
                     ORDER BY {body.ordering_expr}
                     OFFSET (page - 1) * per_page
@@ -574,6 +577,9 @@ async def get_members_in_organization(
                                 code,
                                 name
                             }}
+                        ),
+                        roles := (
+                            SELECT .roles {{ id, code, name }}
                         ),
                         is_deleted,
                         created_at,

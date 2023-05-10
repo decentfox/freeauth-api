@@ -33,6 +33,7 @@
 #     'src/freeauth/roles/queries/update_role_status.edgeql'
 #     'src/freeauth/users/queries/update_user.edgeql'
 #     'src/freeauth/users/queries/update_user_organization.edgeql'
+#     'src/freeauth/users/queries/update_user_roles.edgeql'
 #     'src/freeauth/users/queries/update_user_status.edgeql'
 #     'src/freeauth/settings/queries/upsert_login_setting.edgeql'
 #     'src/freeauth/auth/queries/validate_code.edgeql'
@@ -286,6 +287,34 @@ class UpdateRoleStatusResult(NoPydanticValidation):
     name: str
     code: str | None
     is_deleted: bool
+
+
+@dataclasses.dataclass
+class UpdateUserRolesResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str | None
+    username: str | None
+    email: str | None
+    mobile: str | None
+    departments: list[UpdateUserRolesResultDepartmentsItem]
+    roles: list[UpdateUserRolesResultRolesItem]
+    is_deleted: bool
+    created_at: datetime.datetime
+    last_login_at: datetime.datetime | None
+
+
+@dataclasses.dataclass
+class UpdateUserRolesResultDepartmentsItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
+
+
+@dataclasses.dataclass
+class UpdateUserRolesResultRolesItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
 
 
 @dataclasses.dataclass
@@ -1609,6 +1638,46 @@ async def update_user_organization(
         """,
         id=id,
         organization_ids=organization_ids,
+    )
+
+
+async def update_user_roles(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    id: uuid.UUID,
+    role_ids: list[uuid.UUID] | None,
+) -> UpdateUserRolesResult | None:
+    return await executor.query_single(
+        """\
+        WITH
+            user_id := <uuid>$id,
+            role_ids := <optional array<uuid>>$role_ids
+        SELECT (
+            UPDATE User FILTER .id = user_id
+            SET {
+                roles := (
+                    SELECT Role
+                    FILTER .id IN array_unpack(role_ids)
+                )
+            }
+        ) {
+            name,
+            username,
+            email,
+            mobile,
+            departments := (
+                SELECT .directly_organizations { id, code, name }
+            ),
+            roles := (
+                SELECT .roles { id, code, name }
+            ),
+            is_deleted,
+            created_at,
+            last_login_at
+        };\
+        """,
+        id=id,
+        role_ids=role_ids,
     )
 
 

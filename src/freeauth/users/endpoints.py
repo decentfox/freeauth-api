@@ -13,6 +13,7 @@ from ..dataclasses import PaginatedData, QueryBody
 from ..query_api import (
     CreateUserResult,
     DeleteUserResult,
+    UpdateUserRolesResult,
     UpdateUserStatusResult,
     create_user,
     delete_user,
@@ -20,6 +21,7 @@ from ..query_api import (
     resign_user,
     update_user,
     update_user_organization,
+    update_user_roles,
     update_user_status,
 )
 from ..utils import gen_random_string, get_password_hash
@@ -29,6 +31,7 @@ from .dataclasses import (
     UserPostBody,
     UserPutBody,
     UserResignationBody,
+    UserRoleBody,
     UserStatusBody,
 )
 
@@ -159,6 +162,27 @@ async def update_member_organizations(
     return user
 
 
+@router.put(
+    "/users/{user_id}/roles",
+    tags=["角色管理"],
+    summary="配置角色",
+    description="给指定用户配置指定一个或多个角色，或清空",
+)
+async def update_member_roles(
+    user_id: uuid.UUID,
+    body: UserRoleBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> UpdateUserRolesResult | None:
+    user: UpdateUserRolesResult | None = await update_user_roles(
+        client, id=user_id, role_ids=body.role_ids
+    )
+    if not user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
+        )
+    return user
+
+
 @router.post(
     "/users/resign",
     tags=["组织管理"],
@@ -235,6 +259,9 @@ async def query_users(
                     mobile,
                     departments := (
                         SELECT .directly_organizations {{ code, name }}
+                    ),
+                    roles := (
+                        SELECT .roles {{ id, code, name }}
                     ),
                     is_deleted,
                     created_at,
