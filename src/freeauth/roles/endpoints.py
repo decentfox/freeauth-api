@@ -13,11 +13,14 @@ from ..query_api import (
     CreateRoleResult,
     DeleteRoleResult,
     QueryOrganizationRolesResult,
+    RoleBindUsersResult,
     UpdateRoleStatusResult,
     create_role,
     delete_role,
     get_role_by_id_or_code,
     query_organization_roles,
+    role_bind_users,
+    role_unbind_users,
     update_role,
     update_role_status,
 )
@@ -27,6 +30,7 @@ from .dataclasses import (
     RolePostBody,
     RolePutBody,
     RoleStatusBody,
+    RoleUserBody,
 )
 from .dependencies import parse_role_id_or_code, validate_organization_ids
 
@@ -226,4 +230,103 @@ async def get_organization_roles(
         q=f"%{body.q}%" if body.q else None,
         role_type=body.role_type,
         is_deleted=body.is_deleted,
+    )
+
+
+@router.post(
+    "/roles/{role_id}/users",
+    tags=["角色管理"],
+    summary="获取角色绑定用户列表",
+    description="获取指定角色下绑定的用户，分页获取，支持关键字搜索、排序",
+)
+async def get_members_in_organization(
+    body: QueryBody,
+    role_id: uuid.UUID,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> PaginatedData:
+    result = await client.query_single_json(
+        f"""\
+            WITH
+                page := <optional int64>$page ?? 1,
+                per_page := <optional int64>$per_page ?? 20,
+                q := <optional str>$q,
+                role := (
+                    SELECT Role FILTER .id = <uuid>$role_id
+                ),
+                users := (
+                    SELECT (
+                        role.users
+                    ) FILTER (
+                        true IF not EXISTS q ELSE
+                        .name ?? '' ILIKE q OR
+                        .username ?? '' ILIKE q OR
+                        .mobile ?? '' ILIKE q OR
+                        .email ?? '' ILIKE q
+                    )
+                ),
+                total := count(users)
+            SELECT (
+                total := total,
+                per_page := per_page,
+                page := page,
+                last := math::ceil(total / per_page),
+                rows := array_agg((
+                    SELECT users {{
+                        id,
+                        name,
+                        username,
+                        email,
+                        mobile,
+                        departments := (
+                            SELECT .directly_organizations {{
+                                id,
+                                code,
+                                name
+                            }}
+                        ),
+                        is_deleted,
+                        created_at,
+                        last_login_at
+                    }}
+                    ORDER BY {body.ordering_expr}
+                    OFFSET (page - 1) * per_page
+                    LIMIT per_page
+                ))
+            );\
+            """,
+        q=f"%{body.q}%" if body.q else None,
+        page=body.page,
+        per_page=body.per_page,
+        role_id=role_id,
+    )
+    return PaginatedData.parse_raw(result)
+
+
+@router.post(
+    "/roles/bind_users",
+    tags=["角色管理"],
+    summary="添加用户",
+    description="关联一个或多个用户到角色",
+)
+async def bind_users_to_roles(
+    body: RoleUserBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> list[RoleBindUsersResult]:
+    return await role_bind_users(
+        client, user_ids=body.user_ids, role_ids=body.role_ids
+    )
+
+
+@router.post(
+    "/roles/unbind_users",
+    tags=["角色管理"],
+    summary="添加用户",
+    description="关联一个或多个用户到角色",
+)
+async def unbind_users_to_roles(
+    body: RoleUserBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> list[RoleBindUsersResult]:
+    return await role_unbind_users(
+        client, user_ids=body.user_ids, role_ids=body.role_ids
     )

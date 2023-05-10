@@ -22,6 +22,8 @@
 #     'src/freeauth/organizations/queries/query_org_types.edgeql'
 #     'src/freeauth/roles/queries/query_organization_roles.edgeql'
 #     'src/freeauth/users/queries/resign_user.edgeql'
+#     'src/freeauth/roles/queries/role_bind_users.edgeql'
+#     'src/freeauth/roles/queries/role_unbind_users.edgeql'
 #     'src/freeauth/auth/queries/send_code.edgeql'
 #     'src/freeauth/auth/queries/sign_in.edgeql'
 #     'src/freeauth/auth/queries/sign_up.edgeql'
@@ -251,6 +253,26 @@ class QueryOrganizationRolesResult(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class RoleBindUsersResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str | None
+    username: str | None
+    email: str | None
+    mobile: str | None
+    departments: list[RoleBindUsersResultDepartmentsItem]
+    is_deleted: bool
+    created_at: datetime.datetime
+    last_login_at: datetime.datetime | None
+
+
+@dataclasses.dataclass
+class RoleBindUsersResultDepartmentsItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
+
+
+@dataclasses.dataclass
 class SendCodeResult(NoPydanticValidation):
     id: uuid.UUID
     created_at: datetime.datetime
@@ -296,18 +318,11 @@ class UpdateUserRolesResult(NoPydanticValidation):
     username: str | None
     email: str | None
     mobile: str | None
-    departments: list[UpdateUserRolesResultDepartmentsItem]
+    departments: list[RoleBindUsersResultDepartmentsItem]
     roles: list[UpdateUserRolesResultRolesItem]
     is_deleted: bool
     created_at: datetime.datetime
     last_login_at: datetime.datetime | None
-
-
-@dataclasses.dataclass
-class UpdateUserRolesResultDepartmentsItem(NoPydanticValidation):
-    id: uuid.UUID
-    code: str | None
-    name: str
 
 
 @dataclasses.dataclass
@@ -1077,6 +1092,80 @@ async def resign_user(
         """,
         is_deleted=is_deleted,
         user_ids=user_ids,
+    )
+
+
+async def role_bind_users(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    user_ids: list[uuid.UUID],
+    role_ids: list[uuid.UUID],
+) -> list[RoleBindUsersResult]:
+    return await executor.query(
+        """\
+        WITH
+            user_ids := <array<uuid>>$user_ids,
+            role_ids := <array<uuid>>$role_ids
+        SELECT (
+            UPDATE User FILTER .id in array_unpack(user_ids)
+            SET {
+                roles += (
+                    SELECT Role
+                    FILTER .id IN array_unpack(role_ids)
+                )
+            }
+        ) {
+            name,
+            username,
+            email,
+            mobile,
+            departments := (
+                SELECT .directly_organizations { id, code, name }
+            ),
+            is_deleted,
+            created_at,
+            last_login_at
+        };\
+        """,
+        user_ids=user_ids,
+        role_ids=role_ids,
+    )
+
+
+async def role_unbind_users(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    user_ids: list[uuid.UUID],
+    role_ids: list[uuid.UUID],
+) -> list[RoleBindUsersResult]:
+    return await executor.query(
+        """\
+        WITH
+            user_ids := <array<uuid>>$user_ids,
+            role_ids := <array<uuid>>$role_ids
+        SELECT (
+            UPDATE User FILTER .id in array_unpack(user_ids)
+            SET {
+                roles -= (
+                    SELECT Role
+                    FILTER .id IN array_unpack(role_ids)
+                )
+            }
+        ) {
+            name,
+            username,
+            email,
+            mobile,
+            departments := (
+                SELECT .directly_organizations { id, code, name }
+            ),
+            is_deleted,
+            created_at,
+            last_login_at
+        };\
+        """,
+        user_ids=user_ids,
+        role_ids=role_ids,
     )
 
 
