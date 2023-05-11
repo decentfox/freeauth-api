@@ -1,6 +1,6 @@
 WITH
-    name := <optional str>$name,
-    username := <optional str>$username,
+    name := <str>$name,
+    username := <str>$username,
     email := <optional str>$email,
     mobile := <optional str>$mobile
 SELECT (

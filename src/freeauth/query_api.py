@@ -1573,8 +1573,8 @@ async def update_role_status(
 async def update_user(
     executor: edgedb.AsyncIOExecutor,
     *,
-    name: str | None,
-    username: str | None,
+    name: str,
+    username: str,
     email: str | None,
     mobile: str | None,
     id: uuid.UUID,
@@ -1582,8 +1582,8 @@ async def update_user(
     return await executor.query_single(
         """\
         WITH
-            name := <optional str>$name,
-            username := <optional str>$username,
+            name := <str>$name,
+            username := <str>$username,
             email := <optional str>$email,
             mobile := <optional str>$mobile
         SELECT (
