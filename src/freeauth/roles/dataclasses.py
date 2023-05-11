@@ -97,3 +97,19 @@ class OrganizationRoleQueryBody:
             "支持按角色状态进行过滤，true 代表已禁用的角色，false 代表已启用的角色"
         ),
     )
+
+
+@dataclass(config=BaseModelConfig)
+class RoleUserBody:
+    role_ids: list[uuid.UUID] = Field(
+        ...,
+        title="角色 ID 列表",
+        description="可设置一个或多个角色D",
+        min_items=1,
+    )
+    user_ids: list[uuid.UUID] = Field(
+        ...,
+        title="用户 ID 列表",
+        description="待添加的用户 ID 列表",
+        min_items=1,
+    )
