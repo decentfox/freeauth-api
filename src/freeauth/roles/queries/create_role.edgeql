@@ -3,23 +3,18 @@ SELECT (
         name := <str>$name,
         code := <optional str>$code,
         description := <optional str>$description,
-        organizations := (
-            SELECT Organization
-            FILTER .id IN array_unpack(
-                <optional array<uuid>>$organization_ids
-            )
+        org_type := (
+            SELECT OrganizationType
+            FILTER .id = <optional uuid>$org_type_id
         )
     }
 ) {
     name,
     code,
     description,
-    organizations: {
+    org_type: {
         code,
         name,
-        is_org_type := EXISTS [is OrganizationType],
-        is_enterprise := EXISTS [is Enterprise],
-        is_department := EXISTS [is Department]
     },
     is_deleted,
     created_at

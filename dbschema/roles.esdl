@@ -5,10 +5,9 @@ module default {
         property code_upper := str_upper(.code);
         property description -> str;
 
-        multi link organizations -> Organization {
-            on target delete allow;
+        link org_type -> OrganizationType {
+            on target delete delete source;
         };
-
         multi link users := .<roles[is User];
 
         constraint exclusive on (.code_upper);

@@ -9,11 +9,10 @@ from fastapi import Depends, HTTPException
 
 from .. import get_edgedb_client
 from ..app import router
-from ..dataclasses import PaginatedData, QueryBody
+from ..dataclasses import PaginatedData
 from ..query_api import (
     CreateUserResult,
     DeleteUserResult,
-    UpdateUserRolesResult,
     UpdateUserStatusResult,
     create_user,
     delete_user,
@@ -30,6 +29,7 @@ from .dataclasses import (
     UserOrganizationBody,
     UserPostBody,
     UserPutBody,
+    UserQueryBody,
     UserResignationBody,
     UserRoleBody,
     UserStatusBody,
@@ -66,6 +66,7 @@ async def post_user(
             mobile=user.mobile,
             hashed_password=get_password_hash(password),
             organization_ids=user.organization_ids,
+            org_type_id=user.org_type_id,
         )
     except edgedb.errors.ConstraintViolationError as e:
         field = str(e).split(" ")[0]
@@ -172,8 +173,8 @@ async def update_member_roles(
     user_id: uuid.UUID,
     body: UserRoleBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> UpdateUserRolesResult | None:
-    user: UpdateUserRolesResult | None = await update_user_roles(
+) -> CreateUserResult | None:
+    user: CreateUserResult | None = await update_user_roles(
         client, id=user_id, role_ids=body.role_ids
     )
     if not user:
@@ -223,7 +224,7 @@ async def get_user(
     description="分页获取，支持关键字搜索、排序及条件过滤",
 )
 async def query_users(
-    body: QueryBody,
+    body: UserQueryBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
     filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
@@ -233,6 +234,8 @@ async def query_users(
             page := <optional int64>$page ?? 1,
             per_page := <optional int64>$per_page ?? 20,
             q := <optional str>$q,
+            org_type_id := <optional uuid>$org_type_id,
+            include_unassigned_users := <bool>$include_unassigned_users,
             users := (
                 SELECT User
                 FILTER (
@@ -241,6 +244,16 @@ async def query_users(
                     .username ?? '' ILIKE q OR
                     .mobile ?? '' ILIKE q OR
                     .email ?? '' ILIKE q
+                ) AND (
+                    true IF include_unassigned_users ELSE
+                    EXISTS .org_type
+                ) AND (
+                    true IF not EXISTS org_type_id ELSE
+                    (
+                        NOT EXISTS .org_type OR
+                        .org_type.id ?= org_type_id
+                    ) IF include_unassigned_users ELSE
+                    .org_type.id = org_type_id
                 ) AND {filtering_expr}
             ),
             total := count(users)
@@ -257,12 +270,11 @@ async def query_users(
                     username,
                     email,
                     mobile,
+                    org_type: {{ id, code, name }},
                     departments := (
-                        SELECT .directly_organizations {{ code, name }}
+                        SELECT .directly_organizations {{ id, code, name }}
                     ),
-                    roles := (
-                        SELECT .roles {{ id, code, name }}
-                    ),
+                    roles: {{ id, code, name }},
                     is_deleted,
                     created_at,
                     last_login_at
@@ -276,6 +288,8 @@ async def query_users(
         q=f"%{body.q}%" if body.q else None,
         page=body.page,
         per_page=body.per_page,
+        org_type_id=body.org_type_id,
+        include_unassigned_users=body.include_unassigned_users,
     )
 
     return PaginatedData.parse_raw(result)

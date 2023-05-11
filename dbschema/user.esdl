@@ -24,8 +24,10 @@ module default {
         multi link organizations := (
             .directly_organizations.<ancestors[is Organization]
         );
-
         multi link roles -> Role {
+            on target delete allow;
+        };
+        link org_type -> OrganizationType {
             on target delete allow;
         };
 

@@ -325,7 +325,10 @@ def test_get_organization_tree_by_org_type(
 
 
 def create_user(
-    test_client: TestClient, faker, organization_ids: list[str] | None = None
+    test_client: TestClient,
+    faker,
+    organization_ids: list[str] | None = None,
+    org_type_id: str | None = None,
 ):
     resp = test_client.post(
         "/v1/users",
@@ -335,6 +338,7 @@ def create_user(
             mobile=faker.phone_number(),
             email=faker.email(),
             organization_ids=organization_ids,
+            org_type_id=org_type_id,
         ),
     )
     user = resp.json()
@@ -348,6 +352,7 @@ def test_add_members_to_organizations(test_client: TestClient, faker):
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["user_ids"] == "该字段为必填项"
     assert error["detail"]["errors"]["organization_ids"] == "该字段为必填项"
+    assert error["detail"]["errors"]["org_type_id"] == "该字段为必填项"
 
     resp = test_client.post(
         "/v1/organizations/members",
@@ -359,69 +364,67 @@ def test_add_members_to_organizations(test_client: TestClient, faker):
     assert error["detail"]["errors"]["organization_ids"] == "请至少选择一项"
 
     org_type_1 = create_org_type(test_client, faker)
-    org_type_2 = create_org_type(test_client, faker)
     enterprise_1_1 = create_enterprise(test_client, org_type_1, faker)
     enterprise_1_2 = create_enterprise(test_client, org_type_1, faker)
-    enterprise_2_1 = create_enterprise(test_client, org_type_2, faker)
     dept_1_1_1 = create_department(test_client, enterprise_1_1, faker)
     dept_1_1_2 = create_department(test_client, enterprise_1_1, faker)
     dept_1_1_1_1 = create_department(test_client, dept_1_1_1, faker)
+
+    org_type_2 = create_org_type(test_client, faker)
+    enterprise_2_1 = create_enterprise(test_client, org_type_2, faker)
     dept_2_1_1 = create_department(test_client, enterprise_2_1, faker)
 
     user_1 = create_user(test_client, faker)
     user_2 = create_user(
         test_client,
         faker,
-        organization_ids=[
-            str(enterprise_1_2.id),
-            str(dept_2_1_1.id),
-            str(enterprise_2_1.id),
-            str(dept_1_1_1.id),
-        ],
+        organization_ids=[str(enterprise_1_1.id), str(dept_1_1_1_1.id)],
+        org_type_id=str(org_type_1.id),
     )
     user_3 = create_user(
         test_client,
         faker,
-        organization_ids=[str(enterprise_1_1.id), str(dept_1_1_1_1.id)],
+        organization_ids=[str(dept_2_1_1.id)],
+        org_type_id=str(org_type_2.id),
     )
 
     organization_ids: list[CreateEnterpriseResult | CreateDepartmentResult] = [
         enterprise_1_2,
         dept_1_1_2,
-        dept_2_1_1,
         dept_1_1_1_1,
+        dept_2_1_1,
     ]
     resp = test_client.post(
         "/v1/organizations/members",
         json={
             "user_ids": [str(u.id) for u in (user_1, user_2, user_3)],
             "organization_ids": [str(o.id) for o in organization_ids],
+            "org_type_id": str(org_type_1.id),
         },
     )
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv) == 2  # user1 and user2
 
     for user in rv:
         if user["id"] == str(user_1.id):
-            assert len(user["departments"]) == 4
-        elif user["id"] == str(user_2.id):
-            assert len(user["departments"]) == 6
+            assert len(user["departments"]) == 3
         else:
-            assert len(user["departments"]) == 5
+            assert len(user["departments"]) == 4
 
     resp = test_client.post(
         f"/v1/organizations/{org_type_1.id}/members", json={}
     )
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert rv["total"] == 3
+    assert rv["total"] == 2
 
     resp = test_client.post(
         f"/v1/organizations/{enterprise_1_1.id}/members", json={}
     )
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert rv["total"] == 3
+    assert rv["total"] == 2
 
     resp = test_client.post(
         f"/v1/organizations/{enterprise_1_1.id}/members",
@@ -430,4 +433,4 @@ def test_add_members_to_organizations(test_client: TestClient, faker):
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 1
-    assert rv["rows"][0]["id"] == str(user_3.id)
+    assert rv["rows"][0]["id"] == str(user_2.id)

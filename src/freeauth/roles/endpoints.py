@@ -11,28 +11,26 @@ from ..app import router
 from ..dataclasses import PaginatedData, QueryBody
 from ..query_api import (
     CreateRoleResult,
+    CreateUserResult,
     DeleteRoleResult,
-    QueryOrganizationRolesResult,
-    RoleBindUsersResult,
     UpdateRoleStatusResult,
     create_role,
     delete_role,
     get_role_by_id_or_code,
-    query_organization_roles,
     role_bind_users,
     role_unbind_users,
     update_role,
     update_role_status,
 )
 from .dataclasses import (
-    OrganizationRoleQueryBody,
     RoleDeleteBody,
     RolePostBody,
     RolePutBody,
+    RoleQueryBody,
     RoleStatusBody,
     RoleUserBody,
 )
-from .dependencies import parse_role_id_or_code, validate_organization_ids
+from .dependencies import parse_role_id_or_code
 
 FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
 
@@ -43,7 +41,6 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
     tags=["角色管理"],
     summary="创建角色",
     description="创建新角色",
-    dependencies=[Depends(validate_organization_ids)],
 )
 async def post_role(
     body: RolePostBody,
@@ -55,7 +52,7 @@ async def post_role(
             name=body.name,
             code=body.code,
             description=body.description,
-            organization_ids=body.organization_ids,
+            org_type_id=body.org_type_id,
         )
     except edgedb.errors.ConstraintViolationError:
         raise HTTPException(
@@ -120,7 +117,6 @@ async def get_role(
     tags=["角色管理"],
     summary="更新角色",
     description="更新指定角色的信息",
-    dependencies=[Depends(validate_organization_ids)],
 )
 async def put_role(
     body: RolePutBody,
@@ -134,7 +130,6 @@ async def put_role(
             code=body.code,
             description=body.description,
             is_deleted=body.is_deleted,
-            organization_ids=body.organization_ids,
             id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
             current_code=id_or_code if isinstance(id_or_code, str) else None,
         )
@@ -157,7 +152,7 @@ async def put_role(
     description="分页获取，支持关键字搜索、排序及条件过滤",
 )
 async def get_roles(
-    body: QueryBody,
+    body: RoleQueryBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
     filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
@@ -167,6 +162,8 @@ async def get_roles(
                 page := <optional int64>$page ?? 1,
                 per_page := <optional int64>$per_page ?? 20,
                 q := <optional str>$q,
+                org_type_id := <optional uuid>$org_type_id,
+                include_global_roles := <bool>$include_global_roles,
                 roles := (
                     SELECT Role
                     FILTER (
@@ -174,7 +171,17 @@ async def get_roles(
                         .name ILIKE q OR
                         .code ?? '' ILIKE q OR
                         .description ?? '' ILIKE q OR
-                        .organizations.name ?? '' ILIKE q
+                        .org_type.name ?? '' ILIKE q
+                    ) AND (
+                        true IF include_global_roles ELSE
+                        EXISTS .org_type
+                    ) AND (
+                        true IF not EXISTS org_type_id ELSE
+                        (
+                            NOT EXISTS .org_type OR
+                            .org_type.id ?= org_type_id
+                        ) IF include_global_roles ELSE
+                        .org_type.id = org_type_id
                     ) AND {filtering_expr}
                 ),
                 total := count(roles)
@@ -190,12 +197,10 @@ async def get_roles(
                         name,
                         code,
                         description,
-                        organizations: {{
+                        org_type: {{
+                            id,
                             code,
                             name,
-                            is_org_type := EXISTS [is OrganizationType],
-                            is_enterprise := EXISTS [is Enterprise],
-                            is_department := EXISTS [is Department]
                         }},
                         is_deleted,
                         created_at
@@ -209,28 +214,10 @@ async def get_roles(
         q=f"%{body.q}%" if body.q else None,
         page=body.page,
         per_page=body.per_page,
+        org_type_id=body.org_type_id,
+        include_global_roles=body.include_global_roles,
     )
     return PaginatedData.parse_raw(result)
-
-
-@router.post(
-    "/organizations/{org_id}/roles/query",
-    tags=["角色管理"],
-    summary="获取可用角色列表",
-    description="包含全局角色和归属于指定组织分支的角色",
-)
-async def get_organization_roles(
-    org_id: uuid.UUID,
-    body: OrganizationRoleQueryBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> list[QueryOrganizationRolesResult]:
-    return await query_organization_roles(
-        client,
-        org_id=org_id,
-        q=f"%{body.q}%" if body.q else None,
-        role_type=body.role_type,
-        is_deleted=body.is_deleted,
-    )
 
 
 @router.post(
@@ -277,6 +264,7 @@ async def get_members_in_organization(
                         username,
                         email,
                         mobile,
+                        org_type: {{ id, code, name }},
                         departments := (
                             SELECT .directly_organizations {{
                                 id,
@@ -284,6 +272,7 @@ async def get_members_in_organization(
                                 name
                             }}
                         ),
+                        roles: {{ id, code, name }},
                         is_deleted,
                         created_at,
                         last_login_at
@@ -311,7 +300,7 @@ async def get_members_in_organization(
 async def bind_users_to_roles(
     body: RoleUserBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> list[RoleBindUsersResult]:
+) -> list[CreateUserResult]:
     return await role_bind_users(
         client, user_ids=body.user_ids, role_ids=body.role_ids
     )
@@ -320,13 +309,13 @@ async def bind_users_to_roles(
 @router.post(
     "/roles/unbind_users",
     tags=["角色管理"],
-    summary="添加用户",
-    description="关联一个或多个用户到角色",
+    summary="移除用户",
+    description="将一个或多个用户的角色移除",
 )
-async def unbind_users_to_roles(
+async def unbind_roles_from_users(
     body: RoleUserBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> list[RoleBindUsersResult]:
+) -> list[CreateUserResult]:
     return await role_unbind_users(
         client, user_ids=body.user_ids, role_ids=body.role_ids
     )

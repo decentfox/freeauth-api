@@ -7,12 +7,9 @@ SELECT assert_single(
             name,
             code,
             description,
-            organizations: {
+            org_type: {
                 code,
                 name,
-                is_org_type := EXISTS [is OrganizationType],
-                is_enterprise := EXISTS [is Enterprise],
-                is_department := EXISTS [is Department]
             },
             is_deleted,
             created_at

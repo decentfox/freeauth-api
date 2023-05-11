@@ -215,6 +215,11 @@ class OrganizationUserBody:
         description="待添加的用户 ID 列表",
         min_items=1,
     )
+    org_type_id: uuid.UUID = Field(
+        ...,
+        title="组织类型 ID",
+        description="直属对象所属的组织类型 ID",
+    )
 
 
 @dataclass(config=BaseModelConfig)

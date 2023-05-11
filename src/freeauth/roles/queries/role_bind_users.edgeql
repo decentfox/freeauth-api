@@ -6,7 +6,12 @@ SELECT (
     SET {
         roles += (
             SELECT Role
-            FILTER .id IN array_unpack(role_ids)
+            FILTER
+                .id IN array_unpack(role_ids) AND
+                (
+                    NOT EXISTS .org_type OR
+                    .org_type ?= User.org_type
+                )
         )
     }
 ) {
@@ -14,9 +19,11 @@ SELECT (
     username,
     email,
     mobile,
+    org_type: { code, name },
     departments := (
-        SELECT .directly_organizations { id, code, name }
+        SELECT .directly_organizations { code, name }
     ),
+    roles: { code, name },
     is_deleted,
     created_at,
     last_login_at

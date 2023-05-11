@@ -17,9 +17,9 @@ from ..config import get_config
 from ..query_api import (
     AuthCodeType,
     AuthVerifyType,
+    CreateUserResult,
     GetUserByAccountResult,
     SendCodeResult,
-    SignInResult,
     ValidateCodeResult,
     send_code,
     sign_in,
@@ -201,7 +201,7 @@ async def sign_up_with_code(
     response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     client_info: dict = Depends(get_client_info),
-) -> SignInResult | None:
+) -> CreateUserResult | None:
     settings = await get_login_settings().get_all(client)
     await validate_auth_code(
         client,
@@ -285,7 +285,7 @@ async def sign_in_with_code(
         verify_account_when_sign_in_with_code
     ),
     client_info: dict = Depends(get_client_info),
-) -> SignInResult | None:
+) -> CreateUserResult | None:
     settings = await get_login_settings().get_all(client)
     await validate_auth_code(
         client,
@@ -321,7 +321,7 @@ async def sign_in_with_pwd(
         verify_account_when_sign_in_with_pwd
     ),
     client_info: dict = Depends(get_client_info),
-) -> SignInResult | None:
+) -> CreateUserResult | None:
     if user.hashed_password != get_password_hash(body.password):
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,

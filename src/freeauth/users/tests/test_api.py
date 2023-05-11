@@ -12,6 +12,7 @@ from ...query_api import (
     CreateDepartmentResult,
     CreateEnterpriseResult,
     CreateOrgTypeResult,
+    CreateRoleResult,
     CreateUserResult,
 )
 
@@ -23,6 +24,7 @@ def create_user(
     email: str | None = None,
     mobile: str | None = None,
     organization_ids: list[str] | None = None,
+    org_type_id: str | None = None,
 ) -> CreateUserResult:
     resp = test_client.post(
         "/v1/users",
@@ -32,6 +34,7 @@ def create_user(
             email=email,
             mobile=mobile,
             organization_ids=organization_ids,
+            org_type_id=org_type_id,
         ),
     )
     user = resp.json()
@@ -187,6 +190,7 @@ def department(
 
 def test_create_user_with_organizations(
     test_client: TestClient,
+    org_type: CreateOrgTypeResult,
     enterprise: CreateEnterpriseResult,
     department: CreateDepartmentResult,
     faker,
@@ -199,6 +203,7 @@ def test_create_user_with_organizations(
             mobile=faker.phone_number(),
             email=faker.email(),
             organization_ids=[str(enterprise.id), str(department.id)],
+            org_type_id=str(org_type.id),
         ),
     )
     user = resp.json()
@@ -409,9 +414,18 @@ def test_update_user_strip_whitespace(
 
 def test_update_user_organizations(
     test_client: TestClient,
-    user: CreateUserResult,
+    org_type: CreateOrgTypeResult,
     department: CreateDepartmentResult,
+    faker,
 ):
+    user = create_user(
+        test_client,
+        name=faker.name(),
+        username=faker.user_name(),
+        mobile=faker.phone_number(),
+        email=faker.email(),
+        org_type_id=str(org_type.id),
+    )
     resp = test_client.put(f"/v1/users/{user.id}/organizations", json={})
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
@@ -436,10 +450,92 @@ def test_update_user_organizations(
     assert len(updated_user["departments"]) == 1
 
 
+@pytest.fixture
+def roles(test_client: TestClient, org_type, faker) -> list[CreateRoleResult]:
+    from ...roles.tests.test_api import create_role
+
+    roles = [
+        create_role(test_client, faker, org_type_id=str(org_type.id)),
+        create_role(test_client, faker),
+    ]
+    return roles
+
+
+def test_update_member_roles(
+    test_client: TestClient, roles, org_type, enterprise, department, faker
+):
+    user_1 = create_user(
+        test_client,
+        name=faker.name(),
+        username=faker.user_name(),
+        mobile=faker.phone_number(),
+        email=faker.email(),
+    )
+    resp = test_client.put(
+        f"/v1/users/{user_1.id}/roles",
+        json=dict(role_ids=[str(r.id) for r in roles]),
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert not rv["departments"]
+    assert len(rv["roles"]) == 1
+    assert rv["roles"][0]["code"] == roles[1].code
+
+    user_2 = create_user(
+        test_client,
+        name=faker.name(),
+        username=faker.user_name(),
+        mobile=faker.phone_number(),
+        email=faker.email(),
+        organization_ids=[str(enterprise.id), str(department.id)],
+        org_type_id=str(org_type.id),
+    )
+    resp = test_client.put(
+        f"/v1/users/{user_2.id}/roles",
+        json=dict(role_ids=[str(r.id) for r in roles]),
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv["departments"]) == 2
+    assert len(rv["roles"]) == 2
+
+    resp = test_client.put(
+        f"/v1/users/{user_2.id}/roles",
+        json=dict(role_ids=[]),
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv["departments"]) == 2
+    assert len(rv["roles"]) == 0
+
+    from ...organizations.tests.test_org_type_api import create_org_type
+
+    another_org_type = create_org_type(test_client, faker)
+    user_3 = create_user(
+        test_client,
+        name=faker.name(),
+        username=faker.user_name(),
+        mobile=faker.phone_number(),
+        email=faker.email(),
+        org_type_id=str(another_org_type.id),
+    )
+    resp = test_client.put(
+        f"/v1/users/{user_3.id}/roles",
+        json=dict(role_ids=[str(r.id) for r in roles]),
+    )
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert len(rv["departments"]) == 0
+    assert len(rv["roles"]) == 1
+    assert rv["roles"][0]["code"] == roles[1].code
+
+
 def test_resign_user(
     test_client: TestClient,
+    org_type: CreateOrgTypeResult,
     enterprise: CreateEnterpriseResult,
     department: CreateDepartmentResult,
+    roles,
     faker,
 ):
     users = []
@@ -452,8 +548,10 @@ def test_resign_user(
                 mobile=faker.phone_number(),
                 email=faker.email(),
                 organization_ids=[str(enterprise.id), str(department.id)],
+                org_type_id=str(org_type.id),
             )
         )
+
     resp = test_client.post(
         "/v1/users/resign",
         json=dict(user_ids=[str(u.id) for u in users]),
@@ -462,21 +560,12 @@ def test_resign_user(
     assert resp.status_code == HTTPStatus.OK, resigned_user
     assert len(resigned_user) == 3
 
-    disabled_user = users[0]
-    data: Dict[str, Any] = {
-        "user_ids": [str(disabled_user.id)],
-        "is_deleted": True,
-    }
-    resp = test_client.put("/v1/users/status", json=data)
-
     for user in users:
         resp = test_client.get(f"/v1/users/{user.id}")
         rv = resp.json()
         assert resp.status_code == HTTPStatus.OK, rv
-        if user.id == disabled_user.id:
-            assert rv["is_deleted"]
-        else:
-            assert not rv["is_deleted"]
+        assert not rv["is_deleted"]
+        assert not rv["roles"]
         assert not rv["departments"]
 
 
@@ -511,6 +600,7 @@ def test_resign_and_disable_user(
         rv = resp.json()
         assert resp.status_code == HTTPStatus.OK, rv
         assert rv["is_deleted"]
+        assert not rv["roles"]
         assert not rv["departments"]
 
 
@@ -527,6 +617,11 @@ def test_get_user(test_client: TestClient, user: CreateUserResult):
 
 
 def test_query_users(test_client: TestClient, faker):
+    from ...organizations.tests.test_org_type_api import create_org_type
+
+    org_type_1 = create_org_type(test_client, faker)
+    org_type_2 = create_org_type(test_client, faker)
+
     users: List[CreateUserResult] = [
         create_user(test_client, name=faker.name(), username=faker.user_name())
     ]
@@ -547,6 +642,7 @@ def test_query_users(test_client: TestClient, faker):
                 name=faker.name(),
                 username=faker.user_name(),
                 email=faker.email(),
+                org_type_id=str(org_type_1.id),
             )
         )
     for _ in range(3):
@@ -556,6 +652,7 @@ def test_query_users(test_client: TestClient, faker):
                 name=faker.name(),
                 username=faker.user_name(),
                 mobile=faker.phone_number(),
+                org_type_id=str(org_type_2.id),
             )
         )
 
@@ -670,3 +767,32 @@ def test_query_users(test_client: TestClient, faker):
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["rows"]) == 6
     assert users[0].username not in [u["username"] for u in rv["rows"]]
+
+    data = {"include_unassigned_users": False}
+    resp = test_client.post("/v1/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 6
+    assert all(u["org_type"] is not None for u in rv["rows"])
+
+    data = {
+        "include_unassigned_users": False,
+        "org_type_id": str(org_type_1.id),
+    }
+    resp = test_client.post("/v1/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 3
+    assert all(u["org_type"]["name"] == org_type_1.name for u in rv["rows"])
+
+    data = {
+        "org_type_id": str(org_type_2.id),
+    }
+    resp = test_client.post("/v1/users/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 7
+    assert all(
+        u["org_type"] is None or u["org_type"]["name"] == org_type_2.name
+        for u in rv["rows"]
+    )

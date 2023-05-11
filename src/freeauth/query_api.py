@@ -20,7 +20,6 @@
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
 #     'src/freeauth/organizations/queries/organization_add_member.edgeql'
 #     'src/freeauth/organizations/queries/query_org_types.edgeql'
-#     'src/freeauth/roles/queries/query_organization_roles.edgeql'
 #     'src/freeauth/users/queries/resign_user.edgeql'
 #     'src/freeauth/roles/queries/role_bind_users.edgeql'
 #     'src/freeauth/roles/queries/role_unbind_users.edgeql'
@@ -39,7 +38,6 @@
 #     'src/freeauth/users/queries/update_user_status.edgeql'
 #     'src/freeauth/settings/queries/upsert_login_setting.edgeql'
 #     'src/freeauth/auth/queries/validate_code.edgeql'
-#     'src/freeauth/roles/queries/validate_role_organization_ids.edgeql'
 # WITH:
 #     $ edgedb-py --file src/freeauth/query_api.py
 
@@ -155,19 +153,16 @@ class CreateRoleResult(NoPydanticValidation):
     name: str
     code: str | None
     description: str | None
-    organizations: list[CreateRoleResultOrganizationsItem]
+    org_type: CreateRoleResultOrgType | None
     is_deleted: bool
     created_at: datetime.datetime
 
 
 @dataclasses.dataclass
-class CreateRoleResultOrganizationsItem(NoPydanticValidation):
+class CreateRoleResultOrgType(NoPydanticValidation):
     id: uuid.UUID
     code: str | None
     name: str
-    is_org_type: bool
-    is_enterprise: bool
-    is_department: bool
 
 
 @dataclasses.dataclass
@@ -177,7 +172,9 @@ class CreateUserResult(NoPydanticValidation):
     username: str | None
     email: str | None
     mobile: str | None
+    org_type: CreateRoleResultOrgType | None
     departments: list[CreateUserResultDepartmentsItem]
+    roles: list[CreateUserResultRolesItem]
     is_deleted: bool
     created_at: datetime.datetime
     last_login_at: datetime.datetime | None
@@ -185,6 +182,13 @@ class CreateUserResult(NoPydanticValidation):
 
 @dataclasses.dataclass
 class CreateUserResultDepartmentsItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
+
+
+@dataclasses.dataclass
+class CreateUserResultRolesItem(NoPydanticValidation):
     id: uuid.UUID
     code: str | None
     name: str
@@ -239,40 +243,6 @@ class GetUserByAccountResult(NoPydanticValidation):
 
 
 @dataclasses.dataclass
-class QueryOrganizationRolesResult(NoPydanticValidation):
-    id: uuid.UUID
-    name: str
-    code: str | None
-    description: str | None
-    is_deleted: bool
-    created_at: datetime.datetime
-    is_global_role: bool
-    is_org_type_role: bool
-    is_enterprise_role: bool
-    is_department_role: bool
-
-
-@dataclasses.dataclass
-class RoleBindUsersResult(NoPydanticValidation):
-    id: uuid.UUID
-    name: str | None
-    username: str | None
-    email: str | None
-    mobile: str | None
-    departments: list[RoleBindUsersResultDepartmentsItem]
-    is_deleted: bool
-    created_at: datetime.datetime
-    last_login_at: datetime.datetime | None
-
-
-@dataclasses.dataclass
-class RoleBindUsersResultDepartmentsItem(NoPydanticValidation):
-    id: uuid.UUID
-    code: str | None
-    name: str
-
-
-@dataclasses.dataclass
 class SendCodeResult(NoPydanticValidation):
     id: uuid.UUID
     created_at: datetime.datetime
@@ -281,18 +251,6 @@ class SendCodeResult(NoPydanticValidation):
     verify_type: AuthVerifyType
     expired_at: datetime.datetime
     ttl: int
-
-
-@dataclasses.dataclass
-class SignInResult(NoPydanticValidation):
-    id: uuid.UUID
-    name: str | None
-    username: str | None
-    email: str | None
-    mobile: str | None
-    is_deleted: bool
-    created_at: datetime.datetime
-    last_login_at: datetime.datetime | None
 
 
 @dataclasses.dataclass
@@ -309,27 +267,6 @@ class UpdateRoleStatusResult(NoPydanticValidation):
     name: str
     code: str | None
     is_deleted: bool
-
-
-@dataclasses.dataclass
-class UpdateUserRolesResult(NoPydanticValidation):
-    id: uuid.UUID
-    name: str | None
-    username: str | None
-    email: str | None
-    mobile: str | None
-    departments: list[RoleBindUsersResultDepartmentsItem]
-    roles: list[UpdateUserRolesResultRolesItem]
-    is_deleted: bool
-    created_at: datetime.datetime
-    last_login_at: datetime.datetime | None
-
-
-@dataclasses.dataclass
-class UpdateUserRolesResultRolesItem(NoPydanticValidation):
-    id: uuid.UUID
-    code: str | None
-    name: str
 
 
 @dataclasses.dataclass
@@ -548,7 +485,7 @@ async def create_role(
     name: str,
     code: str | None,
     description: str | None,
-    organization_ids: list[uuid.UUID] | None,
+    org_type_id: uuid.UUID | None,
 ) -> CreateRoleResult:
     return await executor.query_single(
         """\
@@ -557,23 +494,18 @@ async def create_role(
                 name := <str>$name,
                 code := <optional str>$code,
                 description := <optional str>$description,
-                organizations := (
-                    SELECT Organization
-                    FILTER .id IN array_unpack(
-                        <optional array<uuid>>$organization_ids
-                    )
+                org_type := (
+                    SELECT OrganizationType
+                    FILTER .id = <optional uuid>$org_type_id
                 )
             }
         ) {
             name,
             code,
             description,
-            organizations: {
+            org_type: {
                 code,
                 name,
-                is_org_type := EXISTS [is OrganizationType],
-                is_enterprise := EXISTS [is Enterprise],
-                is_department := EXISTS [is Department]
             },
             is_deleted,
             created_at
@@ -582,7 +514,7 @@ async def create_role(
         name=name,
         code=code,
         description=description,
-        organization_ids=organization_ids,
+        org_type_id=org_type_id,
     )
 
 
@@ -595,16 +527,34 @@ async def create_user(
     mobile: str | None,
     hashed_password: str | None,
     organization_ids: list[uuid.UUID] | None,
+    org_type_id: uuid.UUID | None,
 ) -> CreateUserResult:
     return await executor.query_single(
         """\
-        with
+        WITH
             name := <optional str>$name,
             username := <optional str>$username,
             email := <optional str>$email,
             mobile := <optional str>$mobile,
             hashed_password := <optional str>$hashed_password,
-            organization_ids := <optional array<uuid>>$organization_ids
+            organization_ids := <optional array<uuid>>$organization_ids,
+            org_type := (
+                SELECT OrganizationType FILTER (
+                    .id = <optional uuid>$org_type_id
+                )
+            ),
+            organizations := (
+                SELECT Organization
+                FILTER
+                    ( Organization IS NOT OrganizationType ) AND
+                    (
+                        false IF NOT EXISTS org_type ELSE
+                        (
+                            .id IN array_unpack(organization_ids) AND
+                            org_type IN .ancestors
+                        )
+                    )
+            )
         select (
             insert User {
                 name := name,
@@ -612,19 +562,19 @@ async def create_user(
                 email := email,
                 mobile := mobile,
                 hashed_password := hashed_password,
-                directly_organizations := (
-                    SELECT Organization
-                    FILTER .id IN array_unpack(organization_ids)
-                )
+                org_type := org_type,
+                directly_organizations := organizations
             }
         ) {
             name,
             username,
             email,
             mobile,
+            org_type: { code, name },
             departments := (
                 SELECT .directly_organizations { code, name }
             ),
+            roles: { code, name },
             is_deleted,
             created_at,
             last_login_at
@@ -636,6 +586,7 @@ async def create_user(
         mobile=mobile,
         hashed_password=hashed_password,
         organization_ids=organization_ids,
+        org_type_id=org_type_id,
     )
 
 
@@ -880,12 +831,9 @@ async def get_role_by_id_or_code(
                     name,
                     code,
                     description,
-                    organizations: {
+                    org_type: {
                         code,
                         name,
-                        is_org_type := EXISTS [is OrganizationType],
-                        is_enterprise := EXISTS [is Enterprise],
-                        is_department := EXISTS [is Department]
                     },
                     is_deleted,
                     created_at
@@ -940,9 +888,11 @@ async def get_user_by_id(
                 username,
                 email,
                 mobile,
+                org_type: { code, name },
                 departments := (
                     SELECT .directly_organizations { code, name }
                 ),
+                roles: { code, name },
                 is_deleted,
                 created_at,
                 last_login_at
@@ -958,28 +908,51 @@ async def organization_add_member(
     *,
     user_ids: list[uuid.UUID],
     organization_ids: list[uuid.UUID],
+    org_type_id: uuid.UUID,
 ) -> list[CreateUserResult]:
     return await executor.query(
         """\
         WITH
             user_ids := <array<uuid>>$user_ids,
-            organization_ids := <array<uuid>>$organization_ids
-        SELECT (
-            UPDATE User FILTER .id in array_unpack(user_ids)
-            SET {
-                directly_organizations += (
-                    SELECT Organization
-                    FILTER .id IN array_unpack(organization_ids)
+            organization_ids := <array<uuid>>$organization_ids,
+            org_type := (
+                SELECT OrganizationType FILTER (
+                    .id = <uuid>$org_type_id
                 )
+            ),
+            organizations := (
+                SELECT Organization
+                FILTER
+                    ( Organization IS NOT OrganizationType ) AND
+                    (
+                        false IF NOT EXISTS org_type ELSE
+                        (
+                            .id IN array_unpack(organization_ids) AND
+                            org_type IN .ancestors
+                        )
+                    )
+            )
+        SELECT (
+            UPDATE User FILTER
+                .id in array_unpack(user_ids) AND
+                (
+                    NOT EXISTS .org_type OR
+                    .org_type ?= org_type
+                )
+            SET {
+                org_type := org_type,
+                directly_organizations += organizations
             }
         ) {
             name,
             username,
             email,
             mobile,
+            org_type: { code, name },
             departments := (
                 SELECT .directly_organizations { code, name }
             ),
+            roles: { code, name },
             is_deleted,
             created_at,
             last_login_at
@@ -987,6 +960,7 @@ async def organization_add_member(
         """,
         user_ids=user_ids,
         organization_ids=organization_ids,
+        org_type_id=org_type_id,
     )
 
 
@@ -1005,72 +979,6 @@ async def query_org_types(
     )
 
 
-async def query_organization_roles(
-    executor: edgedb.AsyncIOExecutor,
-    *,
-    q: str | None,
-    role_type: str | None,
-    is_deleted: bool | None,
-    org_id: uuid.UUID,
-) -> list[QueryOrganizationRolesResult]:
-    return await executor.query(
-        """\
-        WITH
-            q := <optional str>$q,
-            role_type := <optional str>$role_type,
-            is_deleted := <optional bool>$is_deleted,
-            organization := (
-                SELECT Organization FILTER .id = <uuid>$org_id
-            ),
-            roles := (
-                SELECT DISTINCT ((
-                    SELECT Role FILTER NOT EXISTS .organizations
-                ) UNION (
-                    SELECT organization.<organizations[is Role]
-                ) UNION (
-                    SELECT organization.ancestors.<organizations[is Role]
-                ))
-            )
-        SELECT roles {
-            name,
-            code,
-            description,
-            is_deleted,
-            created_at,
-            is_global_role := NOT EXISTS .organizations,
-            is_org_type_role := EXISTS .organizations[is OrganizationType],
-            is_enterprise_role := EXISTS .organizations[is Enterprise],
-            is_department_role := EXISTS .organizations[is Department]
-        }
-        FILTER
-            (
-                true IF not EXISTS q ELSE
-                .name ILIKE q OR
-                .code ?? '' ILIKE q OR
-                .description ?? '' ILIKE q
-            ) AND (
-                true IF NOT EXISTS role_type ELSE
-                NOT EXISTS .organizations IF role_type = 'global' ELSE
-                EXISTS .organizations[is OrganizationType]
-                IF role_type = 'org_type' ELSE
-                EXISTS .organizations[is Enterprise]
-                IF role_type = 'enterprise' ELSE
-                EXISTS .organizations[is Department]
-                IF role_type = 'department' ELSE false
-            ) AND (
-                true IF NOT EXISTS is_deleted ELSE .is_deleted = is_deleted
-            )
-        ORDER BY
-            .is_deleted THEN
-            .created_at DESC;\
-        """,
-        q=q,
-        role_type=role_type,
-        is_deleted=is_deleted,
-        org_id=org_id,
-    )
-
-
 async def resign_user(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -1084,6 +992,8 @@ async def resign_user(
             UPDATE User FILTER .id in array_unpack(<array<uuid>>$user_ids)
             SET {
                 directly_organizations := {},
+                org_type := {},
+                roles := {},
                 deleted_at := (
                     datetime_of_transaction() IF is_deleted ELSE .deleted_at
                 )
@@ -1100,7 +1010,7 @@ async def role_bind_users(
     *,
     user_ids: list[uuid.UUID],
     role_ids: list[uuid.UUID],
-) -> list[RoleBindUsersResult]:
+) -> list[CreateUserResult]:
     return await executor.query(
         """\
         WITH
@@ -1111,7 +1021,12 @@ async def role_bind_users(
             SET {
                 roles += (
                     SELECT Role
-                    FILTER .id IN array_unpack(role_ids)
+                    FILTER
+                        .id IN array_unpack(role_ids) AND
+                        (
+                            NOT EXISTS .org_type OR
+                            .org_type ?= User.org_type
+                        )
                 )
             }
         ) {
@@ -1119,9 +1034,11 @@ async def role_bind_users(
             username,
             email,
             mobile,
+            org_type: { code, name },
             departments := (
-                SELECT .directly_organizations { id, code, name }
+                SELECT .directly_organizations { code, name }
             ),
+            roles: { code, name },
             is_deleted,
             created_at,
             last_login_at
@@ -1137,7 +1054,7 @@ async def role_unbind_users(
     *,
     user_ids: list[uuid.UUID],
     role_ids: list[uuid.UUID],
-) -> list[RoleBindUsersResult]:
+) -> list[CreateUserResult]:
     return await executor.query(
         """\
         WITH
@@ -1156,9 +1073,11 @@ async def role_unbind_users(
             username,
             email,
             mobile,
+            org_type: { code, name },
             departments := (
-                SELECT .directly_organizations { id, code, name }
+                SELECT .directly_organizations { code, name }
             ),
+            roles: { code, name },
             is_deleted,
             created_at,
             last_login_at
@@ -1244,7 +1163,7 @@ async def sign_in(
     client_info: str,
     id: uuid.UUID,
     access_token: str,
-) -> SignInResult | None:
+) -> CreateUserResult | None:
     return await executor.query_single(
         """\
         WITH
@@ -1279,6 +1198,11 @@ async def sign_in(
             username,
             email,
             mobile,
+            org_type: { code, name },
+            departments := (
+                SELECT .directly_organizations { code, name }
+            ),
+            roles: { code, name },
             is_deleted,
             created_at,
             last_login_at
@@ -1299,7 +1223,7 @@ async def sign_up(
     mobile: str | None,
     hashed_password: str,
     client_info: str,
-) -> SignInResult:
+) -> CreateUserResult:
     return await executor.query_single(
         """\
         WITH
@@ -1337,6 +1261,11 @@ async def sign_up(
             username,
             email,
             mobile,
+            org_type: { code, name },
+            departments := (
+                SELECT .directly_organizations { code, name }
+            ),
+            roles: { code, name },
             is_deleted,
             created_at,
             last_login_at
@@ -1569,7 +1498,6 @@ async def update_role(
     id: uuid.UUID | None,
     current_code: str | None,
     is_deleted: bool | None,
-    organization_ids: list[uuid.UUID] | None,
     name: str,
     code: str | None,
     description: str | None,
@@ -1580,7 +1508,6 @@ async def update_role(
             id := <optional uuid>$id,
             current_code := <optional str>$current_code,
             is_deleted := <optional bool>$is_deleted,
-            organization_ids := <optional array<uuid>>$organization_ids,
             role := assert_single((
                 SELECT Role
                 FILTER
@@ -1597,22 +1524,15 @@ async def update_role(
                 deleted_at := (
                     .deleted_at IF NOT EXISTS is_deleted ELSE
                     datetime_of_transaction() IF is_deleted ELSE {}
-                ),
-                organizations := (
-                    SELECT Organization
-                    FILTER .id IN array_unpack(organization_ids)
                 )
             }
         ) {
             name,
             code,
             description,
-            organizations: {
+            org_type: {
                 code,
                 name,
-                is_org_type := EXISTS [is OrganizationType],
-                is_enterprise := EXISTS [is Enterprise],
-                is_department := EXISTS [is Department]
             },
             is_deleted,
             created_at
@@ -1621,7 +1541,6 @@ async def update_role(
         id=id,
         current_code=current_code,
         is_deleted=is_deleted,
-        organization_ids=organization_ids,
         name=name,
         code=code,
         description=description,
@@ -1680,9 +1599,11 @@ async def update_user(
             username,
             email,
             mobile,
+            org_type: { code, name },
             departments := (
                 SELECT .directly_organizations { code, name }
             ),
+            roles: { code, name },
             is_deleted,
             created_at,
             last_login_at
@@ -1709,7 +1630,17 @@ async def update_user_organization(
             SET {
                 directly_organizations := (
                     SELECT Organization
-                    FILTER .id IN array_unpack(<array<uuid>>$organization_ids)
+                    FILTER
+                        ( Organization IS NOT OrganizationType ) AND
+                        (
+                            false IF NOT EXISTS User.org_type ELSE
+                            (
+                                .id IN array_unpack(
+                                    <array<uuid>>$organization_ids
+                                ) AND
+                                User.org_type IN .ancestors
+                            )
+                        )
                 )
             }
         ) {
@@ -1717,9 +1648,11 @@ async def update_user_organization(
             username,
             email,
             mobile,
+            org_type: { code, name },
             departments := (
                 SELECT .directly_organizations { code, name }
             ),
+            roles: { code, name },
             is_deleted,
             created_at,
             last_login_at
@@ -1735,7 +1668,7 @@ async def update_user_roles(
     *,
     id: uuid.UUID,
     role_ids: list[uuid.UUID] | None,
-) -> UpdateUserRolesResult | None:
+) -> CreateUserResult | None:
     return await executor.query_single(
         """\
         WITH
@@ -1746,7 +1679,12 @@ async def update_user_roles(
             SET {
                 roles := (
                     SELECT Role
-                    FILTER .id IN array_unpack(role_ids)
+                    FILTER
+                        .id IN array_unpack(role_ids) AND
+                        (
+                            NOT EXISTS .org_type OR
+                            .org_type ?= User.org_type
+                        )
                 )
             }
         ) {
@@ -1754,12 +1692,11 @@ async def update_user_roles(
             username,
             email,
             mobile,
+            org_type: { code, name },
             departments := (
-                SELECT .directly_organizations { id, code, name }
+                SELECT .directly_organizations { code, name }
             ),
-            roles := (
-                SELECT .roles { id, code, name }
-            ),
+            roles: { code, name },
             is_deleted,
             created_at,
             last_login_at
@@ -1879,33 +1816,4 @@ async def validate_code(
         verify_type=verify_type,
         code=code,
         max_attempts=max_attempts,
-    )
-
-
-async def validate_role_organization_ids(
-    executor: edgedb.AsyncIOExecutor,
-    *,
-    organization_ids: list[uuid.UUID],
-) -> list[str]:
-    return await executor.query_single(
-        """\
-        WITH
-            organization_ids := array_unpack(<array<uuid>>$organization_ids),
-            organizations := (
-                SELECT Organization FILTER .id IN organization_ids
-            ),
-            children := (
-                SELECT DISTINCT (
-                    FOR x IN organizations
-                    UNION (
-                        SELECT x.children
-                    )
-                )
-            ),
-            invalid_organizations := (
-                SELECT organizations FILTER organizations IN children
-            )
-        SELECT array_agg(invalid_organizations.name);\
-        """,
-        organization_ids=organization_ids,
     )

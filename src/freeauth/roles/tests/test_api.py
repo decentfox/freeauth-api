@@ -8,10 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ...query_api import (
-    CreateDepartmentResult,
-    CreateEnterpriseResult,
     CreateOrgTypeResult,
     CreateRoleResult,
+    CreateUserResult,
 )
 
 
@@ -20,24 +19,6 @@ def org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
     from ...organizations.tests.test_org_type_api import create_org_type
 
     return create_org_type(test_client, faker)
-
-
-@pytest.fixture
-def enterprise(
-    test_client: TestClient, org_type: CreateOrgTypeResult, faker
-) -> CreateEnterpriseResult:
-    from ...organizations.tests.test_enterprise_api import create_enterprise
-
-    return create_enterprise(test_client, org_type, faker)
-
-
-@pytest.fixture
-def department(
-    test_client: TestClient, enterprise: CreateEnterpriseResult, faker
-) -> CreateDepartmentResult:
-    from ...organizations.tests.test_department_api import create_department
-
-    return create_department(test_client, enterprise, faker)
 
 
 @pytest.mark.parametrize(
@@ -72,39 +53,28 @@ def test_create_role_validate_errors(
     assert error["detail"]["errors"][field] == msg
 
 
-def test_create_role(
-    test_client: TestClient, faker, org_type, enterprise, department
-):
+def test_create_role(test_client: TestClient, faker, org_type):
     data: dict[str, Any] = {
         "name": faker.company_prefix() + "经理",
         "code": faker.lexify("?" * 10),
         "description": faker.sentence(),
-        "organization_ids": [
-            str(org_type.id),
-            str(enterprise.id),
-            str(department.id),
-        ],
+        "org_type_id": None,
     }
-    resp = test_client.post("/v1/roles", json=data)
-    error = resp.json()
-    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
-    assert (
-        error["detail"]["errors"]["organization_ids"]
-        == f'"{enterprise.name}"、'
-        f'"{department.name}"已包含在其他所属对象中，无需重复设置'
-    )
-
-    from ...organizations.tests.test_enterprise_api import create_enterprise
-
-    enterprise_2 = create_enterprise(test_client, org_type, faker)
-    data["organization_ids"] = [str(enterprise_2.id), str(department.id)]
     resp = test_client.post("/v1/roles", json=data)
     role = resp.json()
     assert resp.status_code == HTTPStatus.CREATED, role
     assert role["name"] == data["name"]
     assert role["code"] == data["code"].upper()
     assert not role["is_deleted"]
-    assert len(role["organizations"]) == 2
+    assert not role["org_type"]
+
+    data["code"] = faker.lexify("?" * 10)
+    data["org_type_id"] = str(org_type.id)
+    resp = test_client.post("/v1/roles", json=data)
+    role = resp.json()
+    assert resp.status_code == HTTPStatus.CREATED, role
+    assert role["org_type"]["code"] == org_type.code
+    assert role["org_type"]["name"] == org_type.name
 
     data["code"] = role["code"].upper()
     resp = test_client.post("/v1/roles", json=data)
@@ -114,7 +84,7 @@ def test_create_role(
 
 
 def create_role(
-    test_client: TestClient, faker, organization_ids: list[str] | None = None
+    test_client: TestClient, faker, org_type_id: str | None = None
 ) -> CreateRoleResult:
     resp = test_client.post(
         "/v1/roles",
@@ -122,7 +92,7 @@ def create_role(
             "name": faker.company_prefix() + "经理",
             "code": faker.lexify("?" * 10),
             "description": faker.sentence(),
-            "organization_ids": organization_ids,
+            "org_type_id": org_type_id,
         },
     )
     return CreateRoleResult(**resp.json())
@@ -133,14 +103,11 @@ def role(test_client: TestClient, faker) -> CreateRoleResult:
     return create_role(test_client, faker)
 
 
-def test_update_role(
-    test_client: TestClient, role: CreateRoleResult, faker, department
-):
+def test_update_role(test_client: TestClient, role: CreateRoleResult, faker):
     data: dict[str, Any] = {
         "name": role.name,
         "code": role.code,
         "description": role.description,
-        "organization_ids": [str(o.id) for o in role.organizations],
         "is_deleted": role.is_deleted,
     }
     resp = test_client.put(f"/v1/roles/{uuid.uuid4()}", json=data)
@@ -157,9 +124,6 @@ def test_update_role(
         "name": f"    {role.name}",
         "code": f"   {role.code}",
         "description": f"    {role.description}",
-        "organization_ids": [str(o.id) for o in role.organizations] + [
-            str(uuid.uuid4())
-        ],
     }
     resp = test_client.put(f"/v1/roles/{role.id}", json=data)
     rv = resp.json()
@@ -169,7 +133,6 @@ def test_update_role(
     data = {
         "name": "new name",
         "is_deleted": True,
-        "organization_ids": [str(department.id)],
     }
     resp = test_client.put(f"/v1/roles/{role.code}", json=data)
     rv = resp.json()
@@ -177,16 +140,6 @@ def test_update_role(
     assert rv["name"] == "new name"
     assert not rv["code"]
     assert not rv["description"]
-    assert rv["organizations"] == [
-        {
-            "id": str(department.id),
-            "code": department.code,
-            "name": department.name,
-            "is_org_type": False,
-            "is_department": True,
-            "is_enterprise": False,
-        }
-    ]
     assert rv["is_deleted"]
 
     another_role = create_role(test_client, faker)
@@ -292,32 +245,36 @@ def test_delete_roles(test_client: TestClient, faker):
 
 
 @pytest.fixture
-def roles(test_client: TestClient, org_type, enterprise, department, faker):
+def org_types(test_client: TestClient, faker):
+    from ...organizations.tests.test_org_type_api import create_org_type
+
+    org_types = []
+    for _ in range(3):
+        org_types.append(create_org_type(test_client, faker))
+    return org_types
+
+
+@pytest.fixture
+def roles(test_client: TestClient, org_types, faker):
     roles = []
     for _ in range(2):
         roles.append(create_role(test_client, faker))
     for _ in range(2):
         roles.append(
-            create_role(
-                test_client, faker, organization_ids=[str(org_type.id)]
-            )
+            create_role(test_client, faker, org_type_id=str(org_types[0].id))
         )
     for _ in range(2):
         roles.append(
-            create_role(
-                test_client, faker, organization_ids=[str(enterprise.id)]
-            )
+            create_role(test_client, faker, org_type_id=str(org_types[1].id))
         )
     for _ in range(2):
         roles.append(
-            create_role(
-                test_client, faker, organization_ids=[str(department.id)]
-            )
+            create_role(test_client, faker, org_type_id=str(org_types[2].id))
         )
     return roles
 
 
-def test_get_roles(test_client: TestClient, roles, org_type):
+def test_get_roles(test_client: TestClient, roles, org_types):
     data: dict[str, Any] = dict(
         per_page=3,
     )
@@ -336,86 +293,170 @@ def test_get_roles(test_client: TestClient, roles, org_type):
     assert rv["total"] == 1
     assert rv["rows"][0]["name"] == roles[0].name
 
-    data["q"] = org_type.name
+    data["q"] = org_types[0].name
     resp = test_client.post("/v1/roles/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 2
-    assert rv["rows"][0]["organizations"][0]["name"] == org_type.name
-    assert rv["rows"][1]["organizations"][0]["name"] == org_type.name
+    assert rv["rows"][0]["org_type"]["name"] == org_types[0].name
+    assert rv["rows"][1]["org_type"]["name"] == org_types[0].name
+
+    data = {"include_global_roles": False}
+    resp = test_client.post("/v1/roles/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 6
+    for ot in rv["rows"]:
+        assert ot["org_type"] is not None
+
+    data = {
+        "include_global_roles": False,
+        "org_type_id": str(org_types[2].id),
+    }
+    resp = test_client.post("/v1/roles/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 2
+    assert rv["rows"][0]["org_type"]["name"] == org_types[2].name
+    assert rv["rows"][1]["org_type"]["name"] == org_types[2].name
+
+    data = {
+        "org_type_id": str(org_types[0].id),
+    }
+    resp = test_client.post("/v1/roles/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 4
+    for ot in rv["rows"]:
+        assert (
+            ot["org_type"] is None
+            or ot["org_type"]["name"] == org_types[0].name
+        )
 
 
-def test_get_organization_roles(
-    test_client: TestClient, roles, org_type, enterprise, department
+def test_bind_or_unbind_users_to_roles(
+    test_client: TestClient, roles, org_types, faker
 ):
-    data: dict[str, Any] = dict()
-    resp = test_client.post(
-        f"/v1/organizations/{org_type.id}/roles/query", json=data
-    )
-    rv = resp.json()
-    assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 4
+    from ...users.tests.test_api import create_user
+
+    resp = test_client.post("/v1/roles/bind_users", json={})
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert error["detail"]["errors"]["user_ids"] == "该字段为必填项"
+    assert error["detail"]["errors"]["role_ids"] == "该字段为必填项"
 
     resp = test_client.post(
-        f"/v1/organizations/{enterprise.id}/roles/query", json=data
+        "/v1/roles/bind_users",
+        json={
+            "user_ids": [],
+            "role_ids": [],
+        },
+    )
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert error["detail"]["errors"]["user_ids"] == "请至少选择一项"
+    assert error["detail"]["errors"]["role_ids"] == "请至少选择一项"
+
+    users: list[CreateUserResult] = [
+        create_user(
+            test_client, name=faker.name(), username=faker.user_name()
+        ),
+        create_user(
+            test_client,
+            name=faker.name(),
+            username=faker.user_name(),
+            org_type_id=str(org_types[0].id),
+        ),
+        create_user(
+            test_client,
+            name=faker.name(),
+            username=faker.user_name(),
+            org_type_id=str(org_types[1].id),
+        ),
+    ]
+    resp = test_client.post(
+        "/v1/roles/bind_users",
+        json={
+            "user_ids": [str(u.id) for u in users],
+            "role_ids": [str(r.id) for r in roles],
+        },
     )
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 6
+    for user in rv:
+        if user["id"] == str(users[0].id):
+            assert len(user["roles"]) == 2  # global roles
+            assert sorted(r["id"] for r in user["roles"]) == sorted(
+                str(r.id) for r in roles[0:2]
+            )
+        else:
+            assert len(user["roles"]) == 4  # global + org_type roles
+
+            if user["id"] == str(users[1].id):
+                assert sorted(r["id"] for r in user["roles"]) == sorted(
+                    str(r.id) for r in roles[0:4]
+                )
+            else:
+                assert sorted(r["id"] for r in user["roles"]) == sorted(
+                    str(r.id) for r in (roles[0:2] + roles[4:6])
+                )
+
+    resp = test_client.post("/v1/roles/unbind_users", json={})
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert error["detail"]["errors"]["user_ids"] == "该字段为必填项"
+    assert error["detail"]["errors"]["role_ids"] == "该字段为必填项"
 
     resp = test_client.post(
-        f"/v1/organizations/{department.id}/roles/query", json=data
+        "/v1/roles/unbind_users",
+        json={
+            "user_ids": [],
+            "role_ids": [],
+        },
     )
-    rv = resp.json()
-    assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 8
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert error["detail"]["errors"]["user_ids"] == "请至少选择一项"
+    assert error["detail"]["errors"]["role_ids"] == "请至少选择一项"
 
-    data["q"] = roles[0].name
     resp = test_client.post(
-        f"/v1/organizations/{org_type.id}/roles/query", json=data
+        "/v1/roles/unbind_users",
+        json={
+            "user_ids": [str(u.id) for u in users],
+            "role_ids": [str(r.id) for r in roles[7:]],
+        },
     )
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 1
-    assert rv[0]["name"] == roles[0].name
+    for user in rv:
+        if user["id"] == str(users[0].id):
+            assert len(user["roles"]) == 2  # global roles
+        else:
+            assert len(user["roles"]) == 4  # global + org_type roles
 
-    data["role_type"] = "global"
     resp = test_client.post(
-        f"/v1/organizations/{org_type.id}/roles/query", json=data
+        "/v1/roles/unbind_users",
+        json={
+            "user_ids": [str(u.id) for u in users],
+            "role_ids": [str(r.id) for r in roles[0:2]],
+        },
     )
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 1
-    assert rv[0]["name"] == roles[0].name
+    for user in rv:
+        if user["id"] == str(users[0].id):
+            assert len(user["roles"]) == 0  # global roles removed
+        else:
+            assert len(user["roles"]) == 2  # org_type roles left
 
-    data["is_deleted"] = True
     resp = test_client.post(
-        f"/v1/organizations/{org_type.id}/roles/query", json=data
+        "/v1/roles/unbind_users",
+        json={
+            "user_ids": [str(u.id) for u in users],
+            "role_ids": [str(r.id) for r in roles],
+        },
     )
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 0
-
-    data = {"role_type": "org_type"}
-    resp = test_client.post(
-        f"/v1/organizations/{department.id}/roles/query", json=data
-    )
-    rv = resp.json()
-    assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 2
-
-    data = {"role_type": "enterprise"}
-    resp = test_client.post(
-        f"/v1/organizations/{department.id}/roles/query", json=data
-    )
-    rv = resp.json()
-    assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 2
-
-    data = {"role_type": "enterprise"}
-    resp = test_client.post(
-        f"/v1/organizations/{org_type.id}/roles/query", json=data
-    )
-    rv = resp.json()
-    assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv) == 0
+    for user in rv:
+        assert not user["roles"]

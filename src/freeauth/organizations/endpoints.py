@@ -520,7 +520,10 @@ async def add_members_to_organizations(
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[CreateUserResult]:
     return await organization_add_member(
-        client, user_ids=body.user_ids, organization_ids=body.organization_ids
+        client,
+        user_ids=body.user_ids,
+        organization_ids=body.organization_ids,
+        org_type_id=body.org_type_id,
     )
 
 
@@ -571,6 +574,7 @@ async def get_members_in_organization(
                         username,
                         email,
                         mobile,
+                        org_type: {{ id, code, name }},
                         departments := (
                             SELECT .directly_organizations {{
                                 id,
@@ -578,9 +582,7 @@ async def get_members_in_organization(
                                 name
                             }}
                         ),
-                        roles := (
-                            SELECT .roles {{ id, code, name }}
-                        ),
+                        roles: {{ id, code, name }},
                         is_deleted,
                         created_at,
                         last_login_at

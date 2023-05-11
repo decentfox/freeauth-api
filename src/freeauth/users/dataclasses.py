@@ -6,7 +6,8 @@ from typing import List
 from pydantic import EmailStr, Field, root_validator, validator
 from pydantic.dataclasses import dataclass
 
-from ..dataclasses import BaseModelConfig
+from ..dataclasses import FilterItem  # noqa
+from ..dataclasses import BaseModelConfig, QueryBody
 from ..utils import MOBILE_REGEX
 
 
@@ -50,6 +51,11 @@ class UserPostBody:
         None,
         title="直属部门 ID 列表",
         description="可设置一个或多个部门分支或企业机构 ID",
+    )
+    org_type_id: uuid.UUID | None = Field(
+        None,
+        title="组织类型 ID",
+        description="用户所属组织类型",
     )
 
     @validator("*", pre=True)
@@ -148,4 +154,18 @@ class UserDeleteBody:
         ...,
         title="用户 ID 数组",
         description="待删除的用户 ID 列表",
+    )
+
+
+@dataclass(config=BaseModelConfig)
+class UserQueryBody(QueryBody):
+    org_type_id: uuid.UUID | None = Field(
+        None,
+        title="组织类型 ID",
+        description="支持过滤指定组织类型下的用户",
+    )
+    include_unassigned_users: bool = Field(
+        True,
+        title="是否包含未设置任何组织类型的用户",
+        description="默认为 true，设为 false 代表仅查询关联了组织类型的用户",
     )

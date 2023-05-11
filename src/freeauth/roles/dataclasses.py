@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import uuid
-from enum import Enum
 
 from pydantic import Field, validator
 from pydantic.dataclasses import dataclass
 
-from ..dataclasses import BaseModelConfig
+from ..dataclasses import FilterItem  # noqa
+from ..dataclasses import BaseModelConfig, QueryBody
 
 
 @dataclass(config=BaseModelConfig)
-class RolePostBody:
+class BaseRoleBody:
     name: str = Field(
         ...,
         title="名称",
@@ -27,11 +27,6 @@ class RolePostBody:
         title="描述",
         description="角色描述",
     )
-    organization_ids: list[uuid.UUID] | None = Field(
-        None,
-        title="归属对象 ID 列表",
-        description="可设置一个或多个组织类型、部门分支或企业机构 ID",
-    )
 
     @validator("code", pre=True)
     def convert_to_uppercase(cls, v):
@@ -39,7 +34,16 @@ class RolePostBody:
 
 
 @dataclass(config=BaseModelConfig)
-class RolePutBody(RolePostBody):
+class RolePostBody(BaseRoleBody):
+    org_type_id: uuid.UUID | None = Field(
+        None,
+        title="组织类型 ID",
+        description="属于指定组织类型下的角色；未提供该字段则代表角色为全局角色",
+    )
+
+
+@dataclass(config=BaseModelConfig)
+class RolePutBody(BaseRoleBody):
     is_deleted: bool | None = Field(
         None,
         title="是否禁用",
@@ -71,13 +75,6 @@ class RoleDeleteBody:
     )
 
 
-class RoleTypeEnum(str, Enum):
-    global_role = "global"
-    org_type = "org_type"
-    enterprise = "enterprise"
-    department = "department"
-
-
 @dataclass(config=BaseModelConfig)
 class OrganizationRoleQueryBody:
     q: str | None = Field(
@@ -85,10 +82,10 @@ class OrganizationRoleQueryBody:
         title="搜索关键字",
         description="支持搜索角色名称、角色代码、角色描述",
     )
-    role_type: RoleTypeEnum | None = Field(
+    org_type_id: uuid.UUID | None = Field(
         None,
-        title="角色类型",
-        description="支持按角色类型进行过滤",
+        title="组织类型 ID",
+        description="支持过滤指定组织类型下的角色",
     )
     is_deleted: bool | None = Field(
         None,
@@ -110,6 +107,20 @@ class RoleUserBody:
     user_ids: list[uuid.UUID] = Field(
         ...,
         title="用户 ID 列表",
-        description="待添加的用户 ID 列表",
+        description="待添加/移除的用户 ID 列表",
         min_items=1,
+    )
+
+
+@dataclass(config=BaseModelConfig)
+class RoleQueryBody(QueryBody):
+    org_type_id: uuid.UUID | None = Field(
+        None,
+        title="组织类型 ID",
+        description="支持过滤指定组织类型下的角色",
+    )
+    include_global_roles: bool = Field(
+        True,
+        title="是否包含全局角色",
+        description="默认为 true，设为 false 代表仅查询组织类型角色",
     )

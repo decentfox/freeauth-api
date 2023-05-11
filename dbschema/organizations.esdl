@@ -6,6 +6,7 @@ module default {
         };
 
         multi link enterprises := .<org_type[is Enterprise];
+        multi link roles := .<org_type[is Role];
 
         constraint exclusive on (.code_upper);
     }
