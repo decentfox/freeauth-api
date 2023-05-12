@@ -18,6 +18,7 @@ class UserBodyConfig(BaseModelConfig):
         ),
         "value_error.email": "邮箱格式有误",
         "value_error.str.regex": "仅支持中国大陆11位手机号",
+        "value_error.any_str.min_length": "该字段为必填项",
         "value_error.missing": "该字段为必填项",
         "type_error.none.not_allowed": "该字段不得为空",
         "type_error.uuid": "ID格式错误",
@@ -82,12 +83,14 @@ class UserPutBody:
         ...,
         title="姓名",
         description="用户姓名",
+        min_length=1,
         max_length=50,
     )
     username: str = Field(
         ...,
         title="用户名",
         description="登录用户名",
+        min_length=1,
         max_length=50,
     )
     email: EmailStr | None = Field(
