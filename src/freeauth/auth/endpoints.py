@@ -13,21 +13,32 @@ from jose import jwt
 
 from .. import get_edgedb_client, logger
 from ..app import router
+from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
 from ..config import get_config
 from ..query_api import (
+    AuthAuditEventType,
+    AuthAuditStatusCode,
     AuthCodeType,
     AuthVerifyType,
     CreateUserResult,
     GetUserByAccountResult,
     SendCodeResult,
     ValidateCodeResult,
+    ValidatePwdResult,
+    create_audit_log,
     send_code,
     sign_in,
     sign_up,
     validate_code,
+    validate_pwd,
 )
 from ..settings import get_login_settings
-from ..utils import MOBILE_REGEX, gen_random_string, get_password_hash
+from ..utils import (
+    MOBILE_REGEX,
+    gen_random_string,
+    get_password_hash,
+    verify_password,
+)
 from .dataclasses import (
     SignInCodeBody,
     SignInPwdBody,
@@ -39,7 +50,6 @@ from .dependencies import (
     get_client_info,
     verify_account_when_send_code,
     verify_account_when_sign_in_with_code,
-    verify_account_when_sign_in_with_pwd,
     verify_account_when_sign_up,
     verify_new_account_when_send_code,
 )
@@ -317,16 +327,66 @@ async def sign_in_with_pwd(
     body: SignInPwdBody,
     response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-    user: GetUserByAccountResult = Depends(
-        verify_account_when_sign_in_with_pwd
-    ),
     client_info: dict = Depends(get_client_info),
 ) -> CreateUserResult | None:
-    if user.hashed_password != get_password_hash(body.password):
+    settings = await get_login_settings().get_all(client)
+    pwd_signin_modes = settings["pwd_signin_modes"]
+    if not pwd_signin_modes:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"account": "密码输入错误"},
+            detail={"account": "系统不支持密码登录，请使用其他登录方式"},
         )
+    user: ValidatePwdResult | None = await validate_pwd(
+        client,
+        username=body.account if "username" in pwd_signin_modes else None,
+        mobile=body.account if "mobile" in pwd_signin_modes else None,
+        email=body.account if "email" in pwd_signin_modes else None,
+        interval=(
+            settings["signin_pwd_validating_interval"]
+            if settings["signin_pwd_validating_limit_enabled"]
+            else None
+        ),
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail={
+                "account": AUDIT_STATUS_CODE_MAPPING[
+                    AuthAuditStatusCode.ACCOUNT_NOT_EXISTS
+                ]
+            },
+        )
+    field = "account"
+    status_code: AuthAuditStatusCode | None = None
+    if user.is_deleted:
+        status_code = AuthAuditStatusCode.ACCOUNT_DISABLED
+    elif not (
+        user.hashed_password
+        and verify_password(body.password, user.hashed_password)
+    ):
+        field = "password"
+        status_code = AuthAuditStatusCode.INVALID_PASSWORD
+        if (
+            settings["signin_pwd_validating_limit_enabled"]
+            and user.recent_failed_attempts
+            >= settings["signin_pwd_validating_max_attempts"]
+        ):
+            status_code = AuthAuditStatusCode.PASSWORD_ATTEMPTS_EXCEEDED
+
+    if status_code:
+        await create_audit_log(
+            client,
+            user_id=user.id,
+            client_info=json.dumps(client_info),
+            status_code=status_code.value,  # type: ignore
+            event_type=AuthAuditEventType.SIGNIN.value,  # type: ignore
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={field: AUDIT_STATUS_CODE_MAPPING[status_code]},
+        )
+
     token = await create_access_token(client, response, user.id)
     return await sign_in(
         client,

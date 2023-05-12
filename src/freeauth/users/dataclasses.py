@@ -47,6 +47,11 @@ class UserPostBody:
         description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
         regex=MOBILE_REGEX,
     )
+    password: str | None = Field(
+        None,
+        title="密码",
+        description="初始密码，如未提供则由系统自动生成",
+    )
     organization_ids: list[uuid.UUID] | None = Field(
         None,
         title="直属部门 ID 列表",

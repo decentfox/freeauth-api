@@ -56,7 +56,7 @@ async def post_user(
     username: str | None = user.username
     if not username:
         username = gen_random_string(8)
-    password: str = gen_random_string(12, secret=True)
+    password: str = user.password or gen_random_string(12, secret=True)
     try:
         created_user = await create_user(
             client,

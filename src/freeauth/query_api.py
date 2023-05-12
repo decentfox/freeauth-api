@@ -38,6 +38,7 @@
 #     'src/freeauth/users/queries/update_user_status.edgeql'
 #     'src/freeauth/settings/queries/upsert_login_setting.edgeql'
 #     'src/freeauth/auth/queries/validate_code.edgeql'
+#     'src/freeauth/auth/queries/validate_pwd.edgeql'
 # WITH:
 #     $ edgedb-py --file src/freeauth/query_api.py
 
@@ -69,6 +70,14 @@ class AuthAuditEventType(enum.Enum):
     SIGNUP = "SignUp"
 
 
+class AuthAuditStatusCode(enum.Enum):
+    OK = "OK"
+    ACCOUNT_NOT_EXISTS = "ACCOUNT_NOT_EXISTS"
+    ACCOUNT_DISABLED = "ACCOUNT_DISABLED"
+    PASSWORD_ATTEMPTS_EXCEEDED = "PASSWORD_ATTEMPTS_EXCEEDED"
+    INVALID_PASSWORD = "INVALID_PASSWORD"
+
+
 class AuthCodeType(enum.Enum):
     SMS = "SMS"
     EMAIL = "Email"
@@ -86,7 +95,7 @@ class CreateAuditLogResult(NoPydanticValidation):
     os: str | None
     device: str | None
     browser: str | None
-    status_code: int
+    status_code: AuthAuditStatusCode
     is_succeed: bool
     event_type: AuthAuditEventType
     created_at: datetime.datetime
@@ -288,26 +297,37 @@ class ValidateCodeResult(typing.NamedTuple):
     incorrect_attempts: int
 
 
+@dataclasses.dataclass
+class ValidatePwdResult(NoPydanticValidation):
+    id: uuid.UUID
+    hashed_password: str | None
+    is_deleted: bool
+    recent_failed_attempts: int
+
+
 async def create_audit_log(
     executor: edgedb.AsyncIOExecutor,
     *,
     user_id: uuid.UUID,
     client_info: str,
+    status_code: AuthAuditStatusCode,
     event_type: AuthAuditEventType,
-    status_code: int,
 ) -> CreateAuditLogResult:
     return await executor.query_single(
         """\
         WITH
-            user := (SELECT User FILTER .id = <uuid>$user_id),
+            module auth,
+            user := (SELECT default::User FILTER .id = <uuid>$user_id),
             client_info := (
                 <tuple<client_ip: str, user_agent: json>><json>$client_info
-            )
+            ),
+            status_code := <AuditStatusCode>$status_code
         SELECT (
-            INSERT auth::AuditLog {
+            INSERT AuditLog {
                 client_ip := <str>client_info.client_ip,
-                event_type := <auth::AuditEventType>$event_type,
-                status_code := <int16>$status_code,
+                event_type := <AuditEventType>$event_type,
+                status_code := status_code,
+                is_succeed := status_code = AuditStatusCode.OK,
                 raw_ua := <str>client_info.user_agent['raw_ua'],
                 os := <str>client_info.user_agent['os'],
                 device := <str>client_info.user_agent['device'],
@@ -332,8 +352,8 @@ async def create_audit_log(
         """,
         user_id=user_id,
         client_info=client_info,
-        event_type=event_type,
         status_code=status_code,
+        event_type=event_type,
     )
 
 
@@ -1184,8 +1204,9 @@ async def sign_in(
             audit_log := (
                 INSERT auth::AuditLog {
                     client_ip := client_info.client_ip,
-                    event_type := <auth::AuditEventType>'SignIn',
-                    status_code := 200,
+                    event_type := auth::AuditEventType.SignIn,
+                    status_code := auth::AuditStatusCode.OK,
+                    is_succeed := true,
                     raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
@@ -1247,8 +1268,9 @@ async def sign_up(
             audit_log := (
                 INSERT auth::AuditLog {
                     client_ip := client_info.client_ip,
-                    event_type := <auth::AuditEventType>'SignUp',
-                    status_code := 200,
+                    event_type := auth::AuditEventType.SignUp,
+                    status_code := auth::AuditStatusCode.OK,
+                    is_succeed := true,
                     raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
@@ -1816,4 +1838,68 @@ async def validate_code(
         verify_type=verify_type,
         code=code,
         max_attempts=max_attempts,
+    )
+
+
+async def validate_pwd(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    username: str | None,
+    mobile: str | None,
+    email: str | None,
+    interval: int | None,
+) -> ValidatePwdResult | None:
+    return await executor.query_single(
+        """\
+        with
+            module auth,
+            username := <optional str>$username,
+            mobile := <optional str>$mobile,
+            email := <optional str>$email,
+            interval := <optional int64>$interval,
+            user := assert_single((
+                select default::User
+                filter
+                    (exists username and .username ?= username) or
+                    (exists mobile and .mobile ?= mobile) or
+                    (exists email and .email ?= email)
+            )),
+            recent_success_attempt := (
+                select AuditLog
+                filter
+                    .user = user
+                    and .event_type = AuditEventType.SignIn
+                    and .status_code = AuditStatusCode.OK
+                    and .created_at >= (
+                        datetime_of_statement() -
+                        cal::to_relative_duration(minutes := interval)
+                    )
+                limit 1
+            ),
+            recent_failed_attempts := (
+                select AuditLog
+                filter
+                    .user = user
+                    and .event_type = AuditEventType.SignIn
+                    and .status_code = AuditStatusCode.INVALID_PASSWORD
+                    and (
+                        .created_at >= recent_success_attempt.created_at
+                        if exists recent_success_attempt else
+                        .created_at >= (
+                            datetime_of_statement() -
+                            cal::to_relative_duration(minutes := interval)
+                        )
+                    )
+            )
+
+        select user {
+            hashed_password,
+            is_deleted,
+            recent_failed_attempts := count(recent_failed_attempts)
+        };\
+        """,
+        username=username,
+        mobile=mobile,
+        email=email,
+        interval=interval,
     )

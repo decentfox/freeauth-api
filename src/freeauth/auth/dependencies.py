@@ -17,7 +17,6 @@ from ..settings import get_login_settings
 from ..utils import MOBILE_REGEX
 from .dataclasses import (
     SignInCodeBody,
-    SignInPwdBody,
     SignInSendCodeBody,
     SignUpBody,
     SignUpSendCodeBody,
@@ -160,23 +159,4 @@ async def verify_account_when_sign_in_with_code(
         client,
         mobile=body.account if is_sms else None,
         email=body.account if not is_sms else None,
-    )
-
-
-async def verify_account_when_sign_in_with_pwd(
-    body: SignInPwdBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> GetUserByAccountResult:
-    login_settings = get_login_settings()
-    pwd_signin_modes = await login_settings.get("pwd_signin_modes", client)
-    if not pwd_signin_modes:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"account": "系统不支持密码登录，请使用其他登录方式"},
-        )
-    return await get_signin_account(
-        client,
-        username=body.account if "username" in pwd_signin_modes else None,
-        mobile=body.account if "mobile" in pwd_signin_modes else None,
-        email=body.account if "email" in pwd_signin_modes else None,
     )

@@ -148,7 +148,10 @@ def test_pwd_signin_modes(
     )
     resp = test_client.post("/v1/sign_in", json=data)
     error = resp.json()
-    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    if not pwd_signin_modes:
+        assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    else:
+        assert resp.status_code == HTTPStatus.NOT_FOUND, error
     assert error["detail"]["errors"]["account"] == err_msg
 
 
