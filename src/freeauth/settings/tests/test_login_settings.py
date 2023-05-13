@@ -10,6 +10,7 @@ from jose import jwt
 from ...config import get_config
 from ...query_api import AuthCodeType
 from ...users.tests.test_api import create_user
+from ...utils import gen_random_string
 from .. import get_login_settings
 
 
@@ -342,4 +343,48 @@ def test_code_sending_limit(
     assert (
         error["detail"]["errors"]["code"]
         == "验证码获取次数超限，请稍后再次获取"
+    )
+
+
+def test_pwd_validating_limit(test_client: TestClient):
+    password = gen_random_string(12, secret=True)
+    user = create_user(test_client, mobile="13800000000", password=password)
+
+    get_login_settings.cache_clear()
+    resp = test_client.put(
+        "/v1/login_settings",
+        json={
+            "signinPwdValidatingLimitEnabled": False,
+            "signinPwdValidatingMaxAttempts": 3,
+            "signinPwdValidatingInterval": 1440,
+            "pwdSigninModes": ["mobile"],
+        },
+    )
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+
+    for i in range(4):
+        resp = test_client.post(
+            "/v1/sign_in",
+            json={"account": user.mobile, "password": "wrong password"},
+        )
+        error = resp.json()
+        assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+        assert error["detail"]["errors"]["password"] == "密码输入错误"
+
+    resp = test_client.put(
+        "/v1/login_settings",
+        json={
+            "signinPwdValidatingLimitEnabled": True,
+        },
+    )
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+    resp = test_client.post(
+        "/v1/sign_in",
+        json={"account": user.mobile, "password": "wrong password"},
+    )
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert (
+        error["detail"]["errors"]["password"]
+        == "密码连续多次输入错误，账号暂时被锁定"
     )

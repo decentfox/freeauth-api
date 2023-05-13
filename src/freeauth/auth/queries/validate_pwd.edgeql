@@ -38,7 +38,6 @@ with
                 )
             )
     )
-
 select user {
     hashed_password,
     is_deleted,

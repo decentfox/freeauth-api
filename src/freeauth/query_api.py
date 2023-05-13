@@ -72,10 +72,15 @@ class AuthAuditEventType(enum.Enum):
 
 class AuthAuditStatusCode(enum.Enum):
     OK = "OK"
+    ACCOUNT_ALREADY_EXISTS = "ACCOUNT_ALREADY_EXISTS"
     ACCOUNT_NOT_EXISTS = "ACCOUNT_NOT_EXISTS"
     ACCOUNT_DISABLED = "ACCOUNT_DISABLED"
-    PASSWORD_ATTEMPTS_EXCEEDED = "PASSWORD_ATTEMPTS_EXCEEDED"
     INVALID_PASSWORD = "INVALID_PASSWORD"
+    PASSWORD_ATTEMPTS_EXCEEDED = "PASSWORD_ATTEMPTS_EXCEEDED"
+    INVALID_CODE = "INVALID_CODE"
+    CODE_INCORRECT = "CODE_INCORRECT"
+    CODE_ATTEMPTS_EXCEEDED = "CODE_ATTEMPTS_EXCEEDED"
+    CODE_EXPIRED = "CODE_EXPIRED"
 
 
 class AuthCodeType(enum.Enum):
@@ -247,7 +252,6 @@ class GetOrganizationNodeResult(NoPydanticValidation):
 @dataclasses.dataclass
 class GetUserByAccountResult(NoPydanticValidation):
     id: uuid.UUID
-    hashed_password: str | None
     is_deleted: bool
 
 
@@ -291,10 +295,7 @@ class UpsertLoginSettingResult(NoPydanticValidation):
 
 
 class ValidateCodeResult(typing.NamedTuple):
-    code_required: bool
-    code_found: bool
-    code_valid: bool
-    incorrect_attempts: int
+    status_code: AuthAuditStatusCode
 
 
 @dataclasses.dataclass
@@ -315,19 +316,20 @@ async def create_audit_log(
 ) -> CreateAuditLogResult:
     return await executor.query_single(
         """\
-        WITH
+        with
             module auth,
-            user := (SELECT default::User FILTER .id = <uuid>$user_id),
+            user := (
+                select default::User filter .id = <uuid>$user_id
+            ),
             client_info := (
                 <tuple<client_ip: str, user_agent: json>><json>$client_info
             ),
             status_code := <AuditStatusCode>$status_code
-        SELECT (
-            INSERT AuditLog {
+        select (
+            insert AuditLog {
                 client_ip := <str>client_info.client_ip,
                 event_type := <AuditEventType>$event_type,
                 status_code := status_code,
-                is_succeed := status_code = AuditStatusCode.OK,
                 raw_ua := <str>client_info.user_agent['raw_ua'],
                 os := <str>client_info.user_agent['os'],
                 device := <str>client_info.user_agent['device'],
@@ -881,7 +883,7 @@ async def get_user_by_account(
             mobile := <optional str>$mobile,
             email := <optional str>$email
         SELECT
-            User { id, hashed_password, is_deleted }
+            User { id, is_deleted }
         FILTER (
             .username ?= username IF EXISTS username ELSE
             .mobile ?= mobile IF EXISTS mobile ELSE
@@ -1206,7 +1208,6 @@ async def sign_in(
                     client_ip := client_info.client_ip,
                     event_type := auth::AuditEventType.SignIn,
                     status_code := auth::AuditStatusCode.OK,
-                    is_succeed := true,
                     raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
@@ -1270,7 +1271,6 @@ async def sign_up(
                     client_ip := client_info.client_ip,
                     event_type := auth::AuditEventType.SignUp,
                     status_code := auth::AuditStatusCode.OK,
-                    is_succeed := true,
                     raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
@@ -1787,50 +1787,57 @@ async def validate_code(
 ) -> ValidateCodeResult:
     return await executor.query_single(
         """\
-        WITH
+        with
+            module auth,
             account := <str>$account,
-            code_type := <auth::CodeType>$code_type,
-            verify_type := <auth::VerifyType>$verify_type,
+            code_type := <CodeType>$code_type,
+            verify_type := <VerifyType>$verify_type,
             code := <str>$code,
             max_attempts := <optional int64>$max_attempts,
             consumable_record := (
-                SELECT auth::VerifyRecord
-                FILTER .account = account
-                    AND .code_type  = code_type
-                    AND .verify_type = verify_type
-                    AND .consumable
-                    AND (.incorrect_attempts <= max_attempts) ?? true
-                ORDER BY .created_at DESC
-                LIMIT 1
+                select VerifyRecord
+                filter .account = account
+                    and .code_type  = code_type
+                    and .verify_type = verify_type
+                    and .consumable
+                    and (.incorrect_attempts <= max_attempts) ?? true
             ),
-            record := (SELECT consumable_record FILTER .code = code),
+            record := ( select consumable_record filter .code = code ),
             valid_record := (
-                UPDATE record
-                FILTER .expired_at > datetime_of_transaction()
-                SET {
+                update record
+                filter .expired_at > datetime_of_transaction()
+                set {
                     consumed_at := datetime_of_transaction()
                 }
             ),
             incorrect_record := (
-                UPDATE consumable_record
-                FILTER EXISTS max_attempts AND NOT EXISTS record
-                SET {
+                update consumable_record
+                filter exists max_attempts and not exists record
+                set {
                     incorrect_attempts := .incorrect_attempts + 1,
                     expired_at := (
-                        datetime_of_transaction() IF
-                        .incorrect_attempts = max_attempts - 1 ELSE
+                        datetime_of_transaction() if
+                        .incorrect_attempts = max_attempts - 1 else
                         .expired_at
                     )
                 }
+            ),
+            code_attempts_exceeded := any(
+                (incorrect_record.incorrect_attempts >= max_attempts) ?? false
+            ),
+            status_code := (
+                AuditStatusCode.INVALID_CODE
+                if not exists consumable_record
+                else AuditStatusCode.CODE_ATTEMPTS_EXCEEDED
+                if code_attempts_exceeded
+                else AuditStatusCode.CODE_INCORRECT
+                if not exists record
+                else AuditStatusCode.CODE_EXPIRED
+                if not exists valid_record
+                else AuditStatusCode.OK
             )
-        SELECT (
-            code_required := NOT EXISTS consumable_record,
-            code_found := EXISTS record,
-            code_valid := EXISTS valid_record,
-            incorrect_attempts := (
-                incorrect_record.incorrect_attempts ??
-                consumable_record.incorrect_attempts ?? 0
-            )
+        select (
+            status_code := status_code,
         );\
         """,
         account=account,
@@ -1891,7 +1898,6 @@ async def validate_pwd(
                         )
                     )
             )
-
         select user {
             hashed_password,
             is_deleted,

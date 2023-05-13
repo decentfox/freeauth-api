@@ -106,6 +106,8 @@ async def validate_auth_code(
     verify_type: AuthVerifyType,
     code: str,
     max_attempts: int | None,
+    user: GetUserByAccountResult | None,
+    client_info: dict,
 ):
     code_type = AuthCodeType.EMAIL
     if re.match(MOBILE_REGEX, account):
@@ -118,25 +120,19 @@ async def validate_auth_code(
         code=code,
         max_attempts=max_attempts,
     )
-    if rv.code_required:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"code": "验证码错误或已失效，请重新获取"},
-        )
-    if not rv.code_found:
-        err_msg = "验证码错误，请重新输入"
-        if max_attempts and rv.incorrect_attempts >= max_attempts:
-            err_msg = (
-                "您输入的错误验证码次数过多，当前验证码已失效，请重新获取"
+    status_code = AuthAuditStatusCode(str(rv.status_code))
+    if status_code != AuthAuditStatusCode.OK:
+        if user:
+            await create_audit_log(
+                client,
+                user_id=user.id,
+                client_info=json.dumps(client_info),
+                status_code=status_code.value,  # type: ignore
+                event_type=AuthAuditEventType.SIGNIN.value,  # type: ignore
             )
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"code": err_msg},
-        )
-    elif not rv.code_valid:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"code": "验证码已失效，请重新获取"},
+            detail={"code": AUDIT_STATUS_CODE_MAPPING[status_code]},
         )
 
 
@@ -223,6 +219,8 @@ async def sign_up_with_code(
             if settings["signup_code_validating_limit_enabled"]
             else None
         ),
+        user=None,
+        client_info=client_info,
     )
     code_type: AuthCodeType = body.code_type
     username: str = gen_random_string(8)
@@ -307,6 +305,8 @@ async def sign_in_with_code(
             if settings["signin_code_validating_limit_enabled"]
             else None
         ),
+        user=user,
+        client_info=client_info,
     )
     token = await create_access_token(client, response, user.id)
     return await sign_in(

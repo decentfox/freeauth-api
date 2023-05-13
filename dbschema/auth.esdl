@@ -11,6 +11,7 @@ module auth {
         INVALID_PASSWORD,
         PASSWORD_ATTEMPTS_EXCEEDED,
         INVALID_CODE,
+        CODE_INCORRECT,
         CODE_ATTEMPTS_EXCEEDED,
         CODE_EXPIRED,
     >;
@@ -49,7 +50,7 @@ module auth {
     }
 
     type AuditLog extending default::TimeStamped {
-        link user -> default::User;
+        required link user -> default::User;
         required property client_ip -> str {
             readonly := true;
         }
@@ -59,9 +60,7 @@ module auth {
         required property status_code -> AuditStatusCode {
             readonly := true;
         };
-        required property is_succeed -> bool {
-            default := true;
-        };
+        required property is_succeed := .status_code = AuditStatusCode.OK;
         property raw_ua -> str {
             readonly := true;
         };
@@ -76,6 +75,5 @@ module auth {
         };
 
         index on (.event_type);
-        index on (.is_succeed);
     }
 }

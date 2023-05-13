@@ -21,7 +21,6 @@ WITH
             client_ip := client_info.client_ip,
             event_type := auth::AuditEventType.SignUp,
             status_code := auth::AuditStatusCode.OK,
-            is_succeed := true,
             raw_ua := <str>client_info.user_agent['raw_ua'],
             os := <str>client_info.user_agent['os'],
             device := <str>client_info.user_agent['device'],
