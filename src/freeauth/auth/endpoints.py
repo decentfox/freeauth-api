@@ -15,6 +15,7 @@ from .. import get_edgedb_client, logger
 from ..app import router
 from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
 from ..config import get_config
+from ..dependencies import get_current_user
 from ..query_api import (
     AuthAuditEventType,
     AuthAuditStatusCode,
@@ -394,3 +395,15 @@ async def sign_in_with_pwd(
         access_token=token,
         client_info=json.dumps(client_info),
     )
+
+
+@router.get(
+    "/me",
+    tags=["认证相关"],
+    summary="获取个人信息",
+    description="获取当前登录用户的个人信息",
+)
+async def get_user_me(
+    current_user: CreateUserResult = Depends(get_current_user),
+) -> CreateUserResult:
+    return current_user

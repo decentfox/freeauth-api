@@ -223,7 +223,7 @@ def test_sign_in_with_code(test_client: TestClient):
     assert rv["rows"][0]["os"] == "Mac OS X"
 
 
-async def test_sign_in_with_password(test_client: TestClient):
+def test_sign_in_with_password(test_client: TestClient):
     resp = test_client.post("/v1/sign_in", json={})
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
@@ -287,3 +287,35 @@ async def test_sign_in_with_password(test_client: TestClient):
         error["detail"]["errors"]["password"]
         == "密码连续多次输入错误，账号暂时被锁定"
     )
+
+
+def test_get_user_me(test_client: TestClient):
+    password = gen_random_string(12, secret=True)
+    user = create_user(test_client, mobile="13800000000", password=password)
+
+    resp = test_client.post(
+        "/v1/sign_in",
+        json={
+            "account": "13800000000",
+            "password": password,
+        },
+    )
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+
+    resp = test_client.get("/v1/me")
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["id"] == str(user.id)
+
+    resp = test_client.put(
+        "/v1/users/status",
+        json={
+            "user_ids": [str(user.id)],
+            "is_deleted": True,
+        },
+    )
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+    resp = test_client.get("/v1/me")
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED, error
+    assert "身份验证失败" in error["detail"]["message"]

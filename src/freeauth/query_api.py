@@ -16,6 +16,7 @@
 #     'src/freeauth/organizations/queries/get_org_type_by_id_or_code.edgeql'
 #     'src/freeauth/organizations/queries/get_organization_node.edgeql'
 #     'src/freeauth/roles/queries/get_role_by_id_or_code.edgeql'
+#     'src/freeauth/auth/queries/get_user_by_access_token.edgeql'
 #     'src/freeauth/auth/queries/get_user_by_account.edgeql'
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
 #     'src/freeauth/organizations/queries/organization_add_member.edgeql'
@@ -866,6 +867,41 @@ async def get_role_by_id_or_code(
         """,
         id=id,
         code=code,
+    )
+
+
+async def get_user_by_access_token(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    access_token: str,
+) -> CreateUserResult | None:
+    return await executor.query_single(
+        """\
+        with
+            token := (
+                select auth::Token
+                filter
+                    .access_token = <str>$access_token
+                    and .is_revoked = false
+            )
+        select
+            User {
+                name,
+                username,
+                email,
+                mobile,
+                org_type: { code, name },
+                departments := (
+                    SELECT .directly_organizations { code, name }
+                ),
+                roles: { code, name },
+                is_deleted,
+                created_at,
+                last_login_at
+            }
+        filter User = token.user\
+        """,
+        access_token=access_token,
     )
 
 
