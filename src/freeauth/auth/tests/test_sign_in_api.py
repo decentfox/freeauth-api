@@ -289,33 +289,40 @@ def test_sign_in_with_password(test_client: TestClient):
     )
 
 
-def test_get_user_me(test_client: TestClient):
-    password = gen_random_string(12, secret=True)
-    user = create_user(test_client, mobile="13800000000", password=password)
-
-    resp = test_client.post(
-        "/v1/sign_in",
-        json={
-            "account": "13800000000",
-            "password": password,
-        },
-    )
-    assert resp.status_code == HTTPStatus.OK, resp.json()
-
-    resp = test_client.get("/v1/me")
+def test_get_user_me(bo_user_client: TestClient, bo_user):
+    resp = bo_user_client.get("/v1/me")
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert rv["id"] == str(user.id)
+    assert rv["id"] == str(bo_user.id)
 
-    resp = test_client.put(
+    resp = bo_user_client.put(
         "/v1/users/status",
         json={
-            "user_ids": [str(user.id)],
+            "user_ids": [str(bo_user.id)],
             "is_deleted": True,
         },
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
-    resp = test_client.get("/v1/me")
+    resp = bo_user_client.get("/v1/me")
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED, error
+    assert "身份验证失败" in error["detail"]["message"]
+
+
+def test_sign_out(bo_user_client: TestClient, bo_user):
+    resp = bo_user_client.get("/v1/me")
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["id"] == str(bo_user.id)
+
+    resp = bo_user_client.post("/v1/sign_out")
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+
+    config = get_config()
+    token = resp.cookies.get(config.jwt_cookie_key)
+    assert token is None
+
+    resp = bo_user_client.get("/v1/me")
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNAUTHORIZED, error
     assert "身份验证失败" in error["detail"]["message"]

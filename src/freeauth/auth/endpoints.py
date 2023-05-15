@@ -15,7 +15,7 @@ from .. import get_edgedb_client, logger
 from ..app import router
 from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
 from ..config import get_config
-from ..dependencies import get_current_user
+from ..dependencies import get_access_token, require_user
 from ..query_api import (
     AuthAuditEventType,
     AuthAuditStatusCode,
@@ -29,6 +29,7 @@ from ..query_api import (
     create_audit_log,
     send_code,
     sign_in,
+    sign_out,
     sign_up,
     validate_code,
     validate_pwd,
@@ -155,6 +156,7 @@ async def create_access_token(
         key=config.jwt_cookie_key,
         value=token,
         httponly=True,
+        secure=config.jwt_cookie_secure,
         max_age=jwt_token_ttl * 60 if jwt_token_ttl else None,
         samesite="strict",
     )
@@ -397,6 +399,31 @@ async def sign_in_with_pwd(
     )
 
 
+@router.post(
+    "/sign_out",
+    tags=["认证相关"],
+    summary="退出登录",
+    description="清除用户登录态",
+)
+async def post_sign_out(
+    response: Response,
+    access_token: str = Depends(get_access_token),
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> str:
+    if not access_token:
+        return "ok"
+
+    await sign_out(client, access_token=access_token)
+    config = get_config()
+    response.delete_cookie(
+        key=config.jwt_cookie_key,
+        httponly=True,
+        secure=config.jwt_cookie_secure,
+        samesite="strict",
+    )
+    return "ok"
+
+
 @router.get(
     "/me",
     tags=["认证相关"],
@@ -404,6 +431,6 @@ async def sign_in_with_pwd(
     description="获取当前登录用户的个人信息",
 )
 async def get_user_me(
-    current_user: CreateUserResult = Depends(get_current_user),
+    current_user: CreateUserResult = Depends(require_user),
 ) -> CreateUserResult:
     return current_user

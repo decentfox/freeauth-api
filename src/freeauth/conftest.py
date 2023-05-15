@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from freeauth.app import get_app
+from freeauth.query_api import CreateUserResult
 
 TEST_DBNAME = "testdb"
 
@@ -66,6 +67,7 @@ async def edgedb_client(db) -> AsyncGenerator[edgedb.AsyncIOClient, None]:
 @pytest.fixture
 def app(mocker) -> FastAPI:
     os.environ["TESTING"] = "true"
+    os.environ["JWT_COOKIE_SECURE"] = "false"
     os.environ["DEMO_ACCOUNTS"] = '["user@example.com", "13800000000"]'
     mocker.patch("freeauth.app.setup_edgedb", tx_setup_edgedb)
     mocker.patch("freeauth.app.shutdown_edgedb", tx_shutdown_edgedb)
@@ -111,3 +113,32 @@ async def tx_shutdown_edgedb(app):
 @pytest.fixture(scope="session", autouse=True)
 def faker_locale():
     return ["zh_CN"]
+
+
+@pytest.fixture
+def bo_user(test_client, faker) -> CreateUserResult:
+    username = faker.user_name()
+    resp = test_client.post(
+        "/v1/users",
+        json=dict(
+            name=faker.name(),
+            username=username,
+            mobile=faker.phone_number(),
+            email=faker.email(),
+            password=username,
+        ),
+    )
+    user = resp.json()
+    return CreateUserResult(**user)
+
+
+@pytest.fixture
+def bo_user_client(test_client, bo_user) -> TestClient:
+    test_client.post(
+        "/v1/sign_in",
+        json={
+            "account": bo_user.username,
+            "password": bo_user.username,
+        },
+    )
+    return test_client

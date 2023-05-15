@@ -26,6 +26,7 @@
 #     'src/freeauth/roles/queries/role_unbind_users.edgeql'
 #     'src/freeauth/auth/queries/send_code.edgeql'
 #     'src/freeauth/auth/queries/sign_in.edgeql'
+#     'src/freeauth/auth/queries/sign_out.edgeql'
 #     'src/freeauth/auth/queries/sign_up.edgeql'
 #     'src/freeauth/organizations/queries/update_department.edgeql'
 #     'src/freeauth/organizations/queries/update_enterprise.edgeql'
@@ -265,6 +266,11 @@ class SendCodeResult(NoPydanticValidation):
     verify_type: AuthVerifyType
     expired_at: datetime.datetime
     ttl: int
+
+
+@dataclasses.dataclass
+class SignOutResult(NoPydanticValidation):
+    id: uuid.UUID
 
 
 @dataclasses.dataclass
@@ -1268,6 +1274,25 @@ async def sign_in(
         """,
         client_info=client_info,
         id=id,
+        access_token=access_token,
+    )
+
+
+async def sign_out(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    access_token: str,
+) -> SignOutResult | None:
+    return await executor.query_single(
+        """\
+        update auth::Token
+        filter
+            .access_token = <str>$access_token
+            and .is_revoked = false
+        set {
+            revoked_at := datetime_of_transaction()
+        };\
+        """,
         access_token=access_token,
     )
 
