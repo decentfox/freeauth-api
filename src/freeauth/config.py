@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     jwt_token_ttl: int = 1440  # 分钟，默认为一天
     jwt_secret_key: str = "secret_key"
     jwt_cookie_key: str = "access_token"
+    jwt_cookie_secure: bool = True
 
     verify_code_ttl: int = 10  # in minutes
     verify_code_cool_down: int = 60  # in seconds

@@ -7,9 +7,11 @@ import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
 
+from ...audit_logs.dataclasses import AuthAuditEventType
 from ...config import get_config
-from ...query_api import AuthAuditEventType, AuthCodeType, AuthVerifyType
+from ...query_api import AuthAuditStatusCode, AuthCodeType, AuthVerifyType
 from ...users.tests.test_api import create_user
+from ...utils import gen_random_string
 
 
 @pytest.fixture(autouse=True)
@@ -21,6 +23,8 @@ def login_settings_for_signup(test_client: TestClient):
             "codeSigninModes": ["mobile", "email"],
             "pwdSigninModes": ["username", "mobile", "email"],
             "signinCodeValidatingLimitEnabled": True,
+            "signinPwdValidatingLimitEnabled": True,
+            "signinPwdValidatingMaxAttempts": 2,
         },
     )
 
@@ -210,12 +214,16 @@ def test_sign_in_with_code(test_client: TestClient):
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["rows"]) == 1
     assert rv["rows"][0]["event_type"] == AuthAuditEventType.SIGNIN.value
-    assert rv["rows"][0]["status_code"] == HTTPStatus.OK
+    assert (
+        AuthAuditStatusCode(rv["rows"][0]["status_code"])
+        == AuthAuditStatusCode.OK
+    )
+    assert rv["rows"][0]["is_succeed"]
     assert rv["rows"][0]["user"]["email"] == account
     assert rv["rows"][0]["os"] == "Mac OS X"
 
 
-async def test_sign_in_with_password(test_client: TestClient):
+def test_sign_in_with_password(test_client: TestClient):
     resp = test_client.post("/v1/sign_in", json={})
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
@@ -225,14 +233,96 @@ async def test_sign_in_with_password(test_client: TestClient):
     account: str = "13800000000"
     data: Dict = {
         "account": account,
-        "password": "123123",
+        "password": "wrong password",
     }
     resp = test_client.post("/v1/sign_in", json=data)
     error = resp.json()
-    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert resp.status_code == HTTPStatus.NOT_FOUND, error
     assert (
         error["detail"]["errors"]["account"]
         == "账号不存在，请您确认登录信息输入是否正确"
     )
 
-    # TODO: complete this test
+    password = gen_random_string(12, secret=True)
+    user = create_user(test_client, mobile="13800000000", password=password)
+    resp = test_client.put(
+        "/v1/users/status",
+        json={
+            "user_ids": [str(user.id)],
+            "is_deleted": True,
+        },
+    )
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+    resp = test_client.post("/v1/sign_in", json=data)
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert error["detail"]["errors"]["account"] == "您的账号已停用"
+
+    resp = test_client.put(
+        "/v1/users/status",
+        json={
+            "user_ids": [str(user.id)],
+            "is_deleted": False,
+        },
+    )
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+    data["password"] = password
+    resp = test_client.post("/v1/sign_in", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["mobile"] == user.mobile
+    assert rv["last_login_at"]
+
+    data["password"] = "wrong password"
+    for _ in range(2):
+        resp = test_client.post("/v1/sign_in", json=data)
+        error = resp.json()
+        assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+        assert error["detail"]["errors"]["password"] == "密码输入错误"
+
+    resp = test_client.post("/v1/sign_in", json=data)
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
+    assert (
+        error["detail"]["errors"]["password"]
+        == "密码连续多次输入错误，账号暂时被锁定"
+    )
+
+
+def test_get_user_me(bo_user_client: TestClient, bo_user):
+    resp = bo_user_client.get("/v1/me")
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["id"] == str(bo_user.id)
+
+    resp = bo_user_client.put(
+        "/v1/users/status",
+        json={
+            "user_ids": [str(bo_user.id)],
+            "is_deleted": True,
+        },
+    )
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+    resp = bo_user_client.get("/v1/me")
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED, error
+    assert "身份验证失败" in error["detail"]["message"]
+
+
+def test_sign_out(bo_user_client: TestClient, bo_user):
+    resp = bo_user_client.get("/v1/me")
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["id"] == str(bo_user.id)
+
+    resp = bo_user_client.post("/v1/sign_out")
+    assert resp.status_code == HTTPStatus.OK, resp.json()
+
+    config = get_config()
+    token = resp.cookies.get(config.jwt_cookie_key)
+    assert token is None
+
+    resp = bo_user_client.get("/v1/me")
+    error = resp.json()
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED, error
+    assert "身份验证失败" in error["detail"]["message"]

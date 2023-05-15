@@ -1,13 +1,17 @@
-WITH
-    user := (SELECT User FILTER .id = <uuid>$user_id),
+with
+    module auth,
+    user := (
+        select default::User filter .id = <uuid>$user_id
+    ),
     client_info := (
         <tuple<client_ip: str, user_agent: json>><json>$client_info
-    )
-SELECT (
-    INSERT auth::AuditLog {
+    ),
+    status_code := <AuditStatusCode>$status_code
+select (
+    insert AuditLog {
         client_ip := <str>client_info.client_ip,
-        event_type := <auth::AuditEventType>$event_type,
-        status_code := <int16>$status_code,
+        event_type := <AuditEventType>$event_type,
+        status_code := status_code,
         raw_ua := <str>client_info.user_agent['raw_ua'],
         os := <str>client_info.user_agent['os'],
         device := <str>client_info.user_agent['device'],

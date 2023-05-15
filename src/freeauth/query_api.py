@@ -16,6 +16,7 @@
 #     'src/freeauth/organizations/queries/get_org_type_by_id_or_code.edgeql'
 #     'src/freeauth/organizations/queries/get_organization_node.edgeql'
 #     'src/freeauth/roles/queries/get_role_by_id_or_code.edgeql'
+#     'src/freeauth/auth/queries/get_user_by_access_token.edgeql'
 #     'src/freeauth/auth/queries/get_user_by_account.edgeql'
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
 #     'src/freeauth/organizations/queries/organization_add_member.edgeql'
@@ -25,6 +26,7 @@
 #     'src/freeauth/roles/queries/role_unbind_users.edgeql'
 #     'src/freeauth/auth/queries/send_code.edgeql'
 #     'src/freeauth/auth/queries/sign_in.edgeql'
+#     'src/freeauth/auth/queries/sign_out.edgeql'
 #     'src/freeauth/auth/queries/sign_up.edgeql'
 #     'src/freeauth/organizations/queries/update_department.edgeql'
 #     'src/freeauth/organizations/queries/update_enterprise.edgeql'
@@ -38,6 +40,7 @@
 #     'src/freeauth/users/queries/update_user_status.edgeql'
 #     'src/freeauth/settings/queries/upsert_login_setting.edgeql'
 #     'src/freeauth/auth/queries/validate_code.edgeql'
+#     'src/freeauth/auth/queries/validate_pwd.edgeql'
 # WITH:
 #     $ edgedb-py --file src/freeauth/query_api.py
 
@@ -69,6 +72,19 @@ class AuthAuditEventType(enum.Enum):
     SIGNUP = "SignUp"
 
 
+class AuthAuditStatusCode(enum.Enum):
+    OK = "OK"
+    ACCOUNT_ALREADY_EXISTS = "ACCOUNT_ALREADY_EXISTS"
+    ACCOUNT_NOT_EXISTS = "ACCOUNT_NOT_EXISTS"
+    ACCOUNT_DISABLED = "ACCOUNT_DISABLED"
+    INVALID_PASSWORD = "INVALID_PASSWORD"
+    PASSWORD_ATTEMPTS_EXCEEDED = "PASSWORD_ATTEMPTS_EXCEEDED"
+    INVALID_CODE = "INVALID_CODE"
+    CODE_INCORRECT = "CODE_INCORRECT"
+    CODE_ATTEMPTS_EXCEEDED = "CODE_ATTEMPTS_EXCEEDED"
+    CODE_EXPIRED = "CODE_EXPIRED"
+
+
 class AuthCodeType(enum.Enum):
     SMS = "SMS"
     EMAIL = "Email"
@@ -86,7 +102,7 @@ class CreateAuditLogResult(NoPydanticValidation):
     os: str | None
     device: str | None
     browser: str | None
-    status_code: int
+    status_code: AuthAuditStatusCode
     is_succeed: bool
     event_type: AuthAuditEventType
     created_at: datetime.datetime
@@ -238,7 +254,6 @@ class GetOrganizationNodeResult(NoPydanticValidation):
 @dataclasses.dataclass
 class GetUserByAccountResult(NoPydanticValidation):
     id: uuid.UUID
-    hashed_password: str | None
     is_deleted: bool
 
 
@@ -251,6 +266,11 @@ class SendCodeResult(NoPydanticValidation):
     verify_type: AuthVerifyType
     expired_at: datetime.datetime
     ttl: int
+
+
+@dataclasses.dataclass
+class SignOutResult(NoPydanticValidation):
+    id: uuid.UUID
 
 
 @dataclasses.dataclass
@@ -282,10 +302,15 @@ class UpsertLoginSettingResult(NoPydanticValidation):
 
 
 class ValidateCodeResult(typing.NamedTuple):
-    code_required: bool
-    code_found: bool
-    code_valid: bool
-    incorrect_attempts: int
+    status_code: AuthAuditStatusCode
+
+
+@dataclasses.dataclass
+class ValidatePwdResult(NoPydanticValidation):
+    id: uuid.UUID
+    hashed_password: str | None
+    is_deleted: bool
+    recent_failed_attempts: int
 
 
 async def create_audit_log(
@@ -293,21 +318,25 @@ async def create_audit_log(
     *,
     user_id: uuid.UUID,
     client_info: str,
+    status_code: AuthAuditStatusCode,
     event_type: AuthAuditEventType,
-    status_code: int,
 ) -> CreateAuditLogResult:
     return await executor.query_single(
         """\
-        WITH
-            user := (SELECT User FILTER .id = <uuid>$user_id),
+        with
+            module auth,
+            user := (
+                select default::User filter .id = <uuid>$user_id
+            ),
             client_info := (
                 <tuple<client_ip: str, user_agent: json>><json>$client_info
-            )
-        SELECT (
-            INSERT auth::AuditLog {
+            ),
+            status_code := <AuditStatusCode>$status_code
+        select (
+            insert AuditLog {
                 client_ip := <str>client_info.client_ip,
-                event_type := <auth::AuditEventType>$event_type,
-                status_code := <int16>$status_code,
+                event_type := <AuditEventType>$event_type,
+                status_code := status_code,
                 raw_ua := <str>client_info.user_agent['raw_ua'],
                 os := <str>client_info.user_agent['os'],
                 device := <str>client_info.user_agent['device'],
@@ -332,8 +361,8 @@ async def create_audit_log(
         """,
         user_id=user_id,
         client_info=client_info,
-        event_type=event_type,
         status_code=status_code,
+        event_type=event_type,
     )
 
 
@@ -847,6 +876,41 @@ async def get_role_by_id_or_code(
     )
 
 
+async def get_user_by_access_token(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    access_token: str,
+) -> CreateUserResult | None:
+    return await executor.query_single(
+        """\
+        with
+            token := (
+                select auth::Token
+                filter
+                    .access_token = <str>$access_token
+                    and .is_revoked = false
+            )
+        select
+            User {
+                name,
+                username,
+                email,
+                mobile,
+                org_type: { code, name },
+                departments := (
+                    SELECT .directly_organizations { code, name }
+                ),
+                roles: { code, name },
+                is_deleted,
+                created_at,
+                last_login_at
+            }
+        filter User = token.user\
+        """,
+        access_token=access_token,
+    )
+
+
 async def get_user_by_account(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -861,7 +925,7 @@ async def get_user_by_account(
             mobile := <optional str>$mobile,
             email := <optional str>$email
         SELECT
-            User { id, hashed_password, is_deleted }
+            User { id, is_deleted }
         FILTER (
             .username ?= username IF EXISTS username ELSE
             .mobile ?= mobile IF EXISTS mobile ELSE
@@ -1184,8 +1248,8 @@ async def sign_in(
             audit_log := (
                 INSERT auth::AuditLog {
                     client_ip := client_info.client_ip,
-                    event_type := <auth::AuditEventType>'SignIn',
-                    status_code := 200,
+                    event_type := auth::AuditEventType.SignIn,
+                    status_code := auth::AuditStatusCode.OK,
                     raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
@@ -1210,6 +1274,25 @@ async def sign_in(
         """,
         client_info=client_info,
         id=id,
+        access_token=access_token,
+    )
+
+
+async def sign_out(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    access_token: str,
+) -> SignOutResult | None:
+    return await executor.query_single(
+        """\
+        update auth::Token
+        filter
+            .access_token = <str>$access_token
+            and .is_revoked = false
+        set {
+            revoked_at := datetime_of_transaction()
+        };\
+        """,
         access_token=access_token,
     )
 
@@ -1247,8 +1330,8 @@ async def sign_up(
             audit_log := (
                 INSERT auth::AuditLog {
                     client_ip := client_info.client_ip,
-                    event_type := <auth::AuditEventType>'SignUp',
-                    status_code := 200,
+                    event_type := auth::AuditEventType.SignUp,
+                    status_code := auth::AuditStatusCode.OK,
                     raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
@@ -1765,50 +1848,57 @@ async def validate_code(
 ) -> ValidateCodeResult:
     return await executor.query_single(
         """\
-        WITH
+        with
+            module auth,
             account := <str>$account,
-            code_type := <auth::CodeType>$code_type,
-            verify_type := <auth::VerifyType>$verify_type,
+            code_type := <CodeType>$code_type,
+            verify_type := <VerifyType>$verify_type,
             code := <str>$code,
             max_attempts := <optional int64>$max_attempts,
             consumable_record := (
-                SELECT auth::VerifyRecord
-                FILTER .account = account
-                    AND .code_type  = code_type
-                    AND .verify_type = verify_type
-                    AND .consumable
-                    AND (.incorrect_attempts <= max_attempts) ?? true
-                ORDER BY .created_at DESC
-                LIMIT 1
+                select VerifyRecord
+                filter .account = account
+                    and .code_type  = code_type
+                    and .verify_type = verify_type
+                    and .consumable
+                    and (.incorrect_attempts <= max_attempts) ?? true
             ),
-            record := (SELECT consumable_record FILTER .code = code),
+            record := ( select consumable_record filter .code = code ),
             valid_record := (
-                UPDATE record
-                FILTER .expired_at > datetime_of_transaction()
-                SET {
+                update record
+                filter .expired_at > datetime_of_transaction()
+                set {
                     consumed_at := datetime_of_transaction()
                 }
             ),
             incorrect_record := (
-                UPDATE consumable_record
-                FILTER EXISTS max_attempts AND NOT EXISTS record
-                SET {
+                update consumable_record
+                filter exists max_attempts and not exists record
+                set {
                     incorrect_attempts := .incorrect_attempts + 1,
                     expired_at := (
-                        datetime_of_transaction() IF
-                        .incorrect_attempts = max_attempts - 1 ELSE
+                        datetime_of_transaction() if
+                        .incorrect_attempts = max_attempts - 1 else
                         .expired_at
                     )
                 }
+            ),
+            code_attempts_exceeded := any(
+                (incorrect_record.incorrect_attempts >= max_attempts) ?? false
+            ),
+            status_code := (
+                AuditStatusCode.INVALID_CODE
+                if not exists consumable_record
+                else AuditStatusCode.CODE_ATTEMPTS_EXCEEDED
+                if code_attempts_exceeded
+                else AuditStatusCode.CODE_INCORRECT
+                if not exists record
+                else AuditStatusCode.CODE_EXPIRED
+                if not exists valid_record
+                else AuditStatusCode.OK
             )
-        SELECT (
-            code_required := NOT EXISTS consumable_record,
-            code_found := EXISTS record,
-            code_valid := EXISTS valid_record,
-            incorrect_attempts := (
-                incorrect_record.incorrect_attempts ??
-                consumable_record.incorrect_attempts ?? 0
-            )
+        select (
+            status_code := status_code,
         );\
         """,
         account=account,
@@ -1816,4 +1906,67 @@ async def validate_code(
         verify_type=verify_type,
         code=code,
         max_attempts=max_attempts,
+    )
+
+
+async def validate_pwd(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    username: str | None,
+    mobile: str | None,
+    email: str | None,
+    interval: int | None,
+) -> ValidatePwdResult | None:
+    return await executor.query_single(
+        """\
+        with
+            module auth,
+            username := <optional str>$username,
+            mobile := <optional str>$mobile,
+            email := <optional str>$email,
+            interval := <optional int64>$interval,
+            user := assert_single((
+                select default::User
+                filter
+                    (exists username and .username ?= username) or
+                    (exists mobile and .mobile ?= mobile) or
+                    (exists email and .email ?= email)
+            )),
+            recent_success_attempt := (
+                select AuditLog
+                filter
+                    .user = user
+                    and .event_type = AuditEventType.SignIn
+                    and .status_code = AuditStatusCode.OK
+                    and .created_at >= (
+                        datetime_of_statement() -
+                        cal::to_relative_duration(minutes := interval)
+                    )
+                limit 1
+            ),
+            recent_failed_attempts := (
+                select AuditLog
+                filter
+                    .user = user
+                    and .event_type = AuditEventType.SignIn
+                    and .status_code = AuditStatusCode.INVALID_PASSWORD
+                    and (
+                        .created_at >= recent_success_attempt.created_at
+                        if exists recent_success_attempt else
+                        .created_at >= (
+                            datetime_of_statement() -
+                            cal::to_relative_duration(minutes := interval)
+                        )
+                    )
+            )
+        select user {
+            hashed_password,
+            is_deleted,
+            recent_failed_attempts := count(recent_failed_attempts)
+        };\
+        """,
+        username=username,
+        mobile=mobile,
+        email=email,
+        interval=interval,
     )

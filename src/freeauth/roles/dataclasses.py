@@ -101,7 +101,7 @@ class RoleUserBody:
     role_ids: list[uuid.UUID] = Field(
         ...,
         title="角色 ID 列表",
-        description="可设置一个或多个角色D",
+        description="可设置一个或多个角色",
         min_items=1,
     )
     user_ids: list[uuid.UUID] = Field(

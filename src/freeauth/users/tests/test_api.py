@@ -23,6 +23,7 @@ def create_user(
     username: str | None = None,
     email: str | None = None,
     mobile: str | None = None,
+    password: str | None = None,
     organization_ids: list[str] | None = None,
     org_type_id: str | None = None,
 ) -> CreateUserResult:
@@ -33,6 +34,7 @@ def create_user(
             username=username,
             email=email,
             mobile=mobile,
+            password=password,
             organization_ids=organization_ids,
             org_type_id=org_type_id,
         ),

@@ -3,7 +3,7 @@ WITH
     mobile := <optional str>$mobile,
     email := <optional str>$email
 SELECT
-    User { id, hashed_password, is_deleted }
+    User { id, is_deleted }
 FILTER (
     .username ?= username IF EXISTS username ELSE
     .mobile ?= mobile IF EXISTS mobile ELSE

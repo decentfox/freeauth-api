@@ -13,21 +13,34 @@ from jose import jwt
 
 from .. import get_edgedb_client, logger
 from ..app import router
+from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
 from ..config import get_config
+from ..dependencies import get_access_token, require_user
 from ..query_api import (
+    AuthAuditEventType,
+    AuthAuditStatusCode,
     AuthCodeType,
     AuthVerifyType,
     CreateUserResult,
     GetUserByAccountResult,
     SendCodeResult,
     ValidateCodeResult,
+    ValidatePwdResult,
+    create_audit_log,
     send_code,
     sign_in,
+    sign_out,
     sign_up,
     validate_code,
+    validate_pwd,
 )
 from ..settings import get_login_settings
-from ..utils import MOBILE_REGEX, gen_random_string, get_password_hash
+from ..utils import (
+    MOBILE_REGEX,
+    gen_random_string,
+    get_password_hash,
+    verify_password,
+)
 from .dataclasses import (
     SignInCodeBody,
     SignInPwdBody,
@@ -39,7 +52,6 @@ from .dependencies import (
     get_client_info,
     verify_account_when_send_code,
     verify_account_when_sign_in_with_code,
-    verify_account_when_sign_in_with_pwd,
     verify_account_when_sign_up,
     verify_new_account_when_send_code,
 )
@@ -96,6 +108,8 @@ async def validate_auth_code(
     verify_type: AuthVerifyType,
     code: str,
     max_attempts: int | None,
+    user: GetUserByAccountResult | None,
+    client_info: dict,
 ):
     code_type = AuthCodeType.EMAIL
     if re.match(MOBILE_REGEX, account):
@@ -108,25 +122,19 @@ async def validate_auth_code(
         code=code,
         max_attempts=max_attempts,
     )
-    if rv.code_required:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"code": "验证码错误或已失效，请重新获取"},
-        )
-    if not rv.code_found:
-        err_msg = "验证码错误，请重新输入"
-        if max_attempts and rv.incorrect_attempts >= max_attempts:
-            err_msg = (
-                "您输入的错误验证码次数过多，当前验证码已失效，请重新获取"
+    status_code = AuthAuditStatusCode(str(rv.status_code))
+    if status_code != AuthAuditStatusCode.OK:
+        if user:
+            await create_audit_log(
+                client,
+                user_id=user.id,
+                client_info=json.dumps(client_info),
+                status_code=status_code.value,  # type: ignore
+                event_type=AuthAuditEventType.SIGNIN.value,  # type: ignore
             )
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"code": err_msg},
-        )
-    elif not rv.code_valid:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"code": "验证码已失效，请重新获取"},
+            detail={"code": AUDIT_STATUS_CODE_MAPPING[status_code]},
         )
 
 
@@ -148,6 +156,7 @@ async def create_access_token(
         key=config.jwt_cookie_key,
         value=token,
         httponly=True,
+        secure=config.jwt_cookie_secure,
         max_age=jwt_token_ttl * 60 if jwt_token_ttl else None,
         samesite="strict",
     )
@@ -213,6 +222,8 @@ async def sign_up_with_code(
             if settings["signup_code_validating_limit_enabled"]
             else None
         ),
+        user=None,
+        client_info=client_info,
     )
     code_type: AuthCodeType = body.code_type
     username: str = gen_random_string(8)
@@ -297,6 +308,8 @@ async def sign_in_with_code(
             if settings["signin_code_validating_limit_enabled"]
             else None
         ),
+        user=user,
+        client_info=client_info,
     )
     token = await create_access_token(client, response, user.id)
     return await sign_in(
@@ -317,16 +330,66 @@ async def sign_in_with_pwd(
     body: SignInPwdBody,
     response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-    user: GetUserByAccountResult = Depends(
-        verify_account_when_sign_in_with_pwd
-    ),
     client_info: dict = Depends(get_client_info),
 ) -> CreateUserResult | None:
-    if user.hashed_password != get_password_hash(body.password):
+    settings = await get_login_settings().get_all(client)
+    pwd_signin_modes = settings["pwd_signin_modes"]
+    if not pwd_signin_modes:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail={"account": "密码输入错误"},
+            detail={"account": "系统不支持密码登录，请使用其他登录方式"},
         )
+    user: ValidatePwdResult | None = await validate_pwd(
+        client,
+        username=body.account if "username" in pwd_signin_modes else None,
+        mobile=body.account if "mobile" in pwd_signin_modes else None,
+        email=body.account if "email" in pwd_signin_modes else None,
+        interval=(
+            settings["signin_pwd_validating_interval"]
+            if settings["signin_pwd_validating_limit_enabled"]
+            else None
+        ),
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail={
+                "account": AUDIT_STATUS_CODE_MAPPING[
+                    AuthAuditStatusCode.ACCOUNT_NOT_EXISTS
+                ]
+            },
+        )
+    field = "account"
+    status_code: AuthAuditStatusCode | None = None
+    if user.is_deleted:
+        status_code = AuthAuditStatusCode.ACCOUNT_DISABLED
+    elif not (
+        user.hashed_password
+        and verify_password(body.password, user.hashed_password)
+    ):
+        field = "password"
+        status_code = AuthAuditStatusCode.INVALID_PASSWORD
+        if (
+            settings["signin_pwd_validating_limit_enabled"]
+            and user.recent_failed_attempts
+            >= settings["signin_pwd_validating_max_attempts"]
+        ):
+            status_code = AuthAuditStatusCode.PASSWORD_ATTEMPTS_EXCEEDED
+
+    if status_code:
+        await create_audit_log(
+            client,
+            user_id=user.id,
+            client_info=json.dumps(client_info),
+            status_code=status_code.value,  # type: ignore
+            event_type=AuthAuditEventType.SIGNIN.value,  # type: ignore
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail={field: AUDIT_STATUS_CODE_MAPPING[status_code]},
+        )
+
     token = await create_access_token(client, response, user.id)
     return await sign_in(
         client,
@@ -334,3 +397,40 @@ async def sign_in_with_pwd(
         access_token=token,
         client_info=json.dumps(client_info),
     )
+
+
+@router.post(
+    "/sign_out",
+    tags=["认证相关"],
+    summary="退出登录",
+    description="清除用户登录态",
+)
+async def post_sign_out(
+    response: Response,
+    access_token: str = Depends(get_access_token),
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> str:
+    if not access_token:
+        return "ok"
+
+    await sign_out(client, access_token=access_token)
+    config = get_config()
+    response.delete_cookie(
+        key=config.jwt_cookie_key,
+        httponly=True,
+        secure=config.jwt_cookie_secure,
+        samesite="strict",
+    )
+    return "ok"
+
+
+@router.get(
+    "/me",
+    tags=["认证相关"],
+    summary="获取个人信息",
+    description="获取当前登录用户的个人信息",
+)
+async def get_user_me(
+    current_user: CreateUserResult = Depends(require_user),
+) -> CreateUserResult:
+    return current_user

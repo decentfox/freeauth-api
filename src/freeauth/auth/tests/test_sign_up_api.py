@@ -10,7 +10,13 @@ from fastapi.testclient import TestClient
 from jose import jwt
 
 from ...config import get_config
-from ...query_api import AuthCodeType, AuthVerifyType, send_code, validate_code
+from ...query_api import (
+    AuthAuditStatusCode,
+    AuthCodeType,
+    AuthVerifyType,
+    send_code,
+    validate_code,
+)
 from ...users.tests.test_api import create_user
 from ...utils import gen_random_string
 
@@ -260,10 +266,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
         code="12345678",
         max_attempts=None,
     )
-    assert rv.code_required
-    assert not rv.code_found
-    assert not rv.code_valid
-    assert rv.incorrect_attempts == 0
+    status_code = AuthAuditStatusCode(str(rv.status_code))
+    assert status_code == AuthAuditStatusCode.INVALID_CODE
 
     code: str = gen_random_string(6, letters=string.digits)
     await send_code(
@@ -286,23 +290,11 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
             code="12345678",
             max_attempts=3,
         )
-        assert not rv.code_required
-        assert not rv.code_found
-        assert not rv.code_valid
-        assert rv.incorrect_attempts == i + 1
-
-    rv = await validate_code(
-        edgedb_client,
-        account=account,
-        code_type=AuthCodeType.SMS.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
-        code=code,
-        max_attempts=3,
-    )
-    assert not rv.code_required
-    assert rv.code_found
-    assert not rv.code_valid
-    assert rv.incorrect_attempts == 3
+        status_code = AuthAuditStatusCode(str(rv.status_code))
+        if i < 2:
+            assert status_code == AuthAuditStatusCode.CODE_INCORRECT
+        else:
+            assert status_code == AuthAuditStatusCode.CODE_ATTEMPTS_EXCEEDED
 
     code: str = gen_random_string(6, letters=string.digits)
     await send_code(
@@ -324,10 +316,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
         code="12345678",
         max_attempts=3,
     )
-    assert not rv.code_required
-    assert not rv.code_found
-    assert not rv.code_valid
-    assert rv.incorrect_attempts == 1
+    status_code = AuthAuditStatusCode(str(rv.status_code))
+    assert status_code == AuthAuditStatusCode.CODE_INCORRECT
 
     rv = await validate_code(
         edgedb_client,
@@ -337,7 +327,5 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
         code=code,
         max_attempts=3,
     )
-    assert not rv.code_required
-    assert rv.code_found
-    assert rv.code_valid
-    assert rv.incorrect_attempts == 1
+    status_code = AuthAuditStatusCode(str(rv.status_code))
+    assert status_code == AuthAuditStatusCode.OK

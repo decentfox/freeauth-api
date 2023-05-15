@@ -1,45 +1,52 @@
-WITH
+with
+    module auth,
     account := <str>$account,
-    code_type := <auth::CodeType>$code_type,
-    verify_type := <auth::VerifyType>$verify_type,
+    code_type := <CodeType>$code_type,
+    verify_type := <VerifyType>$verify_type,
     code := <str>$code,
     max_attempts := <optional int64>$max_attempts,
     consumable_record := (
-        SELECT auth::VerifyRecord
-        FILTER .account = account
-            AND .code_type  = code_type
-            AND .verify_type = verify_type
-            AND .consumable
-            AND (.incorrect_attempts <= max_attempts) ?? true
-        ORDER BY .created_at DESC
-        LIMIT 1
+        select VerifyRecord
+        filter .account = account
+            and .code_type  = code_type
+            and .verify_type = verify_type
+            and .consumable
+            and (.incorrect_attempts <= max_attempts) ?? true
     ),
-    record := (SELECT consumable_record FILTER .code = code),
+    record := ( select consumable_record filter .code = code ),
     valid_record := (
-        UPDATE record
-        FILTER .expired_at > datetime_of_transaction()
-        SET {
+        update record
+        filter .expired_at > datetime_of_transaction()
+        set {
             consumed_at := datetime_of_transaction()
         }
     ),
     incorrect_record := (
-        UPDATE consumable_record
-        FILTER EXISTS max_attempts AND NOT EXISTS record
-        SET {
+        update consumable_record
+        filter exists max_attempts and not exists record
+        set {
             incorrect_attempts := .incorrect_attempts + 1,
             expired_at := (
-                datetime_of_transaction() IF
-                .incorrect_attempts = max_attempts - 1 ELSE
+                datetime_of_transaction() if
+                .incorrect_attempts = max_attempts - 1 else
                 .expired_at
             )
         }
+    ),
+    code_attempts_exceeded := any(
+        (incorrect_record.incorrect_attempts >= max_attempts) ?? false
+    ),
+    status_code := (
+        AuditStatusCode.INVALID_CODE
+        if not exists consumable_record
+        else AuditStatusCode.CODE_ATTEMPTS_EXCEEDED
+        if code_attempts_exceeded
+        else AuditStatusCode.CODE_INCORRECT
+        if not exists record
+        else AuditStatusCode.CODE_EXPIRED
+        if not exists valid_record
+        else AuditStatusCode.OK
     )
-SELECT (
-    code_required := NOT EXISTS consumable_record,
-    code_found := EXISTS record,
-    code_valid := EXISTS valid_record,
-    incorrect_attempts := (
-        incorrect_record.incorrect_attempts ??
-        consumable_record.incorrect_attempts ?? 0
-    )
+select (
+    status_code := status_code,
 );

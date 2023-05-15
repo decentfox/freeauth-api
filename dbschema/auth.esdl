@@ -2,6 +2,19 @@ module auth {
     scalar type CodeType extending enum<SMS, Email>;
     scalar type VerifyType extending enum<SignIn, SignUp>;
     scalar type AuditEventType extending enum<SignIn, SignOut, SignUp>;
+    scalar type AuditStatusCode extending
+    enum<
+        OK,
+        ACCOUNT_ALREADY_EXISTS,
+        ACCOUNT_NOT_EXISTS,
+        ACCOUNT_DISABLED,
+        INVALID_PASSWORD,
+        PASSWORD_ATTEMPTS_EXCEEDED,
+        INVALID_CODE,
+        CODE_INCORRECT,
+        CODE_ATTEMPTS_EXCEEDED,
+        CODE_EXPIRED,
+    >;
 
     type VerifyRecord extending default::TimeStamped {
         required property account -> str {
@@ -44,10 +57,10 @@ module auth {
         required property event_type -> AuditEventType {
             readonly := true;
         };
-        required property status_code -> int16 {
+        required property status_code -> AuditStatusCode {
             readonly := true;
         };
-        property is_succeed := .status_code = 200;
+        required property is_succeed := .status_code = AuditStatusCode.OK;
         property raw_ua -> str {
             readonly := true;
         };
@@ -62,6 +75,5 @@ module auth {
         };
 
         index on (.event_type);
-        index on (.is_succeed);
     }
 }
