@@ -119,6 +119,14 @@ class RoleQueryBody(QueryBody):
         title="组织类型 ID",
         description="支持过滤指定组织类型下的角色",
     )
+    include_org_type_roles: bool = Field(
+        True,
+        title="是否包含组织类型角色",
+        description=(
+            "默认为 true，设为 false 代表仅查询全局角色。注意：该参数设置为"
+            " false 时，系统将忽略 org_type_id 参数。"
+        ),
+    )
     include_global_roles: bool = Field(
         True,
         title="是否包含全局角色",

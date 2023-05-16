@@ -333,6 +333,23 @@ def test_get_roles(test_client: TestClient, roles, org_types):
             or ot["org_type"]["name"] == org_types[0].name
         )
 
+    data = {"include_org_type_roles": False}
+    resp = test_client.post("/v1/roles/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 2
+    for ot in rv["rows"]:
+        assert ot["org_type"] is None
+
+    data = {
+        "include_org_type_roles": False,
+        "include_global_roles": False,
+    }
+    resp = test_client.post("/v1/roles/query", json=data)
+    rv = resp.json()
+    assert resp.status_code == HTTPStatus.OK, rv
+    assert rv["total"] == 0
+
 
 def test_bind_or_unbind_users_to_roles(
     test_client: TestClient, roles, org_types, faker

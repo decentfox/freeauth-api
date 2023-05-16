@@ -164,6 +164,7 @@ async def get_roles(
                 q := <optional str>$q,
                 org_type_id := <optional uuid>$org_type_id,
                 include_global_roles := <bool>$include_global_roles,
+                include_org_type_roles := <bool>$include_org_type_roles,
                 roles := (
                     SELECT Role
                     FILTER (
@@ -175,6 +176,9 @@ async def get_roles(
                     ) AND (
                         true IF include_global_roles ELSE
                         EXISTS .org_type
+                    ) AND (
+                        true IF include_org_type_roles ELSE
+                        NOT EXISTS .org_type
                     ) AND (
                         true IF not EXISTS org_type_id ELSE
                         (
@@ -216,6 +220,7 @@ async def get_roles(
         per_page=body.per_page,
         org_type_id=body.org_type_id,
         include_global_roles=body.include_global_roles,
+        include_org_type_roles=body.include_org_type_roles,
     )
     return PaginatedData.parse_raw(result)
 
