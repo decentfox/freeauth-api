@@ -6,9 +6,28 @@ SELECT
         mobile,
         org_type: { code, name },
         departments := (
-            SELECT .directly_organizations { code, name }
+            SELECT .directly_organizations {
+                id,
+                code,
+                name,
+                enterprise := assert_single(.ancestors {
+                    id,
+                    name
+                } FILTER EXISTS [is Enterprise]),
+                org_type := assert_single(.ancestors {
+                    id,
+                    name
+                } FILTER EXISTS [is OrganizationType])
+            }
         ),
-        roles: { code, name },
+        roles: {
+            id,
+            code,
+            name,
+            description,
+            is_deleted,
+            org_type: { code, name }
+        },
         is_deleted,
         created_at,
         last_login_at

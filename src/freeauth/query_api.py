@@ -258,6 +258,46 @@ class GetUserByAccountResult(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class GetUserByIdResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str | None
+    username: str | None
+    email: str | None
+    mobile: str | None
+    org_type: CreateRoleResultOrgType | None
+    departments: list[GetUserByIdResultDepartmentsItem]
+    roles: list[GetUserByIdResultRolesItem]
+    is_deleted: bool
+    created_at: datetime.datetime
+    last_login_at: datetime.datetime | None
+
+
+@dataclasses.dataclass
+class GetUserByIdResultDepartmentsItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
+    enterprise: GetUserByIdResultDepartmentsItemEnterprise | None
+    org_type: GetUserByIdResultDepartmentsItemEnterprise | None
+
+
+@dataclasses.dataclass
+class GetUserByIdResultDepartmentsItemEnterprise(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+
+
+@dataclasses.dataclass
+class GetUserByIdResultRolesItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
+    description: str | None
+    is_deleted: bool
+    org_type: CreateRoleResultOrgType | None
+
+
+@dataclasses.dataclass
 class SendCodeResult(NoPydanticValidation):
     id: uuid.UUID
     created_at: datetime.datetime
@@ -943,7 +983,7 @@ async def get_user_by_id(
     executor: edgedb.AsyncIOExecutor,
     *,
     id: uuid.UUID,
-) -> CreateUserResult | None:
+) -> GetUserByIdResult | None:
     return await executor.query_single(
         """\
         SELECT
@@ -954,9 +994,28 @@ async def get_user_by_id(
                 mobile,
                 org_type: { code, name },
                 departments := (
-                    SELECT .directly_organizations { code, name }
+                    SELECT .directly_organizations {
+                        id,
+                        code,
+                        name,
+                        enterprise := assert_single(.ancestors {
+                            id,
+                            name
+                        } FILTER EXISTS [is Enterprise]),
+                        org_type := assert_single(.ancestors {
+                            id,
+                            name
+                        } FILTER EXISTS [is OrganizationType])
+                    }
                 ),
-                roles: { code, name },
+                roles: {
+                    id,
+                    code,
+                    name,
+                    description,
+                    is_deleted,
+                    org_type: { code, name }
+                },
                 is_deleted,
                 created_at,
                 last_login_at

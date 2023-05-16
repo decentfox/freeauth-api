@@ -13,6 +13,7 @@ from ..dataclasses import PaginatedData
 from ..query_api import (
     CreateUserResult,
     DeleteUserResult,
+    GetUserByIdResult,
     UpdateUserStatusResult,
     create_user,
     delete_user,
@@ -208,8 +209,8 @@ async def resign_users(
 async def get_user(
     user_id: uuid.UUID,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> CreateUserResult:
-    user: CreateUserResult | None = await get_user_by_id(client, id=user_id)
+) -> GetUserByIdResult:
+    user: GetUserByIdResult | None = await get_user_by_id(client, id=user_id)
     if not user:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
