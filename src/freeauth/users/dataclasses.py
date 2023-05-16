@@ -8,24 +8,10 @@ from pydantic.dataclasses import dataclass
 
 from ..dataclasses import FilterItem  # noqa
 from ..dataclasses import BaseModelConfig, QueryBody
-from ..utils import MOBILE_REGEX
+from ..validators import MobileStr, UsernameStr
 
 
-class UserBodyConfig(BaseModelConfig):
-    error_msg_templates = {
-        "value_error.any_str.max_length": (
-            "最大支持的长度为{limit_value}个字符"
-        ),
-        "value_error.email": "邮箱格式有误",
-        "value_error.str.regex": "仅支持中国大陆11位手机号",
-        "value_error.any_str.min_length": "该字段为必填项",
-        "value_error.missing": "该字段为必填项",
-        "type_error.none.not_allowed": "该字段不得为空",
-        "type_error.uuid": "ID格式错误",
-    }
-
-
-@dataclass(config=UserBodyConfig)
+@dataclass(config=BaseModelConfig)
 class UserPostBody:
     name: str | None = Field(
         None,
@@ -33,20 +19,18 @@ class UserPostBody:
         description="用户姓名（选填），默认为用户名",
         max_length=50,
     )
-    username: str | None = Field(
+    username: UsernameStr | None = Field(
         None,
         title="用户名",
         description="登录用户名，未提供则由随机生成",
-        max_length=50,
     )
     email: EmailStr | None = Field(
         None, description="邮箱，可接收登录验证邮件", title="邮箱"
     )
-    mobile: str | None = Field(
+    mobile: MobileStr | None = Field(
         None,
         title="手机号",
         description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
-        regex=MOBILE_REGEX,
     )
     password: str | None = Field(
         None,
@@ -82,7 +66,7 @@ class UserPostBody:
         return values
 
 
-@dataclass(config=UserBodyConfig)
+@dataclass(config=BaseModelConfig)
 class UserPutBody:
     name: str = Field(
         ...,
@@ -91,21 +75,18 @@ class UserPutBody:
         min_length=1,
         max_length=50,
     )
-    username: str = Field(
+    username: UsernameStr = Field(
         ...,
         title="用户名",
         description="登录用户名",
-        min_length=1,
-        max_length=50,
     )
     email: EmailStr | None = Field(
         None, description="邮箱，可接收登录验证邮件", title="邮箱"
     )
-    mobile: str | None = Field(
+    mobile: MobileStr | None = Field(
         None,
         title="手机号",
         description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
-        regex=MOBILE_REGEX,
     )
 
 
@@ -142,7 +123,7 @@ class UserResignationBody:
     )
 
 
-@dataclass(config=UserBodyConfig)
+@dataclass(config=BaseModelConfig)
 class UserStatusBody:
     user_ids: List[uuid.UUID] = Field(
         ...,
@@ -156,7 +137,7 @@ class UserStatusBody:
     )
 
 
-@dataclass(config=UserBodyConfig)
+@dataclass(config=BaseModelConfig)
 class UserDeleteBody:
     user_ids: List[uuid.UUID] = Field(
         ...,

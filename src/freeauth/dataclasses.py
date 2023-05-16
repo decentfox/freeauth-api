@@ -12,6 +12,7 @@ class BaseModelConfig:
     error_msg_templates = {
         "type_error.enum": "不是有效的枚举值",
         "type_error.none.not_allowed": "该字段不得为空",
+        "value_error.email": "邮箱格式有误",
         "type_error.uuid": "ID格式错误",
         "value_error.any_str.min_length": "该字段为必填项",
         "value_error.any_str.max_length": (
