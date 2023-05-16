@@ -439,7 +439,7 @@ def test_update_user_strip_whitespace(
     assert data[field] != updated_user[field] == db_value
 
 
-def test_update_user_organizations(
+def test_change_user_organizations(
     test_client: TestClient,
     org_type: CreateOrgTypeResult,
     department: CreateDepartmentResult,
@@ -475,6 +475,30 @@ def test_update_user_organizations(
     updated_user = resp.json()
     assert resp.status_code == HTTPStatus.OK, updated_user
     assert len(updated_user["departments"]) == 1
+
+
+def test_set_user_organizations(
+    test_client: TestClient,
+    org_type: CreateOrgTypeResult,
+    department: CreateDepartmentResult,
+    faker,
+):
+    user = create_user(
+        test_client,
+        name=faker.name(),
+        username=faker.user_name(),
+        mobile=faker.phone_number(),
+        email=faker.email(),
+    )
+    ids = [str(department.id), str(uuid.uuid4())]
+    resp = test_client.put(
+        f"/v1/users/{user.id}/organizations",
+        json=dict(organization_ids=ids, org_type_id=str(org_type.id)),
+    )
+    updated_user = resp.json()
+    assert resp.status_code == HTTPStatus.OK, updated_user
+    assert len(updated_user["departments"]) == 1
+    assert updated_user["org_type"]["id"] == str(org_type.id)
 
 
 @pytest.fixture

@@ -6,7 +6,11 @@ SELECT (
             FILTER
                 ( Organization IS NOT OrganizationType ) AND
                 (
-                    false IF NOT EXISTS User.org_type ELSE
+                    (
+                        .id IN array_unpack(
+                            <array<uuid>>$organization_ids
+                        )
+                    ) IF NOT EXISTS User.org_type ELSE
                     (
                         .id IN array_unpack(
                             <array<uuid>>$organization_ids
@@ -14,6 +18,11 @@ SELECT (
                         User.org_type IN .ancestors
                     )
                 )
+        ),
+        org_type := (
+            SELECT OrganizationType FILTER (
+                .id = <optional uuid>$org_type_id
+            )
         )
     }
 ) {

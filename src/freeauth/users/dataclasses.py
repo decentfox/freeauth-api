@@ -98,6 +98,11 @@ class UserOrganizationBody:
         description="可设置一个或多个部门分支或企业机构 ID",
         min_items=1,
     )
+    org_type_id: uuid.UUID | None = Field(
+        None,
+        title="组织类型 ID",
+        description="用户所属组织类型",
+    )
 
 
 @dataclass(config=BaseModelConfig)

@@ -1764,6 +1764,7 @@ async def update_user_organization(
     *,
     id: uuid.UUID,
     organization_ids: list[uuid.UUID],
+    org_type_id: uuid.UUID | None,
 ) -> CreateUserResult | None:
     return await executor.query_single(
         """\
@@ -1775,7 +1776,11 @@ async def update_user_organization(
                     FILTER
                         ( Organization IS NOT OrganizationType ) AND
                         (
-                            false IF NOT EXISTS User.org_type ELSE
+                            (
+                                .id IN array_unpack(
+                                    <array<uuid>>$organization_ids
+                                )
+                            ) IF NOT EXISTS User.org_type ELSE
                             (
                                 .id IN array_unpack(
                                     <array<uuid>>$organization_ids
@@ -1783,6 +1788,11 @@ async def update_user_organization(
                                 User.org_type IN .ancestors
                             )
                         )
+                ),
+                org_type := (
+                    SELECT OrganizationType FILTER (
+                        .id = <optional uuid>$org_type_id
+                    )
                 )
             }
         ) {
@@ -1802,6 +1812,7 @@ async def update_user_organization(
         """,
         id=id,
         organization_ids=organization_ids,
+        org_type_id=org_type_id,
     )
 
 
