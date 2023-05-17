@@ -1,29 +1,29 @@
-SELECT (
-    UPDATE User FILTER .id = <uuid>$id
-    SET {
+with
+    user := ( select User filter .id = <uuid>$id ),
+    org_type_id := <optional uuid>$org_type_id,
+    org_type := (
+        user.org_type ?? (
+            select OrganizationType filter .id = org_type_id
+        )
+    )
+select (
+    update user filter .id = <uuid>$id
+    set {
         directly_organizations := (
-            SELECT Organization
-            FILTER
-                ( Organization IS NOT OrganizationType ) AND
-                (
+            select Organization
+            filter
+                ( Organization is not OrganizationType )
+                and (
+                    false if not exists org_type else
                     (
-                        .id IN array_unpack(
+                        .id in array_unpack(
                             <array<uuid>>$organization_ids
                         )
-                    ) IF NOT EXISTS User.org_type ELSE
-                    (
-                        .id IN array_unpack(
-                            <array<uuid>>$organization_ids
-                        ) AND
-                        User.org_type IN .ancestors
+                        and org_type in .ancestors
                     )
                 )
         ),
-        org_type := (
-            SELECT OrganizationType FILTER (
-                .id = <optional uuid>$org_type_id
-            )
-        )
+        org_type := org_type
     }
 ) {
     name,
@@ -32,7 +32,7 @@ SELECT (
     mobile,
     org_type: { code, name },
     departments := (
-        SELECT .directly_organizations { code, name }
+        select .directly_organizations { code, name }
     ),
     roles: { code, name },
     is_deleted,
