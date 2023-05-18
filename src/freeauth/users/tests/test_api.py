@@ -439,7 +439,7 @@ def test_update_user_strip_whitespace(
     assert data[field] != updated_user[field] == db_value
 
 
-def test_update_user_organizations(
+def test_change_user_organizations(
     test_client: TestClient,
     org_type: CreateOrgTypeResult,
     department: CreateDepartmentResult,
@@ -475,6 +475,65 @@ def test_update_user_organizations(
     updated_user = resp.json()
     assert resp.status_code == HTTPStatus.OK, updated_user
     assert len(updated_user["departments"]) == 1
+
+    from ...organizations.tests.test_enterprise_api import create_enterprise
+    from ...organizations.tests.test_org_type_api import create_org_type
+
+    another_org_type = create_org_type(test_client, faker)
+    enterprise_1 = create_enterprise(test_client, org_type, faker)
+    enterprise_2 = create_enterprise(test_client, another_org_type, faker)
+
+    ids.extend([str(enterprise_1.id), str(enterprise_2.id)])
+    resp = test_client.put(
+        f"/v1/users/{user.id}/organizations",
+        json=dict(organization_ids=ids, org_type_id=str(another_org_type.id)),
+    )
+    updated_user = resp.json()
+    assert resp.status_code == HTTPStatus.OK, updated_user
+    assert len(updated_user["departments"]) == 2
+    for dept in updated_user["departments"]:
+        assert dept["id"] in {str(department.id), str(enterprise_1.id)}
+    assert updated_user["org_type"]["id"] == str(org_type.id)
+
+
+def test_set_user_organizations(
+    test_client: TestClient,
+    org_type: CreateOrgTypeResult,
+    department: CreateDepartmentResult,
+    faker,
+):
+    from ...organizations.tests.test_enterprise_api import create_enterprise
+    from ...organizations.tests.test_org_type_api import create_org_type
+
+    user = create_user(
+        test_client,
+        name=faker.name(),
+        username=faker.user_name(),
+        mobile=faker.phone_number(),
+        email=faker.email(),
+    )
+    another_org_type = create_org_type(test_client, faker)
+    enterprise = create_enterprise(test_client, another_org_type, faker)
+
+    ids = [str(department.id), str(uuid.uuid4()), str(enterprise.id)]
+    resp = test_client.put(
+        f"/v1/users/{user.id}/organizations",
+        json=dict(organization_ids=ids, org_type_id=None),
+    )
+    updated_user = resp.json()
+    assert resp.status_code == HTTPStatus.OK, updated_user
+    assert len(updated_user["departments"]) == 0
+    assert updated_user["org_type"] is None
+
+    resp = test_client.put(
+        f"/v1/users/{user.id}/organizations",
+        json=dict(organization_ids=ids, org_type_id=str(org_type.id)),
+    )
+    updated_user = resp.json()
+    assert resp.status_code == HTTPStatus.OK, updated_user
+    assert len(updated_user["departments"]) == 1
+    assert updated_user["departments"][0]["id"] == str(department.id)
+    assert updated_user["org_type"]["id"] == str(org_type.id)
 
 
 @pytest.fixture

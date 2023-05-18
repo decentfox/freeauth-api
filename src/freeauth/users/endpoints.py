@@ -155,7 +155,10 @@ async def update_member_organizations(
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateUserResult | None:
     user: CreateUserResult | None = await update_user_organization(
-        client, id=user_id, organization_ids=body.organization_ids
+        client,
+        id=user_id,
+        organization_ids=body.organization_ids,
+        org_type_id=body.org_type_id,
     )
     if not user:
         raise HTTPException(
