@@ -4,7 +4,7 @@ with
 select (
     update Role filter .id in array_unpack(role_ids)
     set {
-        permissions += (
+        permissions -= (
             select Permission
             filter .id in array_unpack(permission_ids)
         )

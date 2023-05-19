@@ -28,6 +28,7 @@ from ..query_api import (
     delete_permission,
     get_permission_by_id_or_code,
     perm_bind_roles,
+    perm_unbind_roles,
     update_permission,
     update_permission_status,
 )
@@ -216,7 +217,22 @@ async def bind_roles_to_perm(
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[CreateRoleResult]:
     return await perm_bind_roles(
-        client, permission_id=body.permission_id, role_ids=body.role_ids
+        client, permission_ids=body.permission_ids, role_ids=body.role_ids
+    )
+
+
+@router.post(
+    "/permissions/unbind_roles",
+    tags=["权限管理"],
+    summary="移除角色",
+    description="将一个或多个角色的权限移除",
+)
+async def unbind_roles_to_perm(
+    body: PermRoleBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> list[CreateRoleResult]:
+    return await perm_unbind_roles(
+        client, permission_ids=body.permission_ids, role_ids=body.role_ids
     )
 
 
@@ -258,6 +274,7 @@ async def get_roles_in_permission(
                 last := math::ceil(total / per_page),
                 rows := array_agg((
                     SELECT roles {{
+                        id,
                         name,
                         code,
                         description,
@@ -333,6 +350,7 @@ async def get_users_in_permission(
                         departments := (
                             SELECT .directly_organizations {{ id, code, name }}
                         ),
+                        roles: {{ code, name }},
                         is_deleted,
                         created_at,
                         last_login_at

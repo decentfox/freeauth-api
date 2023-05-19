@@ -24,6 +24,7 @@
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
 #     'src/freeauth/organizations/queries/organization_add_member.edgeql'
 #     'src/freeauth/permissions/queries/perm_bind_roles.edgeql'
+#     'src/freeauth/permissions/queries/perm_unbind_roles.edgeql'
 #     'src/freeauth/organizations/queries/query_org_types.edgeql'
 #     'src/freeauth/users/queries/resign_user.edgeql'
 #     'src/freeauth/roles/queries/role_bind_users.edgeql'
@@ -1220,18 +1221,19 @@ async def perm_bind_roles(
     executor: edgedb.AsyncIOExecutor,
     *,
     role_ids: list[uuid.UUID],
-    permission_id: uuid.UUID,
+    permission_ids: list[uuid.UUID],
 ) -> list[CreateRoleResult]:
     return await executor.query(
         """\
         with
             role_ids := <array<uuid>>$role_ids,
-            permission_id := <uuid>$permission_id
+            permission_ids := <array<uuid>>$permission_ids
         select (
             update Role filter .id in array_unpack(role_ids)
             set {
                 permissions += (
-                    select Permission filter .id = permission_id
+                    select Permission
+                    filter .id in array_unpack(permission_ids)
                 )
             }
         ) {
@@ -1247,7 +1249,43 @@ async def perm_bind_roles(
         };\
         """,
         role_ids=role_ids,
-        permission_id=permission_id,
+        permission_ids=permission_ids,
+    )
+
+
+async def perm_unbind_roles(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    role_ids: list[uuid.UUID],
+    permission_ids: list[uuid.UUID],
+) -> list[CreateRoleResult]:
+    return await executor.query(
+        """\
+        with
+            role_ids := <array<uuid>>$role_ids,
+            permission_ids := <array<uuid>>$permission_ids
+        select (
+            update Role filter .id in array_unpack(role_ids)
+            set {
+                permissions -= (
+                    select Permission
+                    filter .id in array_unpack(permission_ids)
+                )
+            }
+        ) {
+            name,
+            code,
+            description,
+            org_type: {
+                code,
+                name,
+            },
+            is_deleted,
+            created_at
+        };\
+        """,
+        role_ids=role_ids,
+        permission_ids=permission_ids,
     )
 
 

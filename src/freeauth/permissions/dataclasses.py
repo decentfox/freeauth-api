@@ -74,8 +74,9 @@ class PermRoleBody:
         description="可设置一个或多个角色",
         min_items=1,
     )
-    permission_id: uuid.UUID = Field(
+    permission_ids: list[uuid.UUID] = Field(
         ...,
         title="权限 ID",
-        description="待添加/移除的权限 ID",
+        description="待添加/移除的权限 ID 列表",
+        min_items=1,
     )
