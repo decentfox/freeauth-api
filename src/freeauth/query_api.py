@@ -22,7 +22,8 @@
 #     'src/freeauth/auth/queries/get_user_by_access_token.edgeql'
 #     'src/freeauth/auth/queries/get_user_by_account.edgeql'
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
-#     'src/freeauth/organizations/queries/organization_add_member.edgeql'
+#     'src/freeauth/organizations/queries/organization_bind_users.edgeql'
+#     'src/freeauth/organizations/queries/organization_unbind_users.edgeql'
 #     'src/freeauth/permissions/queries/perm_bind_roles.edgeql'
 #     'src/freeauth/permissions/queries/perm_unbind_roles.edgeql'
 #     'src/freeauth/organizations/queries/query_org_types.edgeql'
@@ -1156,7 +1157,7 @@ async def get_user_by_id(
     )
 
 
-async def organization_add_member(
+async def organization_bind_users(
     executor: edgedb.AsyncIOExecutor,
     *,
     user_ids: list[uuid.UUID],
@@ -1214,6 +1215,54 @@ async def organization_add_member(
         user_ids=user_ids,
         organization_ids=organization_ids,
         org_type_id=org_type_id,
+    )
+
+
+async def organization_unbind_users(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    user_ids: list[uuid.UUID],
+    organization_ids: list[uuid.UUID],
+) -> list[CreateUserResult]:
+    return await executor.query(
+        """\
+        with
+            user_ids := <array<uuid>>$user_ids,
+            organization_ids := <array<uuid>>$organization_ids,
+            organizations := (
+                select Organization
+                filter .id in array_unpack(organization_ids)
+            )
+        select (
+            update User filter .id in array_unpack(user_ids)
+            set {
+                org_type := .org_type
+                if array_agg(
+                    User.directly_organizations) != array_agg(organizations)
+                else {},
+                directly_organizations -= organizations,
+                roles -= .org_type.roles
+                if array_agg(
+                    User.directly_organizations) = array_agg(organizations)
+                else {},
+            }
+        ) {
+            name,
+            username,
+            email,
+            mobile,
+            org_type: { code, name },
+            departments := (
+                select .directly_organizations { code, name }
+            ),
+            roles: { code, name },
+            is_deleted,
+            created_at,
+            last_login_at
+        };\
+        """,
+        user_ids=user_ids,
+        organization_ids=organization_ids,
     )
 
 

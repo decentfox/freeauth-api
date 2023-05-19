@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException
 
 from .. import get_edgedb_client
 from ..app import router
-from ..dataclasses import PaginatedData
+from ..dataclasses import PaginatedData, QueryBody
 from ..query_api import (
     CreateUserResult,
     DeleteUserResult,
@@ -294,6 +294,64 @@ async def query_users(
         per_page=body.per_page,
         org_type_id=body.org_type_id,
         include_unassigned_users=body.include_unassigned_users,
+    )
+
+    return PaginatedData.parse_raw(result)
+
+
+@router.post(
+    "/users/{user_id}/permissions",
+    tags=["用户管理"],
+    summary="获取指定用户的权限列表",
+    description="获取指定用户的权限，分页获取，支持关键字搜索、排序及条件过滤",
+)
+async def get_permissions_in_user(
+    body: QueryBody,
+    user_id: uuid.UUID,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> PaginatedData:
+    result = await client.query_single_json(
+        f"""\
+        with
+            page := <optional int64>$page ?? 1,
+            per_page := <optional int64>$per_page ?? 20,
+            q := <optional str>$q,
+            user := (
+                select User filter .id = <uuid>$user_id
+            ),
+            permissions := (
+                select (user.roles.permissions)
+                filter (
+                    true if not exists q else
+                    .name ?? '' ilike q or
+                    .code ?? '' ilike q
+                )
+            ),
+            total := count(permissions)
+        select (
+            total := total,
+            per_page := per_page,
+            page := page,
+            last := math::ceil(total / per_page),
+            rows := array_agg((
+                select permissions {{
+                    id,
+                    name,
+                    code,
+                    description,
+                    roles: {{ id, code, name }},
+                    is_deleted,
+                }}
+                order by {body.ordering_expr}
+                offset (page - 1) * per_page
+                limit per_page
+            ))
+        );\
+        """,
+        q=f"%{body.q}%" if body.q else None,
+        page=body.page,
+        per_page=body.per_page,
+        user_id=user_id,
     )
 
     return PaginatedData.parse_raw(result)

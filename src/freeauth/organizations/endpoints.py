@@ -28,7 +28,8 @@ from ..query_api import (
     get_enterprise_by_id_or_code,
     get_org_type_by_id_or_code,
     get_organization_node,
-    organization_add_member,
+    organization_bind_users,
+    organization_unbind_users,
     query_org_types,
     update_department,
     update_enterprise,
@@ -42,6 +43,7 @@ from .dataclasses import (
     EnterpriseQueryBody,
     OrganizationDeleteBody,
     OrganizationNode,
+    OrganizationUnbindUserBody,
     OrganizationUserBody,
     OrganizationUserQueryBody,
     OrgTypeDeleteBody,
@@ -510,20 +512,37 @@ async def get_organization_tree_by_org_type(
 
 
 @router.post(
-    "/organizations/members",
+    "/organizations/bind_users",
     tags=["组织管理"],
     summary="添加成员",
     description="添加成员到一个或多个部门分支、企业机构中，支持添加多个成员",
 )
-async def add_members_to_organizations(
+async def bind_users_to_organizations(
     body: OrganizationUserBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[CreateUserResult]:
-    return await organization_add_member(
+    return await organization_bind_users(
         client,
         user_ids=body.user_ids,
         organization_ids=body.organization_ids,
         org_type_id=body.org_type_id,
+    )
+
+
+@router.post(
+    "/organizations/unbind_users",
+    tags=["组织管理"],
+    summary="移除成员",
+    description="从一个或多个部门分支、企业机构中移除一个或多个成员",
+)
+async def unbind_users_to_organizations(
+    body: OrganizationUnbindUserBody,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> list[CreateUserResult]:
+    return await organization_unbind_users(
+        client,
+        user_ids=body.user_ids,
+        organization_ids=body.organization_ids,
     )
 
 

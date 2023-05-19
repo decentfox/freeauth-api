@@ -346,8 +346,8 @@ def create_user(
     return CreateUserResult(**user)
 
 
-def test_add_members_to_organizations(test_client: TestClient, faker):
-    resp = test_client.post("/v1/organizations/members", json={})
+def test_bind_users_to_organizations(test_client: TestClient, faker):
+    resp = test_client.post("/v1/organizations/bind_users", json={})
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["user_ids"] == "该字段为必填项"
@@ -355,7 +355,7 @@ def test_add_members_to_organizations(test_client: TestClient, faker):
     assert error["detail"]["errors"]["org_type_id"] == "该字段为必填项"
 
     resp = test_client.post(
-        "/v1/organizations/members",
+        "/v1/organizations/bind_users",
         json={"user_ids": [], "organization_ids": []},
     )
     error = resp.json()
@@ -395,7 +395,7 @@ def test_add_members_to_organizations(test_client: TestClient, faker):
         dept_2_1_1,
     ]
     resp = test_client.post(
-        "/v1/organizations/members",
+        "/v1/organizations/bind_users",
         json={
             "user_ids": [str(u.id) for u in (user_1, user_2, user_3)],
             "organization_ids": [str(o.id) for o in organization_ids],
