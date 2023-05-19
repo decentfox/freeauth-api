@@ -350,7 +350,7 @@ async def get_users_in_permission(
                         departments := (
                             SELECT .directly_organizations {{ id, code, name }}
                         ),
-                        roles: {{ code, name }},
+                        roles: {{ id, code, name }},
                         is_deleted,
                         created_at,
                         last_login_at
