@@ -231,7 +231,7 @@ async def get_roles(
     summary="获取角色绑定用户列表",
     description="获取指定角色下绑定的用户，分页获取，支持关键字搜索、排序",
 )
-async def get_members_in_organization(
+async def get_users_in_role(
     body: QueryBody,
     role_id: uuid.UUID,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),

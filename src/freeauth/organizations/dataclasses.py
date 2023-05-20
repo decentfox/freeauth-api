@@ -223,6 +223,22 @@ class OrganizationUserBody:
 
 
 @dataclass(config=BaseModelConfig)
+class OrganizationUnbindUserBody:
+    organization_ids: list[uuid.UUID] = Field(
+        ...,
+        title="直属部门 ID 列表",
+        description="可设置一个或多个部门分支或企业机构 ID",
+        min_items=1,
+    )
+    user_ids: list[uuid.UUID] = Field(
+        ...,
+        title="用户 ID 列表",
+        description="待移除的用户 ID 列表",
+        min_items=1,
+    )
+
+
+@dataclass(config=BaseModelConfig)
 class OrganizationUserQueryBody(QueryBody):
     include_sub_members: bool = Field(
         True,

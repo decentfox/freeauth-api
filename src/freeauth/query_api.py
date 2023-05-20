@@ -3,10 +3,12 @@
 #     'src/freeauth/organizations/queries/create_department.edgeql'
 #     'src/freeauth/organizations/queries/create_enterprise.edgeql'
 #     'src/freeauth/organizations/queries/create_org_type.edgeql'
+#     'src/freeauth/permissions/queries/create_permission.edgeql'
 #     'src/freeauth/roles/queries/create_role.edgeql'
 #     'src/freeauth/users/queries/create_user.edgeql'
 #     'src/freeauth/organizations/queries/delete_org_type.edgeql'
 #     'src/freeauth/organizations/queries/delete_organization.edgeql'
+#     'src/freeauth/permissions/queries/delete_permission.edgeql'
 #     'src/freeauth/roles/queries/delete_role.edgeql'
 #     'src/freeauth/users/queries/delete_user.edgeql'
 #     'src/freeauth/organizations/queries/get_department_by_id_or_code.edgeql'
@@ -15,11 +17,15 @@
 #     'src/freeauth/settings/queries/get_login_setting_by_key.edgeql'
 #     'src/freeauth/organizations/queries/get_org_type_by_id_or_code.edgeql'
 #     'src/freeauth/organizations/queries/get_organization_node.edgeql'
+#     'src/freeauth/permissions/queries/get_permission_by_id_or_code.edgeql'
 #     'src/freeauth/roles/queries/get_role_by_id_or_code.edgeql'
 #     'src/freeauth/auth/queries/get_user_by_access_token.edgeql'
 #     'src/freeauth/auth/queries/get_user_by_account.edgeql'
 #     'src/freeauth/users/queries/get_user_by_id.edgeql'
-#     'src/freeauth/organizations/queries/organization_add_member.edgeql'
+#     'src/freeauth/organizations/queries/organization_bind_users.edgeql'
+#     'src/freeauth/organizations/queries/organization_unbind_users.edgeql'
+#     'src/freeauth/permissions/queries/perm_bind_roles.edgeql'
+#     'src/freeauth/permissions/queries/perm_unbind_roles.edgeql'
 #     'src/freeauth/organizations/queries/query_org_types.edgeql'
 #     'src/freeauth/users/queries/resign_user.edgeql'
 #     'src/freeauth/roles/queries/role_bind_users.edgeql'
@@ -32,6 +38,8 @@
 #     'src/freeauth/organizations/queries/update_enterprise.edgeql'
 #     'src/freeauth/organizations/queries/update_org_type.edgeql'
 #     'src/freeauth/organizations/queries/update_org_type_status.edgeql'
+#     'src/freeauth/permissions/queries/update_permission.edgeql'
+#     'src/freeauth/permissions/queries/update_permission_status.edgeql'
 #     'src/freeauth/roles/queries/update_role.edgeql'
 #     'src/freeauth/roles/queries/update_role_status.edgeql'
 #     'src/freeauth/users/queries/update_user.edgeql'
@@ -164,6 +172,16 @@ class CreateOrgTypeResult(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class CreatePermissionResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    code: str
+    description: str | None
+    is_deleted: bool
+    created_at: datetime.datetime
+
+
+@dataclasses.dataclass
 class CreateRoleResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
@@ -223,6 +241,11 @@ class DeleteOrganizationResult(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class DeletePermissionResult(NoPydanticValidation):
+    id: uuid.UUID
+
+
+@dataclasses.dataclass
 class DeleteRoleResult(NoPydanticValidation):
     id: uuid.UUID
 
@@ -249,6 +272,27 @@ class GetOrganizationNodeResult(NoPydanticValidation):
     parent_id: uuid.UUID | None
     is_enterprise: bool
     has_children: bool
+
+
+@dataclasses.dataclass
+class GetPermissionByIdOrCodeResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    code: str
+    description: str | None
+    roles: list[GetPermissionByIdOrCodeResultRolesItem]
+    is_deleted: bool
+    created_at: datetime.datetime
+
+
+@dataclasses.dataclass
+class GetPermissionByIdOrCodeResultRolesItem(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    code: str | None
+    description: str | None
+    is_deleted: bool
+    created_at: datetime.datetime
 
 
 @dataclasses.dataclass
@@ -318,6 +362,14 @@ class UpdateOrgTypeStatusResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
     code: str | None
+    is_deleted: bool
+
+
+@dataclasses.dataclass
+class UpdatePermissionStatusResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    code: str
     is_deleted: bool
 
 
@@ -548,6 +600,35 @@ async def create_org_type(
     )
 
 
+async def create_permission(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    name: str,
+    code: str,
+    description: str | None,
+) -> CreatePermissionResult:
+    return await executor.query_single(
+        """\
+        select (
+            insert Permission {
+                name := <str>$name,
+                code := <str>$code,
+                description := <optional str>$description,
+            }
+        ) {
+            name,
+            code,
+            description,
+            is_deleted,
+            created_at
+        }\
+        """,
+        name=name,
+        code=code,
+        description=description,
+    )
+
+
 async def create_role(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -683,6 +764,19 @@ async def delete_organization(
     return await executor.query(
         """\
         DELETE Organization FILTER .id in array_unpack(<array<uuid>>$ids);\
+        """,
+        ids=ids,
+    )
+
+
+async def delete_permission(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    ids: list[uuid.UUID],
+) -> list[DeletePermissionResult]:
+    return await executor.query(
+        """\
+        delete Permission filter .id in array_unpack(<array<uuid>>$ids);\
         """,
         ids=ids,
     )
@@ -883,6 +977,43 @@ async def get_organization_node(
     )
 
 
+async def get_permission_by_id_or_code(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    id: uuid.UUID | None,
+    code: str | None,
+) -> GetPermissionByIdOrCodeResult | None:
+    return await executor.query_single(
+        """\
+        with
+            id := <optional uuid>$id,
+            code := <optional str>$code
+        select assert_single(
+            (
+                select Permission {
+                    name,
+                    code,
+                    description,
+                    roles: {
+                        id,
+                        name,
+                        code,
+                        description,
+                        is_deleted,
+                        created_at
+                    },
+                    is_deleted,
+                    created_at
+                }
+                filter (.id = id) ?? (.code_upper = str_upper(code))
+            )
+        );\
+        """,
+        id=id,
+        code=code,
+    )
+
+
 async def get_role_by_id_or_code(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -1026,7 +1157,7 @@ async def get_user_by_id(
     )
 
 
-async def organization_add_member(
+async def organization_bind_users(
     executor: edgedb.AsyncIOExecutor,
     *,
     user_ids: list[uuid.UUID],
@@ -1084,6 +1215,126 @@ async def organization_add_member(
         user_ids=user_ids,
         organization_ids=organization_ids,
         org_type_id=org_type_id,
+    )
+
+
+async def organization_unbind_users(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    user_ids: list[uuid.UUID],
+    organization_ids: list[uuid.UUID],
+) -> list[CreateUserResult]:
+    return await executor.query(
+        """\
+        with
+            user_ids := <array<uuid>>$user_ids,
+            organization_ids := <array<uuid>>$organization_ids,
+            organizations := (
+                select Organization
+                filter .id in array_unpack(organization_ids)
+            )
+        select (
+            update User filter .id in array_unpack(user_ids)
+            set {
+                org_type := .org_type
+                if array_agg(
+                    User.directly_organizations) != array_agg(organizations)
+                else {},
+                directly_organizations -= organizations,
+                roles -= .org_type.roles
+                if array_agg(
+                    User.directly_organizations) = array_agg(organizations)
+                else {},
+            }
+        ) {
+            name,
+            username,
+            email,
+            mobile,
+            org_type: { code, name },
+            departments := (
+                select .directly_organizations { code, name }
+            ),
+            roles: { code, name },
+            is_deleted,
+            created_at,
+            last_login_at
+        };\
+        """,
+        user_ids=user_ids,
+        organization_ids=organization_ids,
+    )
+
+
+async def perm_bind_roles(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    role_ids: list[uuid.UUID],
+    permission_ids: list[uuid.UUID],
+) -> list[CreateRoleResult]:
+    return await executor.query(
+        """\
+        with
+            role_ids := <array<uuid>>$role_ids,
+            permission_ids := <array<uuid>>$permission_ids
+        select (
+            update Role filter .id in array_unpack(role_ids)
+            set {
+                permissions += (
+                    select Permission
+                    filter .id in array_unpack(permission_ids)
+                )
+            }
+        ) {
+            name,
+            code,
+            description,
+            org_type: {
+                code,
+                name,
+            },
+            is_deleted,
+            created_at
+        };\
+        """,
+        role_ids=role_ids,
+        permission_ids=permission_ids,
+    )
+
+
+async def perm_unbind_roles(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    role_ids: list[uuid.UUID],
+    permission_ids: list[uuid.UUID],
+) -> list[CreateRoleResult]:
+    return await executor.query(
+        """\
+        with
+            role_ids := <array<uuid>>$role_ids,
+            permission_ids := <array<uuid>>$permission_ids
+        select (
+            update Role filter .id in array_unpack(role_ids)
+            set {
+                permissions -= (
+                    select Permission
+                    filter .id in array_unpack(permission_ids)
+                )
+            }
+        ) {
+            name,
+            code,
+            description,
+            org_type: {
+                code,
+                name,
+            },
+            is_deleted,
+            created_at
+        };\
+        """,
+        role_ids=role_ids,
+        permission_ids=permission_ids,
     )
 
 
@@ -1631,6 +1882,88 @@ async def update_org_type_status(
         """,
         is_deleted=is_deleted,
         ids=ids,
+    )
+
+
+async def update_permission(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    id: uuid.UUID | None,
+    current_code: str | None,
+    is_deleted: bool | None,
+    name: str,
+    code: str,
+    description: str | None,
+) -> GetPermissionByIdOrCodeResult | None:
+    return await executor.query_single(
+        """\
+        with
+            id := <optional uuid>$id,
+            current_code := <optional str>$current_code,
+            is_deleted := <optional bool>$is_deleted,
+            permission := assert_single((
+                select Permission
+                filter
+                    (.id = id) ??
+                    (.code_upper ?= str_upper(current_code)) ??
+                    false
+            ))
+        select (
+            update permission
+            set {
+                name := <str>$name,
+                code := <str>$code,
+                description := <optional str>$description,
+                deleted_at := (
+                    .deleted_at IF NOT EXISTS is_deleted ELSE
+                    datetime_of_transaction() IF is_deleted ELSE {}
+                )
+            }
+        ) {
+            name,
+            code,
+            description,
+            roles: {
+                id,
+                name,
+                code,
+                description,
+                is_deleted,
+                created_at
+            },
+            is_deleted,
+            created_at
+        };\
+        """,
+        id=id,
+        current_code=current_code,
+        is_deleted=is_deleted,
+        name=name,
+        code=code,
+        description=description,
+    )
+
+
+async def update_permission_status(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    ids: list[uuid.UUID],
+    is_deleted: bool,
+) -> list[UpdatePermissionStatusResult]:
+    return await executor.query(
+        """\
+        with
+            ids := <array<uuid>>$ids,
+            is_deleted := <bool>$is_deleted
+        select (
+            update Permission filter .id in array_unpack(ids)
+            set {
+                deleted_at := datetime_of_transaction() if is_deleted else {}
+            }
+        ) { name, code, is_deleted };\
+        """,
+        ids=ids,
+        is_deleted=is_deleted,
     )
 
 

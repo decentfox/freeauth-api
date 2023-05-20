@@ -62,7 +62,7 @@ class RoleStatusBody:
     is_deleted: bool = Field(
         ...,
         title="是否禁用",
-        description="true 为禁用角色类型，false 为启用角色类型",
+        description="true 为禁用角色，false 为启用角色",
     )
 
 

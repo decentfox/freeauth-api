@@ -9,6 +9,9 @@ module default {
             on target delete delete source;
         };
         multi link users := .<roles[is User];
+        multi link permissions -> Permission {
+            on target delete allow;
+        };
 
         constraint exclusive on (.code_upper);
     }
