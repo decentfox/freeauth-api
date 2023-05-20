@@ -340,6 +340,7 @@ async def get_permissions_in_user(
                     code,
                     description,
                     roles: {{ id, code, name }},
+                    application: {{ name }},
                     is_deleted,
                 }}
                 order by {body.ordering_expr}

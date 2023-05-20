@@ -10,6 +10,7 @@ from freeauth.permissions.dataclasses import (
     BasePermissionBody,
     PermissionDeleteBody,
     PermissionPutBody,
+    PermissionQueryBody,
     PermissionStatusBody,
     PermRoleBody,
 )
@@ -23,6 +24,7 @@ from ..query_api import (
     CreateRoleResult,
     DeletePermissionResult,
     GetPermissionByIdOrCodeResult,
+    UpdatePermissionResult,
     UpdatePermissionStatusResult,
     create_permission,
     delete_permission,
@@ -53,11 +55,16 @@ async def post_permission(
             name=body.name,
             code=body.code,
             description=body.description,
+            application_id=body.application_id,
         )
     except edgedb.errors.ConstraintViolationError:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail={"code": f"{body.code} 已被使用"},
+        )
+    if not permission:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="应用不存在"
         )
     return permission
 
@@ -124,20 +131,16 @@ async def put_permission(
     body: PermissionPutBody,
     id_or_code: uuid.UUID | str = Depends(parse_permission_id_or_code),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> GetPermissionByIdOrCodeResult:
+) -> UpdatePermissionResult:
     try:
-        permission: GetPermissionByIdOrCodeResult | None = (
-            await update_permission(
-                client,
-                name=body.name,
-                code=body.code,
-                description=body.description,
-                is_deleted=body.is_deleted,
-                id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
-                current_code=(
-                    id_or_code if isinstance(id_or_code, str) else None
-                ),
-            )
+        permission: UpdatePermissionResult | None = await update_permission(
+            client,
+            name=body.name,
+            code=body.code,
+            description=body.description,
+            is_deleted=body.is_deleted,
+            id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
+            current_code=(id_or_code if isinstance(id_or_code, str) else None),
         )
         if not permission:
             raise HTTPException(
@@ -158,7 +161,7 @@ async def put_permission(
     description="分页获取，支持关键字搜索、排序及条件过滤",
 )
 async def get_permissions(
-    body: QueryBody,
+    body: PermissionQueryBody,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
     filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
@@ -168,6 +171,7 @@ async def get_permissions(
                 page := <optional int64>$page ?? 1,
                 per_page := <optional int64>$per_page ?? 20,
                 q := <optional str>$q,
+                application_id := <optional uuid>$application_id,
                 permissions := (
                     SELECT Permission
                     FILTER (
@@ -175,6 +179,9 @@ async def get_permissions(
                         .name ILIKE q OR
                         .code ?? '' ILIKE q OR
                         .description ?? '' ILIKE q
+                    ) AND (
+                        true IF not EXISTS application_id ELSE
+                        .application.id = application_id
                     ) AND {filtering_expr}
                 ),
                 total := count(permissions)
@@ -190,6 +197,7 @@ async def get_permissions(
                         name,
                         code,
                         description,
+                        application: {{ name }},
                         is_deleted,
                         created_at
                     }}
@@ -202,6 +210,7 @@ async def get_permissions(
         q=f"%{body.q}%" if body.q else None,
         page=body.page,
         per_page=body.per_page,
+        application_id=body.application_id,
     )
     return PaginatedData.parse_raw(result)
 

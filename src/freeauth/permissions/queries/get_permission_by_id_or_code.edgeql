@@ -15,6 +15,7 @@ select assert_single(
                 is_deleted,
                 created_at
             },
+            application: { name },
             is_deleted,
             created_at
         }
