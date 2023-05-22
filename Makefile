@@ -28,7 +28,7 @@ up:
 	edgedb migrate
 
 dev: install up
-	poetry run uvicorn freeauth.asgi:app --reload --host 0.0.0.0 --port 5001
+	poetry run uvicorn freeauth.admin.asgi:app --reload --host 0.0.0.0 --port 5001
 
 genqlapi:
 	poetry run edgedb-py --file src/freeauth/query_api.py
