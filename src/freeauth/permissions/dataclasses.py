@@ -5,6 +5,7 @@ import uuid
 from pydantic import Field, validator
 from pydantic.dataclasses import dataclass
 
+from ..dataclasses import FilterItem  # noqa
 from ..dataclasses import BaseModelConfig, QueryBody
 
 
@@ -31,6 +32,16 @@ class BasePermissionBody:
         ...,
         title="所属应用",
         description="所属应用 ID",
+    )
+    new_tags: list[str] = Field(
+        None,
+        title="关联新建标签",
+        description="新建标签名称列表",
+    )
+    existing_tag_ids: list[uuid.UUID] = Field(
+        None,
+        title="关联已有标签",
+        description="已有标签 ID 列表",
     )
 
     @validator("code", pre=True)

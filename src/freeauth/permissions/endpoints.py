@@ -6,16 +6,6 @@ from http import HTTPStatus
 import edgedb
 from fastapi import Depends, HTTPException
 
-from freeauth.permissions.dataclasses import (
-    BasePermissionBody,
-    PermissionDeleteBody,
-    PermissionPutBody,
-    PermissionQueryBody,
-    PermissionStatusBody,
-    PermRoleBody,
-)
-from freeauth.permissions.dependencies import parse_permission_id_or_code
-
 from .. import get_edgedb_client
 from ..app import router
 from ..dataclasses import PaginatedData, QueryBody
@@ -24,16 +14,26 @@ from ..query_api import (
     CreateRoleResult,
     DeletePermissionResult,
     GetPermissionByIdOrCodeResult,
-    UpdatePermissionResult,
+    GetPermissionByIdOrCodeResultTagsItem,
     UpdatePermissionStatusResult,
     create_permission,
     delete_permission,
     get_permission_by_id_or_code,
     perm_bind_roles,
     perm_unbind_roles,
+    query_permission_tags,
     update_permission,
     update_permission_status,
 )
+from .dataclasses import (
+    BasePermissionBody,
+    PermissionDeleteBody,
+    PermissionPutBody,
+    PermissionQueryBody,
+    PermissionStatusBody,
+    PermRoleBody,
+)
+from .dependencies import parse_permission_id_or_code
 
 FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
 
@@ -56,15 +56,13 @@ async def post_permission(
             code=body.code,
             description=body.description,
             application_id=body.application_id,
+            new_tags=body.new_tags,
+            existing_tag_ids=body.existing_tag_ids,
         )
     except edgedb.errors.ConstraintViolationError:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail={"code": f"{body.code} 已被使用"},
-        )
-    if not permission:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="应用不存在"
         )
     return permission
 
@@ -131,20 +129,26 @@ async def put_permission(
     body: PermissionPutBody,
     id_or_code: uuid.UUID | str = Depends(parse_permission_id_or_code),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> UpdatePermissionResult:
+) -> GetPermissionByIdOrCodeResult:
     try:
-        permission: UpdatePermissionResult | None = await update_permission(
-            client,
-            name=body.name,
-            code=body.code,
-            description=body.description,
-            is_deleted=body.is_deleted,
-            id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
-            current_code=(id_or_code if isinstance(id_or_code, str) else None),
+        permission: GetPermissionByIdOrCodeResult | None = (
+            await update_permission(
+                client,
+                name=body.name,
+                code=body.code,
+                description=body.description,
+                new_tags=body.new_tags,
+                existing_tag_ids=body.existing_tag_ids,
+                is_deleted=body.is_deleted,
+                id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
+                current_code=(
+                    id_or_code if isinstance(id_or_code, str) else None
+                ),
+            )
         )
         if not permission:
             raise HTTPException(
-                status_code=HTTPStatus.NOT_FOUND, detail="角色不存在"
+                status_code=HTTPStatus.NOT_FOUND, detail="权限不存在"
             )
     except edgedb.errors.ConstraintViolationError:
         raise HTTPException(
@@ -198,6 +202,7 @@ async def get_permissions(
                         code,
                         description,
                         application: {{ name }},
+                        tags: {{ name }},
                         is_deleted,
                         created_at
                     }}
@@ -376,3 +381,18 @@ async def get_users_in_permission(
         permission_id=permission_id,
     )
     return PaginatedData.parse_raw(result)
+
+
+@router.get(
+    "/permission_tags",
+    tags=["权限管理"],
+    summary="获取权限标签",
+    description="获取指定权限的所有标签",
+)
+async def get_permission_tags(
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+) -> dict[str, list[GetPermissionByIdOrCodeResultTagsItem]]:
+    permission_tags: list[GetPermissionByIdOrCodeResultTagsItem] = (
+        await query_permission_tags(client)
+    )
+    return {"permission_tags": permission_tags}

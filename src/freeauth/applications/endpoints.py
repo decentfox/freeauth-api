@@ -5,12 +5,10 @@ from http import HTTPStatus
 import edgedb
 from fastapi import Depends
 
-from freeauth.applications.dataclasses import (
-    ApplicationDeleteBody,
-    ApplicationStatusBody,
-    BaseApplicationBody,
-)
-from freeauth.query_api import (
+from .. import get_edgedb_client
+from ..app import router
+from ..dataclasses import PaginatedData, QueryBody
+from ..query_api import (
     CreateApplicationResult,
     DeleteApplicationResult,
     UpdateApplicationStatusResult,
@@ -18,10 +16,11 @@ from freeauth.query_api import (
     delete_application,
     update_application_status,
 )
-
-from .. import get_edgedb_client
-from ..app import router
-from ..dataclasses import PaginatedData, QueryBody
+from .dataclasses import (
+    ApplicationDeleteBody,
+    ApplicationStatusBody,
+    BaseApplicationBody,
+)
 
 FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
 

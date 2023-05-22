@@ -29,6 +29,7 @@
 #     'src/freeauth/permissions/queries/perm_bind_roles.edgeql'
 #     'src/freeauth/permissions/queries/perm_unbind_roles.edgeql'
 #     'src/freeauth/organizations/queries/query_org_types.edgeql'
+#     'src/freeauth/permissions/queries/query_permission_tags.edgeql'
 #     'src/freeauth/users/queries/resign_user.edgeql'
 #     'src/freeauth/roles/queries/role_bind_users.edgeql'
 #     'src/freeauth/roles/queries/role_unbind_users.edgeql'
@@ -191,12 +192,19 @@ class CreatePermissionResult(NoPydanticValidation):
     code: str
     description: str | None
     application: CreatePermissionResultApplication
+    tags: list[CreatePermissionResultTagsItem]
     is_deleted: bool
     created_at: datetime.datetime
 
 
 @dataclasses.dataclass
 class CreatePermissionResultApplication(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+
+
+@dataclasses.dataclass
+class CreatePermissionResultTagsItem(NoPydanticValidation):
     id: uuid.UUID
     name: str
 
@@ -307,6 +315,7 @@ class GetPermissionByIdOrCodeResult(NoPydanticValidation):
     description: str | None
     roles: list[GetPermissionByIdOrCodeResultRolesItem]
     application: CreatePermissionResultApplication
+    tags: list[GetPermissionByIdOrCodeResultTagsItem]
     is_deleted: bool
     created_at: datetime.datetime
 
@@ -319,6 +328,12 @@ class GetPermissionByIdOrCodeResultRolesItem(NoPydanticValidation):
     description: str | None
     is_deleted: bool
     created_at: datetime.datetime
+
+
+@dataclasses.dataclass
+class GetPermissionByIdOrCodeResultTagsItem(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
 
 
 @dataclasses.dataclass
@@ -396,17 +411,6 @@ class UpdateOrgTypeStatusResult(NoPydanticValidation):
     name: str
     code: str | None
     is_deleted: bool
-
-
-@dataclasses.dataclass
-class UpdatePermissionResult(NoPydanticValidation):
-    id: uuid.UUID
-    name: str
-    code: str
-    description: str | None
-    roles: list[GetPermissionByIdOrCodeResultRolesItem]
-    is_deleted: bool
-    created_at: datetime.datetime
 
 
 @dataclasses.dataclass
@@ -677,25 +681,46 @@ async def create_permission(
     code: str,
     description: str | None,
     application_id: uuid.UUID,
+    new_tags: list[str],
+    existing_tag_ids: list[uuid.UUID],
 ) -> CreatePermissionResult:
     return await executor.query_single(
         """\
+        with
+            name := <str>$name,
+            code := <str>$code,
+            description := <optional str>$description,
+            application_id := <uuid>$application_id,
+            new_tags := (
+                for item in array_unpack(<array<str>>$new_tags) union (
+                    insert Tag {
+                        name := item,
+                        tag_type := TagType.Permission
+                    }
+                )
+            ),
+            existing_tags := (
+                select Tag
+                filter .id in array_unpack(<array<uuid>>$existing_tag_ids)
+            )
         select (
             insert Permission {
-                name := <str>$name,
-                code := <str>$code,
-                description := <optional str>$description,
+                name := name,
+                code := code,
+                description := description,
                 application := (
                     select Application filter (
-                        .id = <uuid>$application_id
+                        .id = application_id
                     )
-                )
+                ),
+                tags := new_tags union existing_tags
             }
         ) {
             name,
             code,
             description,
             application: { name },
+            tags: { name },
             is_deleted,
             created_at
         }\
@@ -704,6 +729,8 @@ async def create_permission(
         code=code,
         description=description,
         application_id=application_id,
+        new_tags=new_tags,
+        existing_tag_ids=existing_tag_ids,
     )
 
 
@@ -1095,6 +1122,7 @@ async def get_permission_by_id_or_code(
                         created_at
                     },
                     application: { name },
+                    tags: { id, name },
                     is_deleted,
                     created_at
                 }
@@ -1442,6 +1470,19 @@ async def query_org_types(
             .is_deleted THEN
             .is_protected DESC THEN
             .code;\
+        """,
+    )
+
+
+async def query_permission_tags(
+    executor: edgedb.AsyncIOExecutor,
+) -> list[GetPermissionByIdOrCodeResultTagsItem]:
+    return await executor.query(
+        """\
+        select Tag {
+            id,
+            name
+        } filter (.tag_type = TagType.Permission)\
         """,
     )
 
@@ -2007,10 +2048,12 @@ async def update_permission(
     id: uuid.UUID | None,
     current_code: str | None,
     is_deleted: bool | None,
+    new_tags: list[str],
+    existing_tag_ids: list[uuid.UUID],
     name: str,
     code: str,
     description: str | None,
-) -> UpdatePermissionResult | None:
+) -> GetPermissionByIdOrCodeResult | None:
     return await executor.query_single(
         """\
         with
@@ -2023,13 +2066,26 @@ async def update_permission(
                     (.id = id) ??
                     (.code_upper ?= str_upper(current_code)) ??
                     false
-            ))
+            )),
+            new_tags := (
+                for item in array_unpack(<array<str>>$new_tags) union (
+                    insert Tag {
+                        name := item,
+                        tag_type := TagType.Permission
+                    }
+                )
+            ),
+            existing_tags := (
+                select Tag
+                filter .id in array_unpack(<array<uuid>>$existing_tag_ids)
+            )
         select (
             update permission
             set {
                 name := <str>$name,
                 code := <str>$code,
                 description := <optional str>$description,
+                tags := new_tags union existing_tags,
                 deleted_at := (
                     .deleted_at IF NOT EXISTS is_deleted ELSE
                     datetime_of_transaction() IF is_deleted ELSE {}
@@ -2047,6 +2103,8 @@ async def update_permission(
                 is_deleted,
                 created_at
             },
+            application: { name },
+            tags: { id, name },
             is_deleted,
             created_at
         };\
@@ -2054,6 +2112,8 @@ async def update_permission(
         id=id,
         current_code=current_code,
         is_deleted=is_deleted,
+        new_tags=new_tags,
+        existing_tag_ids=existing_tag_ids,
         name=name,
         code=code,
         description=description,

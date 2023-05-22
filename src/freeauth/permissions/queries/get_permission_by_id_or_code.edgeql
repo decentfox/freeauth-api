@@ -16,6 +16,7 @@ select assert_single(
                 created_at
             },
             application: { name },
+            tags: { id, name },
             is_deleted,
             created_at
         }
