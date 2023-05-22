@@ -10,8 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from freeauth.app import get_app
-from freeauth.query_api import CreateUserResult
+from .query_api import CreateUserResult
 
 TEST_DBNAME = "testdb"
 
@@ -66,12 +65,14 @@ async def edgedb_client(db) -> AsyncGenerator[edgedb.AsyncIOClient, None]:
 
 @pytest.fixture
 def app(mocker) -> FastAPI:
+    from . import app as fa_app
+
     os.environ["TESTING"] = "true"
     os.environ["JWT_COOKIE_SECURE"] = "false"
     os.environ["DEMO_ACCOUNTS"] = '["user@example.com", "13800000000"]'
-    mocker.patch("freeauth.app.setup_edgedb", tx_setup_edgedb)
-    mocker.patch("freeauth.app.shutdown_edgedb", tx_shutdown_edgedb)
-    return get_app()
+    mocker.patch.object(fa_app, "setup_edgedb", tx_setup_edgedb)
+    mocker.patch.object(fa_app, "shutdown_edgedb", tx_setup_edgedb)
+    return fa_app.get_app()
 
 
 @pytest.fixture
