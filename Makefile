@@ -1,4 +1,4 @@
-install:
+install: extensions/*/pyproject.toml
 	poetry install --sync
 	poetry run pre-commit install
 
@@ -32,3 +32,7 @@ dev: install up
 
 genqlapi:
 	poetry run edgedb-py --file src/freeauth/query_api.py
+
+extensions/*/pyproject.toml:
+	git submodule init
+	git submodule update
