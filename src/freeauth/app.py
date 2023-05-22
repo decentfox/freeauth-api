@@ -91,6 +91,7 @@ def get_app():
     async def health_check() -> dict[str, str]:
         return {"status": "Ok"}
 
+    from .applications import endpoints  # noqa
     from .audit_logs import endpoints  # noqa
     from .auth import endpoints  # noqa
     from .organizations import endpoints  # noqa
