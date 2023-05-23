@@ -1,12 +1,10 @@
-install: extensions/*/pyproject.toml
+install:
+	@git submodule init
+	@git submodule update
 	@(cd extensions/freeauth && make install)
 	@poetry install --sync
 	@poetry run pre-commit install
 	@poetry run freeauth-db install 2> /dev/null
-
-extensions/*/pyproject.toml:
-	@git submodule init
-	@git submodule update
 
 lint:
 	@poetry run isort src
