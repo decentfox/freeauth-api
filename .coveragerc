@@ -1,10 +1,10 @@
 [run]
 source =
-    src/freeauth
+    src
 branch = True
 omit =
     .venv/*
-    src/freeauth/asgi.py
+    src/freeauth/admin/asgi.py
     */tests/*
     */conftest.py
 

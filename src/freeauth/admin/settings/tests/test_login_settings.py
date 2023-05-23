@@ -7,7 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
 
-from ...config import get_config
+from freeauth.conf.settings import get_settings
+
 from ...query_api import AuthCodeType
 from ...users.tests.test_api import create_user
 from ...utils import gen_random_string
@@ -190,22 +191,22 @@ def test_jwt_token_ttl(test_client: TestClient, jwt_token_ttl: int):
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
-    config = get_config()
+    settings = get_settings()
     req_set_cookie = resp.headers.get("Set-Cookie")
-    assert config.jwt_cookie_key in req_set_cookie
+    assert settings.jwt_cookie_key in req_set_cookie
     if jwt_token_ttl:
         assert f"Max-Age={jwt_token_ttl * 60}" in req_set_cookie
     else:
         assert "Max-Age" not in req_set_cookie
 
-    token = resp.cookies.get(config.jwt_cookie_key)
+    token = resp.cookies.get(settings.jwt_cookie_key)
     assert token is not None
     payload = jwt.decode(
-        token, config.jwt_secret_key, algorithms=[config.jwt_algorithm]
+        token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
     )
     assert (
         round((payload["exp"] - time.time()) / 60) == jwt_token_ttl
-        or config.jwt_token_ttl
+        or settings.jwt_token_ttl
     )
 
 

@@ -7,8 +7,9 @@ import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
 
+from freeauth.conf.settings import get_settings
+
 from ...audit_logs.dataclasses import AuthAuditEventType
-from ...config import get_config
 from ...query_api import AuthAuditStatusCode, AuthCodeType, AuthVerifyType
 from ...users.tests.test_api import create_user
 from ...utils import gen_random_string
@@ -131,9 +132,9 @@ def test_validate_sign_in_code_failed(
         email="user@example.com",
         mobile="13800000000",
     )
-    config = get_config()
+    settings = get_settings()
     if data.get("account") == "13800000000":
-        if data.get("code") == config.demo_code:
+        if data.get("code") == settings.demo_code:
             test_client.put(
                 "/v1/login_settings",
                 json={
@@ -201,11 +202,11 @@ def test_sign_in_with_code(test_client: TestClient):
     assert user["email"] == account
     assert user["last_login_at"] is not None
 
-    config = get_config()
-    token = resp.cookies.get(config.jwt_cookie_key)
+    settings = get_settings()
+    token = resp.cookies.get(settings.jwt_cookie_key)
     assert token is not None
     payload = jwt.decode(
-        token, config.jwt_secret_key, algorithms=[config.jwt_algorithm]
+        token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
     )
     assert payload["sub"] == user["id"]
 
@@ -318,8 +319,8 @@ def test_sign_out(bo_user_client: TestClient, bo_user):
     resp = bo_user_client.post("/v1/sign_out")
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
-    config = get_config()
-    token = resp.cookies.get(config.jwt_cookie_key)
+    settings = get_settings()
+    token = resp.cookies.get(settings.jwt_cookie_key)
     assert token is None
 
     resp = bo_user_client.get("/v1/me")

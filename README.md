@@ -1,4 +1,4 @@
-# FreeAuth API
+# FreeAuth Admin FastAPI http server
 
 ## Development
 
@@ -6,23 +6,40 @@
 
 1. Install the EdgeDB CLI:
 
+refer to https://www.edgedb.com/docs/intro/cli
+
+#### Linux or macOS
+
 ```bash
 curl https://sh.edgedb.com --proto '=https' -sSf1 | sh
 ```
 
-2. Initialize the database:
-
-```bash
-edgedb project init
-```
-
-3. Create a virtual environment and install the development dependencies:
+2. Create a virtual environment and install the development dependencies:
 
 ```bash
 make install
 ```
 
-### Run in dev mode
+3. Set environment variables
+
+Add `export EDGEDB_INSTANCE=FreeAuth` to the end of `.venv/bin/activate` file.
+
+4. Initial FreeAuth DB
+
+```bash
+source .venv/bin/activate
+poetry run freeauth-db install
+```
+
+### Run FreeAuth admin server
+
+1. Active venv
+
+```bash
+poetry shell
+```
+
+2. Run FreeAuth admin server in dev mode
 
 ```bash
 make dev
@@ -44,13 +61,13 @@ edgedb ui
 1. Create a migration:
 
 ```bash
-edgedb migration create
+make db
 ```
 
 2. Apply migrations:
 
 ```bash
-edgedb migrate
+make up
 ```
 
 ### Generate query APIs

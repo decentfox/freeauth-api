@@ -16,6 +16,7 @@ pydantic = {extras = ["dotenv", "email"], version = "^1.10.7"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 user-agents = "^2.2.0"
+freeauth = {path = "extensions/freeauth", develop = true}
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
@@ -39,6 +40,7 @@ build-backend = "poetry.core.masonry.api"
 profile = "black"
 atomic = true
 line_length = 79
+known_first_party = ["freeauth"]
 
 [tool.black]
 line_length = 79
@@ -50,5 +52,5 @@ pretty = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-addopts = "-ra -x --ff --cov-report=term-missing:skip-covered --cov=src/freeauth"
+addopts = "-ra -x --ff --cov-report=term-missing:skip-covered --cov=src/freeauth/admin"
 testpaths = "src"

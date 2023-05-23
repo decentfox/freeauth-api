@@ -11,10 +11,11 @@ import edgedb
 from fastapi import Depends, HTTPException, Response
 from jose import jwt
 
+from freeauth.conf.settings import get_settings
+
 from .. import get_edgedb_client, logger
 from ..app import router
 from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
-from ..config import get_config
 from ..dependencies import get_access_token, require_user
 from ..query_api import (
     AuthAuditEventType,
@@ -69,9 +70,9 @@ async def send_auth_code(
     if re.match(MOBILE_REGEX, account):
         code_type = AuthCodeType.SMS
 
-    config = get_config()
-    if account in config.demo_accounts:
-        code = config.demo_code
+    settings = get_settings()
+    if account in settings.demo_accounts:
+        code = settings.demo_code
     else:
         code = gen_random_string(6, letters=string.digits)
 
@@ -88,7 +89,7 @@ async def send_auth_code(
         code_type=code_type.value,  # type: ignore
         verify_type=verify_type.value,  # type: ignore
         code=code,
-        ttl=(ttl or config.verify_code_ttl) * 60,
+        ttl=(ttl or settings.verify_code_ttl) * 60,
         max_attempts=max_attempts,
         attempts_ttl=attempts_ttl,
     )
@@ -142,21 +143,23 @@ async def create_access_token(
     client: edgedb.AsyncIOClient, response: Response, user_id: uuid.UUID
 ) -> str:
     now = datetime.utcnow()
-    config = get_config()
+    settings = get_settings()
     login_settings = get_login_settings()
     jwt_token_ttl = await login_settings.get("jwt_token_ttl", client)
     payload = {
         "sub": str(user_id),
-        "exp": now + timedelta(minutes=jwt_token_ttl or config.jwt_token_ttl),
+        "exp": now + timedelta(
+            minutes=jwt_token_ttl or settings.jwt_token_ttl
+        ),
     }
     token = jwt.encode(
-        payload, config.jwt_secret_key, algorithm=config.jwt_algorithm
+        payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
     )
     response.set_cookie(
-        key=config.jwt_cookie_key,
+        key=settings.jwt_cookie_key,
         value=token,
         httponly=True,
-        secure=config.jwt_cookie_secure,
+        secure=settings.jwt_cookie_secure,
         max_age=jwt_token_ttl * 60 if jwt_token_ttl else None,
         samesite="strict",
     )
@@ -414,11 +417,11 @@ async def post_sign_out(
         return "ok"
 
     await sign_out(client, access_token=access_token)
-    config = get_config()
+    settings = get_settings()
     response.delete_cookie(
-        key=config.jwt_cookie_key,
+        key=settings.jwt_cookie_key,
         httponly=True,
-        secure=config.jwt_cookie_secure,
+        secure=settings.jwt_cookie_secure,
         samesite="strict",
     )
     return "ok"

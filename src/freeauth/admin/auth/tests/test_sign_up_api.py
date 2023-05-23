@@ -9,7 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
 
-from ...config import get_config
+from freeauth.conf.settings import get_settings
+
 from ...query_api import (
     AuthAuditStatusCode,
     AuthCodeType,
@@ -178,9 +179,9 @@ def test_send_sign_up_code(test_client: TestClient):
 def test_validate_sign_up_code_failed(
     test_client: TestClient, data: Dict, errors: Dict
 ):
-    config = get_config()
-    if data.get("account") in config.demo_accounts:
-        if data.get("code") == config.demo_code:
+    settings = get_settings()
+    if data.get("account") in settings.demo_accounts:
+        if data.get("code") == settings.demo_code:
             test_client.put(
                 "/v1/login_settings",
                 json={
@@ -240,12 +241,12 @@ def test_sign_up(test_client: TestClient):
     assert user["email"] == account
     assert user["last_login_at"] is not None
 
-    config = get_config()
-    token = resp.cookies.get(config.jwt_cookie_key)
+    settings = get_settings()
+    token = resp.cookies.get(settings.jwt_cookie_key)
     assert token is not None
 
     payload = jwt.decode(
-        token, config.jwt_secret_key, algorithms=[config.jwt_algorithm]
+        token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
     )
     assert payload["sub"] == user["id"]
 

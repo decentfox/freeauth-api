@@ -10,9 +10,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from .query_api import CreateUserResult
+from freeauth.conf.settings import get_settings
 
-TEST_DBNAME = "testdb"
+from . import app as freeauth_app
+from .query_api import CreateUserResult
 
 
 @pytest.fixture(scope="session")
@@ -25,18 +26,34 @@ def event_loop():
 
 
 @pytest.fixture(scope="session", autouse=True)
-async def db(request):
+def setup_and_teardown():
+    orig_env = os.environ.copy()
+    os.environ["EDGEDB_DATABASE"] = "testdb"
+    os.environ["TESTING"] = "true"
+    os.environ["JWT_COOKIE_SECURE"] = "false"
+    os.environ["DEMO_ACCOUNTS"] = '["user@example.com", "13800000000"]'
+
+    yield
+
+    os.environ = orig_env
+
+
+@pytest.fixture(scope="session", autouse=True)
+async def db(setup_and_teardown, request):
+    settings = get_settings()
     reset_db = request.config.getoption("--reset-db")
     default_cli = edgedb.create_async_client()
     databases = await default_cli.query("select {sys::Database.name}")
-    exists = TEST_DBNAME in databases
+    exists = settings.edgedb_database in databases
     if reset_db and exists:
-        await default_cli.execute(f"DROP DATABASE {TEST_DBNAME}")
+        await default_cli.execute(f"DROP DATABASE {settings.edgedb_database}")
     if reset_db or not exists:
-        await default_cli.execute(f"CREATE DATABASE {TEST_DBNAME}")
+        await default_cli.execute(
+            f"CREATE DATABASE {settings.edgedb_database}"
+        )
     await default_cli.aclose()
 
-    client = edgedb.create_async_client(database=TEST_DBNAME)
+    client = edgedb.create_async_client(database=settings.edgedb_database)
 
     if reset_db or not exists:
         for file_or_dir in sorted(
@@ -46,6 +63,8 @@ async def db(request):
                 query = f.read()
             await client.execute(query)
     yield client
+
+    await client.aclose()
 
 
 class Rollback(Exception):
@@ -65,14 +84,9 @@ async def edgedb_client(db) -> AsyncGenerator[edgedb.AsyncIOClient, None]:
 
 @pytest.fixture
 def app(mocker) -> FastAPI:
-    from . import app as fa_app
-
-    os.environ["TESTING"] = "true"
-    os.environ["JWT_COOKIE_SECURE"] = "false"
-    os.environ["DEMO_ACCOUNTS"] = '["user@example.com", "13800000000"]'
-    mocker.patch.object(fa_app, "setup_edgedb", tx_setup_edgedb)
-    mocker.patch.object(fa_app, "shutdown_edgedb", tx_setup_edgedb)
-    return fa_app.get_app()
+    mocker.patch.object(freeauth_app, "setup_edgedb", tx_setup_edgedb)
+    mocker.patch.object(freeauth_app, "shutdown_edgedb", tx_setup_edgedb)
+    return freeauth_app.get_app()
 
 
 @pytest.fixture
@@ -92,8 +106,9 @@ def test_client(app):
 
 
 async def tx_setup_edgedb(app):
+    settings = get_settings()
     client = app.state.edgedb_client = edgedb.create_async_client(
-        database=TEST_DBNAME
+        database=settings.edgedb_database
     )
     await client.ensure_connected()
     async for tx in client.with_retry_options(

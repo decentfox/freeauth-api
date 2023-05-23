@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 
+from freeauth.conf.settings import get_settings
+
 from . import logger
-from .config import get_config
 
 
 def configure_logging(app):
@@ -13,8 +14,8 @@ def configure_logging(app):
     if not app.debug:
         fmt = "%(name)s %(levelname)s in %(pathname)s:%(lineno)s: %(message)s"
 
-    config = get_config()
-    if config.testing:
+    settings = get_settings()
+    if settings.testing:
         logger.setLevel(logging.CRITICAL)
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(logging.Formatter(fmt))

@@ -14,7 +14,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
-from .config import get_config
+from freeauth.conf.settings import get_settings
+
 from .log import configure_logging
 
 router = APIRouter(prefix="/v1")
@@ -72,9 +73,9 @@ async def http_exception_accept_handler(
 
 
 def get_app():
-    config = get_config()
+    settings = get_settings()
     app = FastAPI(
-        debug=config.debug,
+        debug=settings.debug,
         title="FreeAuth",
         description="Async REST API in Python for FreeAuth.",
         exception_handlers={
