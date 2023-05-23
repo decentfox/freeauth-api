@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 import pytest
 from fastapi.testclient import TestClient
 
-from ...query_api import (
+from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateDepartmentResult,
     CreateEnterpriseResult,
     CreateOrgTypeResult,

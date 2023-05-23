@@ -3,7 +3,7 @@ from __future__ import annotations
 import edgedb
 import pytest
 
-from ...query_api import (
+from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateDepartmentResult,
     CreateEnterpriseResult,
     CreateOrgTypeResult,

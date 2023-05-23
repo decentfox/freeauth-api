@@ -20,26 +20,21 @@ curl https://sh.edgedb.com --proto '=https' -sSf1 | sh
 make install
 ```
 
-3. Set environment variables
-
-Add `export EDGEDB_INSTANCE=FreeAuth` to the end of `.venv/bin/activate` file.
-
-4. Initial FreeAuth DB
+During the first installation, you will enter an interactive session to initialize the EdgeDB project:
 
 ```bash
-source .venv/bin/activate
-poetry run freeauth-db install
+Specify the name of EdgeDB instance to use with this project [default: FreeAuth]: 
+> FreeAuth
 ```
 
-### Run FreeAuth admin server
-
-1. Active venv
+If you already have a FreeAuth instance in your local environment, you can choose to use the same FreeAuth instance in your project:
 
 ```bash
-poetry shell
+Do you want to use existing instance "FreeAuth" for the project? [y/n]
+> y
 ```
 
-2. Run FreeAuth admin server in dev mode
+### Run FreeAuth admin server in dev mode
 
 ```bash
 make dev
@@ -48,7 +43,7 @@ make dev
 ### Open the EdgeDB UI
 
 ```bash
-edgedb ui
+edgedb ui -I FreeAuth
 ```
 
 ### Automatic API documents

@@ -5,7 +5,7 @@ from typing import Optional
 import edgedb
 import pytest
 
-from ...query_api import (
+from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateUserResult,
     create_user,
     delete_user,

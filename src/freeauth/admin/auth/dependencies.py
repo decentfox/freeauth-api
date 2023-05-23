@@ -7,12 +7,13 @@ import edgedb
 from fastapi import Depends, HTTPException, Request
 from user_agents import parse as ua_parse  # type: ignore
 
-from .. import get_edgedb_client
-from ..query_api import (
+from freeauth.db.auth.auth_qry_async_edgeql import (
     AuthCodeType,
     GetUserByAccountResult,
     get_user_by_account,
 )
+
+from .. import get_edgedb_client
 from ..settings import get_login_settings
 from ..utils import MOBILE_REGEX
 from .dataclasses import (

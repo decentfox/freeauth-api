@@ -5,7 +5,7 @@ from http import HTTPStatus
 import pytest
 from fastapi.testclient import TestClient
 
-from ...query_api import (
+from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateDepartmentResult,
     CreateDepartmentResultEnterprise,
     CreateDepartmentResultParent,
@@ -13,6 +13,7 @@ from ...query_api import (
     CreateOrgTypeResult,
     CreateUserResult,
 )
+
 from .test_enterprise_api import create_enterprise
 from .test_org_type_api import create_org_type
 

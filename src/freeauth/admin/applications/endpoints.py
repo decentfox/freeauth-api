@@ -5,10 +5,7 @@ from http import HTTPStatus
 import edgedb
 from fastapi import Depends
 
-from .. import get_edgedb_client
-from ..app import router
-from ..dataclasses import PaginatedData, QueryBody
-from ..query_api import (
+from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateApplicationResult,
     DeleteApplicationResult,
     UpdateApplicationStatusResult,
@@ -16,6 +13,10 @@ from ..query_api import (
     delete_application,
     update_application_status,
 )
+
+from .. import get_edgedb_client
+from ..app import router
+from ..dataclasses import PaginatedData, QueryBody
 from .dataclasses import (
     ApplicationDeleteBody,
     ApplicationStatusBody,

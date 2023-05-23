@@ -8,9 +8,12 @@ from fastapi import Depends, HTTPException, Request
 from jose import ExpiredSignatureError, JWTError, jwt
 
 from freeauth.conf.settings import get_settings
+from freeauth.db.auth.auth_qry_async_edgeql import (
+    GetUserByAccessTokenResult,
+    get_user_by_access_token,
+)
 
 from . import get_edgedb_client, logger
-from .query_api import CreateUserResult, get_user_by_access_token
 
 
 def get_access_token(req: Request):
@@ -21,7 +24,7 @@ def get_access_token(req: Request):
 async def get_current_user(
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     access_token: str = Depends(get_access_token),
-) -> CreateUserResult | None:
+) -> GetUserByAccessTokenResult | None:
     settings = get_settings()
     if not access_token:
         logger.info("missing token")
@@ -40,8 +43,8 @@ async def get_current_user(
         logger.info("invalid token")
         return None
     else:
-        user: CreateUserResult | None = await get_user_by_access_token(
-            client, access_token=access_token
+        user: GetUserByAccessTokenResult | None = (
+            await get_user_by_access_token(client, access_token=access_token)
         )
         if not user:
             logger.info("token not found")
@@ -64,8 +67,9 @@ async def get_current_user(
 
 
 async def require_user(
-    current_user: CreateUserResult | None = Depends(get_current_user),
-) -> CreateUserResult:
+    current_user: GetUserByAccessTokenResult
+    | None = Depends(get_current_user),
+) -> GetUserByAccessTokenResult:
     if current_user is None:
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED, detail="身份验证失败"

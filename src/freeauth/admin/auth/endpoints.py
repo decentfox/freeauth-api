@@ -12,17 +12,12 @@ from fastapi import Depends, HTTPException, Response
 from jose import jwt
 
 from freeauth.conf.settings import get_settings
-
-from .. import get_edgedb_client, logger
-from ..app import router
-from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
-from ..dependencies import get_access_token, require_user
-from ..query_api import (
+from freeauth.db.auth.auth_qry_async_edgeql import (
     AuthAuditEventType,
     AuthAuditStatusCode,
     AuthCodeType,
     AuthVerifyType,
-    CreateUserResult,
+    GetUserByAccessTokenResult,
     GetUserByAccountResult,
     SendCodeResult,
     ValidateCodeResult,
@@ -35,6 +30,11 @@ from ..query_api import (
     validate_code,
     validate_pwd,
 )
+
+from .. import get_edgedb_client, logger
+from ..app import router
+from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
+from ..dependencies import get_access_token, require_user
 from ..settings import get_login_settings
 from ..utils import (
     MOBILE_REGEX,
@@ -213,7 +213,7 @@ async def sign_up_with_code(
     response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     client_info: dict = Depends(get_client_info),
-) -> CreateUserResult | None:
+) -> GetUserByAccessTokenResult | None:
     settings = await get_login_settings().get_all(client)
     await validate_auth_code(
         client,
@@ -299,7 +299,7 @@ async def sign_in_with_code(
         verify_account_when_sign_in_with_code
     ),
     client_info: dict = Depends(get_client_info),
-) -> CreateUserResult | None:
+) -> GetUserByAccessTokenResult | None:
     settings = await get_login_settings().get_all(client)
     await validate_auth_code(
         client,
@@ -334,7 +334,7 @@ async def sign_in_with_pwd(
     response: Response,
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     client_info: dict = Depends(get_client_info),
-) -> CreateUserResult | None:
+) -> GetUserByAccessTokenResult | None:
     settings = await get_login_settings().get_all(client)
     pwd_signin_modes = settings["pwd_signin_modes"]
     if not pwd_signin_modes:
@@ -434,6 +434,6 @@ async def post_sign_out(
     description="获取当前登录用户的个人信息",
 )
 async def get_user_me(
-    current_user: CreateUserResult = Depends(require_user),
-) -> CreateUserResult:
+    current_user: GetUserByAccessTokenResult = Depends(require_user),
+) -> GetUserByAccessTokenResult:
     return current_user

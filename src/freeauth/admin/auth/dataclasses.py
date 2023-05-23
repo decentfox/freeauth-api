@@ -5,8 +5,9 @@ import re
 from pydantic import EmailStr, Field, validator
 from pydantic.dataclasses import dataclass
 
+from freeauth.db.auth.auth_qry_async_edgeql import AuthCodeType
+
 from ..dataclasses import BaseModelConfig
-from ..query_api import AuthCodeType
 from ..utils import MOBILE_REGEX
 
 

@@ -6,7 +6,7 @@ from typing import Any
 
 import edgedb
 
-from ..query_api import (
+from freeauth.db.auth.auth_qry_async_edgeql import (
     GetLoginSettingResult,
     get_login_setting,
     get_login_setting_by_key,

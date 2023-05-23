@@ -7,10 +7,7 @@ from typing import List
 import edgedb
 from fastapi import Depends, HTTPException
 
-from .. import get_edgedb_client
-from ..app import router
-from ..dataclasses import PaginatedData, QueryBody
-from ..query_api import (
+from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateUserResult,
     DeleteUserResult,
     GetUserByIdResult,
@@ -24,6 +21,10 @@ from ..query_api import (
     update_user_roles,
     update_user_status,
 )
+
+from .. import get_edgedb_client
+from ..app import router
+from ..dataclasses import PaginatedData, QueryBody
 from ..utils import gen_random_string, get_password_hash
 from .dataclasses import (
     UserDeleteBody,

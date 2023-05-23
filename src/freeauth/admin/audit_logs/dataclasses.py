@@ -1,6 +1,6 @@
 import enum
 
-from ..query_api import AuthAuditStatusCode as SC
+from freeauth.db.auth.auth_qry_async_edgeql import AuthAuditStatusCode as SC
 
 
 class AuthAuditEventType(enum.Enum):

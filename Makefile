@@ -2,6 +2,11 @@ install: extensions/*/pyproject.toml
 	@(cd extensions/freeauth && make install)
 	@poetry install --sync
 	@poetry run pre-commit install
+	@poetry run freeauth-db install 2> /dev/null
+
+extensions/*/pyproject.toml:
+	@git submodule init
+	@git submodule update
 
 lint:
 	@poetry run isort src
@@ -16,25 +21,25 @@ test:
 	@poetry run pytest -s
 
 resetdb:
-	@edgedb query "drop database tmp"
-	@edgedb query "create database tmp"
-	@edgedb -d tmp query "drop database edgedb" "create database edgedb"
-	@edgedb query "drop database tmp"
-	@edgedb restore local_data.dump
+	@edgedb -I FreeAuth query "create database tmp"
+	@edgedb -I FreeAuth -d tmp query "drop database edgedb" "create database edgedb"
+	@edgedb -I FreeAuth query "drop database tmp"
+	@edgedb -I FreeAuth restore local_data.dump
 
 db:
-	@edgedb dump local_data.dump
-	@freeauth-db migration create
+	@edgedb -I FreeAuth dump local_data.dump
+	@poetry run freeauth-db migration create
 
 up:
-	@freeauth-db migration apply
+	@poetry run freeauth-db migration apply
 
 dev: install up
 	@poetry run uvicorn freeauth.admin.asgi:app --reload --host 0.0.0.0 --port 5001
 
 genqlapi:
-	@(cd src/freeauth/admin && poetry run edgedb-py --file query_api.py)
-
-extensions/*/pyproject.toml:
-	@git submodule init
-	@git submodule update
+	@if test -n "$$(find src/freeauth/admin -name '*.edgeql' -type f)"; then \
+		cd src/freeauth/admin && \
+		poetry run edgedb-py -I FreeAuth --file query_api.py; \
+	else \
+	  	echo "No .edgeql files found, skip to generate query API."; \
+	fi

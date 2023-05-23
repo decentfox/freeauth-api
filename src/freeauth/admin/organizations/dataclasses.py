@@ -5,9 +5,10 @@ import uuid
 from pydantic import Field, validator
 from pydantic.dataclasses import dataclass
 
+from freeauth.db.admin.admin_qry_async_edgeql import GetOrganizationNodeResult
+
 from ..dataclasses import FilterItem  # noqa
 from ..dataclasses import BaseModelConfig, QueryBody
-from ..query_api import GetOrganizationNodeResult
 
 
 @dataclass(config=BaseModelConfig)

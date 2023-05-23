@@ -6,10 +6,7 @@ from http import HTTPStatus
 import edgedb
 from fastapi import Depends, HTTPException
 
-from .. import get_edgedb_client
-from ..app import router
-from ..dataclasses import PaginatedData, QueryBody
-from ..query_api import (
+from freeauth.db.admin.admin_qry_async_edgeql import (
     CreatePermissionResult,
     CreateRoleResult,
     DeletePermissionResult,
@@ -25,6 +22,10 @@ from ..query_api import (
     update_permission,
     update_permission_status,
 )
+
+from .. import get_edgedb_client
+from ..app import router
+from ..dataclasses import PaginatedData, QueryBody
 from .dataclasses import (
     BasePermissionBody,
     PermissionDeleteBody,

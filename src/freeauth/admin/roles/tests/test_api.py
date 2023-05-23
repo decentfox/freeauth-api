@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from ...query_api import (
+from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateOrgTypeResult,
     CreateRoleResult,
     CreateUserResult,

@@ -8,9 +8,13 @@ from fastapi.testclient import TestClient
 from jose import jwt
 
 from freeauth.conf.settings import get_settings
+from freeauth.db.auth.auth_qry_async_edgeql import (
+    AuthAuditStatusCode,
+    AuthCodeType,
+    AuthVerifyType,
+)
 
 from ...audit_logs.dataclasses import AuthAuditEventType
-from ...query_api import AuthAuditStatusCode, AuthCodeType, AuthVerifyType
 from ...users.tests.test_api import create_user
 from ...utils import gen_random_string
 

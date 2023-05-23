@@ -11,9 +11,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from freeauth.conf.settings import get_settings
+from freeauth.db.admin.admin_qry_async_edgeql import CreateUserResult
 
 from . import app as freeauth_app
-from .query_api import CreateUserResult
 
 
 @pytest.fixture(scope="session")

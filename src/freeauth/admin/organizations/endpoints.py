@@ -7,10 +7,7 @@ from http import HTTPStatus
 import edgedb
 from fastapi import Depends, HTTPException
 
-from .. import get_edgedb_client
-from ..app import router
-from ..dataclasses import PaginatedData
-from ..query_api import (
+from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateDepartmentResult,
     CreateEnterpriseResult,
     CreateOrgTypeResult,
@@ -36,6 +33,10 @@ from ..query_api import (
     update_org_type,
     update_org_type_status,
 )
+
+from .. import get_edgedb_client
+from ..app import router
+from ..dataclasses import PaginatedData
 from .dataclasses import (
     DepartmentPostOrPutBody,
     EnterprisePostBody,

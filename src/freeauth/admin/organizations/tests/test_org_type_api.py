@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from ...query_api import CreateOrgTypeResult
+from freeauth.db.admin.admin_qry_async_edgeql import CreateOrgTypeResult
 
 
 @pytest.mark.parametrize(
