@@ -4,6 +4,7 @@ source =
 branch = True
 omit =
     .venv/*
+    src/freeauth/admin/asgi.py
     */tests/*
     */conftest.py
 

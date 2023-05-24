@@ -10,6 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from freeauth import db as freeauth_db
 from freeauth.conf.settings import get_settings
 from freeauth.db.admin.admin_qry_async_edgeql import CreateUserResult
 
@@ -42,23 +43,24 @@ def setup_and_teardown():
 async def db(setup_and_teardown, request):
     settings = get_settings()
     reset_db = request.config.getoption("--reset-db")
-    default_cli = edgedb.create_async_client()
+    default_cli = edgedb.create_async_client(database="edgedb")
     databases = await default_cli.query("select {sys::Database.name}")
     exists = settings.edgedb_database in databases
     if reset_db and exists:
-        await default_cli.execute(f"DROP DATABASE {settings.edgedb_database}")
+        await default_cli.execute(f"drop database {settings.edgedb_database}")
     if reset_db or not exists:
         await default_cli.execute(
-            f"CREATE DATABASE {settings.edgedb_database}"
+            f"create database {settings.edgedb_database}"
         )
     await default_cli.aclose()
 
     client = edgedb.create_async_client(database=settings.edgedb_database)
 
     if reset_db or not exists:
-        for file_or_dir in sorted(
-            pathlib.Path("dbschema/migrations").iterdir()
-        ):
+        schema_path = pathlib.Path(freeauth_db.__file__).parent.joinpath(
+            "dbschema", "migrations"
+        )
+        for file_or_dir in sorted(schema_path.iterdir()):
             with file_or_dir.open() as f:
                 query = f.read()
             await client.execute(query)

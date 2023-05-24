@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "freeauth"
+name = "freeauth-admin"
 version = "0.1.0"
 description = ""
 authors = ["DecentFoX Studio <service@decentfox.com>"]
@@ -9,6 +9,14 @@ packages = [{ include = "freeauth", from = "src" }]
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
 edgedb = "^1.3.0"
+fastapi = "^0.95.0"
+uvicorn = "^0.21.1"
+httpx = "^0.23.3"
+pydantic = {extras = ["dotenv", "email"], version = "^1.10.7"}
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+user-agents = "^2.2.0"
+freeauth = {path = "../", develop = true}
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
@@ -20,7 +28,9 @@ pytest-cov = "^4.0.0"
 pytest-asyncio = "^0.21.0"
 pre-commit = "^3.2.2"
 pytest-mock = "^3.10.0"
+types-passlib = "^1.7.7.11"
 faker = "^18.4.0"
+types-python-jose = "^3.3.4.7"
 
 [build-system]
 requires = ["poetry-core"]
@@ -30,26 +40,19 @@ build-backend = "poetry.core.masonry.api"
 profile = "black"
 atomic = true
 line_length = 79
-extend_skip_glob = ["*_edgeql.py"]
+known_first_party = ["freeauth"]
 
 [tool.black]
 line_length = 79
 preview = true
-extend-exclude = "_edgeql\\.py$"
 
 [tool.mypy]
 allow_redefinition = true
 pretty = true
-explicit_package_bases = true
-mypy_path = "src"
-exclude = [".*_edgeql.py"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-addopts = "-ra -x --ff --cov-report=term-missing:skip-covered --cov=src/freeauth/conf --cov=src/freeauth/db"
+addopts = "-ra -x --ff --cov-report=term-missing:skip-covered --cov=src/freeauth/admin"
 testpaths = [
-    "tests",
+    "src"
 ]
-
-[tool.poetry.scripts]
-freeauth-db = "freeauth.db.cli:main"

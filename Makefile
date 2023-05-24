@@ -1,22 +1,21 @@
 install:
-	@git submodule init
-	@git submodule update
-	@(cd extensions/freeauth && make install)
-	@poetry install --sync
+	@poetry install
+	@(cd freeauth-admin && poetry install)
 	@poetry run pre-commit install
 	@poetry run freeauth-db install 2> /dev/null
 
 lint:
-	@poetry run isort src
-	@poetry run black src
-	@poetry run flake8 src
-	@poetry run mypy src
+	@poetry run isort .
+	@poetry run black .
+	@poetry run flake8 .
+	@poetry run mypy .
 
 testdb:
-	@poetry run pytest --reset-db
+	@(cd freeauth-admin && poetry run pytest --reset-db)
 
 test:
 	@poetry run pytest -s
+	@(cd freeauth-admin && poetry run pytest -s)
 
 resetdb:
 	@edgedb -I FreeAuth query "create database tmp"
@@ -35,9 +34,9 @@ dev: install up
 	@poetry run uvicorn freeauth.admin.asgi:app --reload --host 0.0.0.0 --port 5001
 
 genqlapi:
-	@if test -n "$$(find src/freeauth/admin -name '*.edgeql' -type f)"; then \
-		cd src/freeauth/admin && \
-		poetry run edgedb-py -I FreeAuth --file query_api.py; \
-	else \
-	  	echo "No .edgeql files found, skip to generate query API."; \
-	fi
+	@(cd src/freeauth/db/admin && \
+	poetry run edgedb-py -I FreeAuth --target async --file admin_qry_async_edgeql.py && \
+	poetry run edgedb-py -I FreeAuth --target blocking --file admin_qry_edgeql.py)
+	@(cd src/freeauth/db/auth && \
+	poetry run edgedb-py -I FreeAuth --target async --file auth_qry_async_edgeql.py && \
+	poetry run edgedb-py -I FreeAuth --target blocking --file auth_qry_edgeql.py)

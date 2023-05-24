@@ -1,3 +1,0 @@
-[submodule "extensions/freeauth"]
-	path = extensions/freeauth
-	url = git@github.com:decentfox/freeauth.git
