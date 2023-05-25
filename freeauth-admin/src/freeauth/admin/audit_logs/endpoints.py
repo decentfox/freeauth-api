@@ -55,6 +55,7 @@ async def query_audit_logs(
                     event_type,
                     user: {{
                         id,
+                        name,
                         username,
                         email,
                         mobile,

@@ -33,15 +33,10 @@ class BasePermissionBody:
         title="所属应用",
         description="所属应用 ID",
     )
-    new_tags: list[str] = Field(
+    tags: list[str] = Field(
         None,
-        title="关联新建标签",
-        description="新建标签名称列表",
-    )
-    existing_tag_ids: list[uuid.UUID] = Field(
-        None,
-        title="关联已有标签",
-        description="已有标签 ID 列表",
+        title="关联标签",
+        description="关联标签 ID 或名称列表",
     )
 
     @validator("code", pre=True)

@@ -57,8 +57,7 @@ async def post_permission(
             code=body.code,
             description=body.description,
             application_id=body.application_id,
-            new_tags=body.new_tags,
-            existing_tag_ids=body.existing_tag_ids,
+            tags=body.tags,
         )
     except edgedb.errors.ConstraintViolationError:
         raise HTTPException(
@@ -130,22 +129,17 @@ async def put_permission(
     body: PermissionPutBody,
     id_or_code: uuid.UUID | str = Depends(parse_permission_id_or_code),
     client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> GetPermissionByIdOrCodeResult:
+) -> CreatePermissionResult:
     try:
-        permission: GetPermissionByIdOrCodeResult | None = (
-            await update_permission(
-                client,
-                name=body.name,
-                code=body.code,
-                description=body.description,
-                new_tags=body.new_tags,
-                existing_tag_ids=body.existing_tag_ids,
-                is_deleted=body.is_deleted,
-                id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
-                current_code=(
-                    id_or_code if isinstance(id_or_code, str) else None
-                ),
-            )
+        permission: CreatePermissionResult | None = await update_permission(
+            client,
+            name=body.name,
+            code=body.code,
+            description=body.description,
+            tags=body.tags,
+            is_deleted=body.is_deleted,
+            id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
+            current_code=(id_or_code if isinstance(id_or_code, str) else None),
         )
         if not permission:
             raise HTTPException(

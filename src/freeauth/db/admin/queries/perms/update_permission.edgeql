@@ -9,25 +9,24 @@ with
             (.code_upper ?= str_upper(current_code)) ??
             false
     )),
-    new_tags := (
-        for item in array_unpack(<array<str>>$new_tags) union (
-            insert Tag {
-                name := item,
-                tag_type := TagType.Permission
-            }
-        )
-    ),
-    existing_tags := (
-        select Tag
-        filter .id in array_unpack(<array<uuid>>$existing_tag_ids)
-    )
+    tags := <optional array<str>>$tags
 select (
     update permission
     set {
         name := <str>$name,
         code := <str>$code,
         description := <optional str>$description,
-        tags := new_tags union existing_tags,
+        tags :=  (
+            for item in array_unpack(tags) union (
+                insert Tag {
+                    name := item,
+                    tag_type := TagType.Permission
+                } unless conflict on .name
+                else (
+                    select Tag filter .name = item and .tag_type = TagType.Permission
+                )
+            )
+        ),
         deleted_at := (
             .deleted_at IF NOT EXISTS is_deleted ELSE
             datetime_of_transaction() IF is_deleted ELSE {}
@@ -37,16 +36,9 @@ select (
     name,
     code,
     description,
-    roles: {
-        id,
-        name,
-        code,
-        description,
-        is_deleted,
-        created_at
-    },
+    roles: { name },
     application: { name },
-    tags: { id, name },
+    tags: { name },
     is_deleted,
     created_at
 };

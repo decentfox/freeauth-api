@@ -123,6 +123,7 @@ class CreatePermissionResult(NoPydanticValidation):
     name: str
     code: str
     description: str | None
+    roles: list[CreatePermissionResultRolesItem]
     application: CreatePermissionResultApplication
     tags: list[CreatePermissionResultTagsItem]
     is_deleted: bool
@@ -131,6 +132,12 @@ class CreatePermissionResult(NoPydanticValidation):
 
 @dataclasses.dataclass
 class CreatePermissionResultApplication(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+
+
+@dataclasses.dataclass
+class CreatePermissionResultRolesItem(NoPydanticValidation):
     id: uuid.UUID
     name: str
 
@@ -239,10 +246,16 @@ class GetPermissionByIdOrCodeResult(NoPydanticValidation):
     code: str
     description: str | None
     roles: list[GetPermissionByIdOrCodeResultRolesItem]
-    application: CreatePermissionResultApplication
+    application: GetPermissionByIdOrCodeResultApplication
     tags: list[GetPermissionByIdOrCodeResultTagsItem]
     is_deleted: bool
     created_at: datetime.datetime
+
+
+@dataclasses.dataclass
+class GetPermissionByIdOrCodeResultApplication(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
 
 
 @dataclasses.dataclass
@@ -514,8 +527,7 @@ async def create_permission(
     code: str,
     description: str | None,
     application_id: uuid.UUID,
-    new_tags: list[str],
-    existing_tag_ids: list[uuid.UUID],
+    tags: list[str] | None,
 ) -> CreatePermissionResult:
     return await executor.query_single(
         """\
@@ -524,18 +536,7 @@ async def create_permission(
             code := <str>$code,
             description := <optional str>$description,
             application_id := <uuid>$application_id,
-            new_tags := (
-                for item in array_unpack(<array<str>>$new_tags) union (
-                    insert Tag {
-                        name := item,
-                        tag_type := TagType.Permission
-                    }
-                )
-            ),
-            existing_tags := (
-                select Tag
-                filter .id in array_unpack(<array<uuid>>$existing_tag_ids)
-            )
+            tags := <optional array<str>>$tags
         select (
             insert Permission {
                 name := name,
@@ -546,12 +547,23 @@ async def create_permission(
                         .id = application_id
                     )
                 ),
-                tags := new_tags union existing_tags
+                tags :=  (
+                    for item in array_unpack(tags) union (
+                        insert Tag {
+                            name := item,
+                            tag_type := TagType.Permission
+                        } unless conflict on .name
+                        else (
+                            select Tag filter .name = item and .tag_type = TagType.Permission
+                        )
+                    )
+                )
             }
         ) {
             name,
             code,
             description,
+            roles: { name },
             application: { name },
             tags: { name },
             is_deleted,
@@ -562,8 +574,7 @@ async def create_permission(
         code=code,
         description=description,
         application_id=application_id,
-        new_tags=new_tags,
-        existing_tag_ids=existing_tag_ids,
+        tags=tags,
     )
 
 
@@ -931,7 +942,7 @@ async def get_permission_by_id_or_code(
                         is_deleted,
                         created_at
                     },
-                    application: { name },
+                    application: { id, name },
                     tags: { id, name },
                     is_deleted,
                     created_at
@@ -1584,12 +1595,11 @@ async def update_permission(
     id: uuid.UUID | None,
     current_code: str | None,
     is_deleted: bool | None,
-    new_tags: list[str],
-    existing_tag_ids: list[uuid.UUID],
+    tags: list[str] | None,
     name: str,
     code: str,
     description: str | None,
-) -> GetPermissionByIdOrCodeResult | None:
+) -> CreatePermissionResult | None:
     return await executor.query_single(
         """\
         with
@@ -1603,25 +1613,24 @@ async def update_permission(
                     (.code_upper ?= str_upper(current_code)) ??
                     false
             )),
-            new_tags := (
-                for item in array_unpack(<array<str>>$new_tags) union (
-                    insert Tag {
-                        name := item,
-                        tag_type := TagType.Permission
-                    }
-                )
-            ),
-            existing_tags := (
-                select Tag
-                filter .id in array_unpack(<array<uuid>>$existing_tag_ids)
-            )
+            tags := <optional array<str>>$tags
         select (
             update permission
             set {
                 name := <str>$name,
                 code := <str>$code,
                 description := <optional str>$description,
-                tags := new_tags union existing_tags,
+                tags :=  (
+                    for item in array_unpack(tags) union (
+                        insert Tag {
+                            name := item,
+                            tag_type := TagType.Permission
+                        } unless conflict on .name
+                        else (
+                            select Tag filter .name = item and .tag_type = TagType.Permission
+                        )
+                    )
+                ),
                 deleted_at := (
                     .deleted_at IF NOT EXISTS is_deleted ELSE
                     datetime_of_transaction() IF is_deleted ELSE {}
@@ -1631,16 +1640,9 @@ async def update_permission(
             name,
             code,
             description,
-            roles: {
-                id,
-                name,
-                code,
-                description,
-                is_deleted,
-                created_at
-            },
+            roles: { name },
             application: { name },
-            tags: { id, name },
+            tags: { name },
             is_deleted,
             created_at
         };\
@@ -1648,8 +1650,7 @@ async def update_permission(
         id=id,
         current_code=current_code,
         is_deleted=is_deleted,
-        new_tags=new_tags,
-        existing_tag_ids=existing_tag_ids,
+        tags=tags,
         name=name,
         code=code,
         description=description,
