@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import edgedb
-from fastapi import Depends
-
-from .. import get_edgedb_client
-from ..app import router
+from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
 
 FILTER_TYPE_MAPPING = {
@@ -22,10 +18,9 @@ FILTER_TYPE_MAPPING = {
 )
 async def query_audit_logs(
     body: QueryBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
     filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
         WITH
             page := <optional int64>$page ?? 1,

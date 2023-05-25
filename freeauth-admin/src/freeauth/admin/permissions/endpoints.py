@@ -23,8 +23,7 @@ from freeauth.db.admin.admin_qry_async_edgeql import (
     update_permission_status,
 )
 
-from .. import get_edgedb_client
-from ..app import router
+from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
 from .dataclasses import (
     BasePermissionBody,
@@ -48,11 +47,10 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
 )
 async def post_permission(
     body: BasePermissionBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreatePermissionResult:
     try:
         permission = await create_permission(
-            client,
+            auth_app.db,
             name=body.name,
             code=body.code,
             description=body.description,
@@ -75,10 +73,9 @@ async def post_permission(
 )
 async def toggle_permissions_status(
     body: PermissionStatusBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[UpdatePermissionStatusResult]:
     return await update_permission_status(
-        client, ids=body.ids, is_deleted=body.is_deleted
+        auth_app.db, ids=body.ids, is_deleted=body.is_deleted
     )
 
 
@@ -90,9 +87,8 @@ async def toggle_permissions_status(
 )
 async def delete_permissions(
     body: PermissionDeleteBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[DeletePermissionResult]:
-    return await delete_permission(client, ids=body.ids)
+    return await delete_permission(auth_app.db, ids=body.ids)
 
 
 @router.get(
@@ -103,11 +99,10 @@ async def delete_permissions(
 )
 async def get_permission(
     id_or_code: uuid.UUID | str = Depends(parse_permission_id_or_code),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> GetPermissionByIdOrCodeResult:
     permission: GetPermissionByIdOrCodeResult | None = (
         await get_permission_by_id_or_code(
-            client,
+            auth_app.db,
             id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
             code=id_or_code if isinstance(id_or_code, str) else None,
         )
@@ -128,11 +123,10 @@ async def get_permission(
 async def put_permission(
     body: PermissionPutBody,
     id_or_code: uuid.UUID | str = Depends(parse_permission_id_or_code),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreatePermissionResult:
     try:
         permission: CreatePermissionResult | None = await update_permission(
-            client,
+            auth_app.db,
             name=body.name,
             code=body.code,
             description=body.description,
@@ -161,10 +155,9 @@ async def put_permission(
 )
 async def get_permissions(
     body: PermissionQueryBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
     filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
             WITH
                 page := <optional int64>$page ?? 1,
@@ -223,10 +216,11 @@ async def get_permissions(
 )
 async def bind_roles_to_perm(
     body: PermRoleBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[CreateRoleResult]:
     return await perm_bind_roles(
-        client, permission_ids=body.permission_ids, role_ids=body.role_ids
+        auth_app.db,
+        permission_ids=body.permission_ids,
+        role_ids=body.role_ids,
     )
 
 
@@ -238,10 +232,11 @@ async def bind_roles_to_perm(
 )
 async def unbind_roles_to_perm(
     body: PermRoleBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[CreateRoleResult]:
     return await perm_unbind_roles(
-        client, permission_ids=body.permission_ids, role_ids=body.role_ids
+        auth_app.db,
+        permission_ids=body.permission_ids,
+        role_ids=body.role_ids,
     )
 
 
@@ -254,9 +249,8 @@ async def unbind_roles_to_perm(
 async def get_roles_in_permission(
     body: QueryBody,
     permission_id: uuid.UUID,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
             WITH
                 page := <optional int64>$page ?? 1,
@@ -317,9 +311,8 @@ async def get_roles_in_permission(
 async def get_users_in_permission(
     body: QueryBody,
     permission_id: uuid.UUID,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
             WITH
                 page := <optional int64>$page ?? 1,
@@ -384,10 +377,10 @@ async def get_users_in_permission(
     summary="获取权限标签",
     description="获取指定权限的所有标签",
 )
-async def get_permission_tags(
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> dict[str, list[GetPermissionByIdOrCodeResultTagsItem]]:
+async def get_permission_tags() -> (
+    dict[str, list[GetPermissionByIdOrCodeResultTagsItem]]
+):
     permission_tags: list[GetPermissionByIdOrCodeResultTagsItem] = (
-        await query_permission_tags(client)
+        await query_permission_tags(auth_app.db)
     )
     return {"permission_tags": permission_tags}

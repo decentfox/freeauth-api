@@ -5,7 +5,7 @@ from http import HTTPStatus
 from typing import List
 
 import edgedb
-from fastapi import Depends, HTTPException
+from fastapi import HTTPException
 
 from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateUserResult,
@@ -22,8 +22,7 @@ from freeauth.db.admin.admin_qry_async_edgeql import (
     update_user_status,
 )
 
-from .. import get_edgedb_client
-from ..app import router
+from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
 from ..utils import gen_random_string, get_password_hash
 from .dataclasses import (
@@ -53,7 +52,6 @@ FILTER_TYPE_MAPPING = {
 )
 async def post_user(
     user: UserPostBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateUserResult:
     username: str | None = user.username
     if not username:
@@ -61,7 +59,7 @@ async def post_user(
     password: str = user.password or gen_random_string(12, secret=True)
     try:
         created_user = await create_user(
-            client,
+            auth_app.db,
             name=user.name or username,
             username=username,
             email=user.email,
@@ -87,12 +85,11 @@ async def post_user(
 )
 async def toggle_user_status(
     body: UserStatusBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ):
     user_ids: List[uuid.UUID] = body.user_ids
     is_deleted: bool = body.is_deleted
     updated_users: List[UpdateUserStatusResult] = await update_user_status(
-        client, user_ids=user_ids, is_deleted=is_deleted
+        auth_app.db, user_ids=user_ids, is_deleted=is_deleted
     )
     return {"users": updated_users}
 
@@ -102,11 +99,10 @@ async def toggle_user_status(
 )
 async def delete_users(
     body: UserDeleteBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ):
     user_ids: List[uuid.UUID] = body.user_ids
     deleted_users: List[DeleteUserResult] = await delete_user(
-        client, user_ids=user_ids
+        auth_app.db, user_ids=user_ids
     )
     return {"users": deleted_users}
 
@@ -120,11 +116,10 @@ async def delete_users(
 async def put_user(
     user_id: uuid.UUID,
     user: UserPutBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateUserResult:
     try:
         updated_user: CreateUserResult | None = await update_user(
-            client,
+            auth_app.db,
             name=user.name,
             username=user.username,
             email=user.email,
@@ -153,10 +148,9 @@ async def put_user(
 async def update_member_organizations(
     user_id: uuid.UUID,
     body: UserOrganizationBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateUserResult | None:
     user: CreateUserResult | None = await update_user_organization(
-        client,
+        auth_app.db,
         id=user_id,
         organization_ids=body.organization_ids,
         org_type_id=body.org_type_id,
@@ -177,10 +171,9 @@ async def update_member_organizations(
 async def update_member_roles(
     user_id: uuid.UUID,
     body: UserRoleBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateUserResult | None:
     user: CreateUserResult | None = await update_user_roles(
-        client, id=user_id, role_ids=body.role_ids
+        auth_app.db, id=user_id, role_ids=body.role_ids
     )
     if not user:
         raise HTTPException(
@@ -197,11 +190,12 @@ async def update_member_roles(
 )
 async def resign_users(
     body: UserResignationBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[DeleteUserResult]:
     user_ids: List[uuid.UUID] = body.user_ids
     is_deleted: bool | None = body.is_deleted
-    return await resign_user(client, user_ids=user_ids, is_deleted=is_deleted)
+    return await resign_user(
+        auth_app.db, user_ids=user_ids, is_deleted=is_deleted
+    )
 
 
 @router.get(
@@ -212,9 +206,10 @@ async def resign_users(
 )
 async def get_user(
     user_id: uuid.UUID,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> GetUserByIdResult:
-    user: GetUserByIdResult | None = await get_user_by_id(client, id=user_id)
+    user: GetUserByIdResult | None = await get_user_by_id(
+        auth_app.db, id=user_id
+    )
     if not user:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
@@ -230,10 +225,9 @@ async def get_user(
 )
 async def query_users(
     body: UserQueryBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
     filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
         WITH
             page := <optional int64>$page ?? 1,
@@ -309,9 +303,8 @@ async def query_users(
 async def get_permissions_in_user(
     body: QueryBody,
     user_id: uuid.UUID,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
         with
             page := <optional int64>$page ?? 1,

@@ -13,8 +13,7 @@ from fastapi.testclient import TestClient
 from freeauth import db as freeauth_db
 from freeauth.conf.settings import get_settings
 from freeauth.db.admin.admin_qry_async_edgeql import CreateUserResult
-
-from . import app as freeauth_app
+from freeauth.ext.fastapi import FreeAuthTestApp
 
 
 @pytest.fixture(scope="session")
@@ -86,8 +85,10 @@ async def edgedb_client(db) -> AsyncGenerator[edgedb.AsyncIOClient, None]:
 
 @pytest.fixture
 def app(mocker) -> FastAPI:
-    mocker.patch.object(freeauth_app, "setup_edgedb", tx_setup_edgedb)
-    mocker.patch.object(freeauth_app, "shutdown_edgedb", tx_setup_edgedb)
+    mocker.patch("freeauth.ext.fastapi.FreeAuthApp", FreeAuthTestApp)
+
+    from . import app as freeauth_app
+
     return freeauth_app.get_app()
 
 
@@ -105,27 +106,6 @@ def test_client(app):
         },
     ) as client:
         yield client
-
-
-async def tx_setup_edgedb(app):
-    settings = get_settings()
-    client = app.state.edgedb_client = edgedb.create_async_client(
-        database=settings.edgedb_database
-    )
-    await client.ensure_connected()
-    async for tx in client.with_retry_options(
-        edgedb.RetryOptions(0)
-    ).transaction():
-        await tx.__aenter__()
-        app.state.edgedb = tx
-        break
-
-
-async def tx_shutdown_edgedb(app):
-    client, app.state.edgedb_client = app.state.edgedb_client, None
-    tx, app.state.edgedb = app.state.edgedb, None
-    await tx.__aexit__(Exception, Exception(), None)
-    await client.aclose()
 
 
 @pytest.fixture(scope="session", autouse=True)

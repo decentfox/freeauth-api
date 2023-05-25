@@ -1,21 +1,31 @@
 install:
 	@poetry install
-	@(cd freeauth-admin && poetry install)
 	@poetry run pre-commit install
 	@poetry run freeauth-db install 2> /dev/null
+	@(source $$(poetry env info --path)/bin/activate && \
+	cd freeauth-admin && \
+	poetry install)
 
 lint:
-	@poetry run isort .
-	@poetry run black .
-	@poetry run flake8 .
-	@poetry run mypy .
+	@poetry run isort src tests
+	@poetry run black src tests
+	@poetry run flake8 src tests
+	@poetry run mypy src tests
+	@(source $$(poetry env info --path)/bin/activate && \
+	cd freeauth-ext/fastapi-ext && make lint)
+	@(source $$(poetry env info --path)/bin/activate && \
+	cd freeauth-admin && make lint)
 
 testdb:
-	@(cd freeauth-admin && poetry run pytest --reset-db)
+	@(source $$(poetry env info --path)/bin/activate && \
+	cd freeauth-admin && make testdb)
 
 test:
-	@poetry run pytest -s
-	@(cd freeauth-admin && poetry run pytest -s)
+	@poetry run pytest
+	@(source $$(poetry env info --path)/bin/activate && \
+	cd freeauth-ext/fastapi-ext && make test)
+	@(source $$(poetry env info --path)/bin/activate && \
+	cd freeauth-admin && make test)
 
 resetdb:
 	@edgedb -I FreeAuth query "create database tmp"
@@ -31,7 +41,9 @@ up:
 	@poetry run freeauth-db migration apply
 
 dev: install up
-	@poetry run uvicorn freeauth.admin.asgi:app --reload --host 0.0.0.0 --port 5001
+	@(source $$(poetry env info --path)/bin/activate && \
+	cd freeauth-admin && \
+	poetry run uvicorn freeauth.admin.asgi:app --reload --host 0.0.0.0 --port 5001)
 
 genqlapi:
 	@(cd src/freeauth/db/admin && \

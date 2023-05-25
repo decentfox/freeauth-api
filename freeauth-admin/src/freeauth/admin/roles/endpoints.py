@@ -20,8 +20,7 @@ from freeauth.db.admin.admin_qry_async_edgeql import (
     update_role_status,
 )
 
-from .. import get_edgedb_client
-from ..app import router
+from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
 from .dataclasses import (
     RoleDeleteBody,
@@ -45,11 +44,10 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
 )
 async def post_role(
     body: RolePostBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateRoleResult:
     try:
         role = await create_role(
-            client,
+            auth_app.db,
             name=body.name,
             code=body.code,
             description=body.description,
@@ -71,10 +69,9 @@ async def post_role(
 )
 async def toggle_roles_status(
     body: RoleStatusBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[UpdateRoleStatusResult]:
     return await update_role_status(
-        client, ids=body.ids, is_deleted=body.is_deleted
+        auth_app.db, ids=body.ids, is_deleted=body.is_deleted
     )
 
 
@@ -86,9 +83,8 @@ async def toggle_roles_status(
 )
 async def delete_roles(
     body: RoleDeleteBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[DeleteRoleResult]:
-    return await delete_role(client, ids=body.ids)
+    return await delete_role(auth_app.db, ids=body.ids)
 
 
 @router.get(
@@ -99,10 +95,9 @@ async def delete_roles(
 )
 async def get_role(
     id_or_code: uuid.UUID | str = Depends(parse_role_id_or_code),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateRoleResult:
     role: CreateRoleResult | None = await get_role_by_id_or_code(
-        client,
+        auth_app.db,
         id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
         code=id_or_code if isinstance(id_or_code, str) else None,
     )
@@ -122,11 +117,10 @@ async def get_role(
 async def put_role(
     body: RolePutBody,
     id_or_code: uuid.UUID | str = Depends(parse_role_id_or_code),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateRoleResult:
     try:
         role: CreateRoleResult | None = await update_role(
-            client,
+            auth_app.db,
             name=body.name,
             code=body.code,
             description=body.description,
@@ -154,10 +148,9 @@ async def put_role(
 )
 async def get_roles(
     body: RoleQueryBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
     filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
             WITH
                 page := <optional int64>$page ?? 1,
@@ -235,9 +228,8 @@ async def get_roles(
 async def get_users_in_role(
     body: QueryBody,
     role_id: uuid.UUID,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
             WITH
                 page := <optional int64>$page ?? 1,
@@ -305,10 +297,9 @@ async def get_users_in_role(
 )
 async def bind_users_to_roles(
     body: RoleUserBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[CreateUserResult]:
     return await role_bind_users(
-        client, user_ids=body.user_ids, role_ids=body.role_ids
+        auth_app.db, user_ids=body.user_ids, role_ids=body.role_ids
     )
 
 
@@ -320,8 +311,7 @@ async def bind_users_to_roles(
 )
 async def unbind_roles_from_users(
     body: RoleUserBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[CreateUserResult]:
     return await role_unbind_users(
-        client, user_ids=body.user_ids, role_ids=body.role_ids
+        auth_app.db, user_ids=body.user_ids, role_ids=body.role_ids
     )

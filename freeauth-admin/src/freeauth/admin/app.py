@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import functools
 from typing import Dict, Union, cast
 
-import edgedb
 from fastapi import APIRouter, FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -15,20 +13,13 @@ from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from freeauth.conf.settings import get_settings
+from freeauth.ext.fastapi import FreeAuthApp
 
 from .log import configure_logging
 
 router = APIRouter(prefix="/v1")
 
-
-async def setup_edgedb(app):
-    client = app.state.edgedb = edgedb.create_async_client()
-    await client.ensure_connected()
-
-
-async def shutdown_edgedb(app):
-    client, app.state.edgedb = app.state.edgedb, None
-    await client.aclose()
+auth_app = FreeAuthApp()
 
 
 async def http_exception_accept_handler(
@@ -85,8 +76,7 @@ def get_app():
     )
     configure_logging(app)
 
-    app.on_event("startup")(functools.partial(setup_edgedb, app))
-    app.on_event("shutdown")(functools.partial(shutdown_edgedb, app))
+    auth_app.init_app(app)
 
     @app.get("/ping", include_in_schema=False)
     async def health_check() -> dict[str, str]:

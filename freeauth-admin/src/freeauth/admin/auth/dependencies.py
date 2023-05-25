@@ -4,7 +4,7 @@ import re
 from http import HTTPStatus
 
 import edgedb
-from fastapi import Depends, HTTPException, Request
+from fastapi import HTTPException, Request
 from user_agents import parse as ua_parse  # type: ignore
 
 from freeauth.db.auth.auth_qry_async_edgeql import (
@@ -13,7 +13,7 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     get_user_by_account,
 )
 
-from .. import get_edgedb_client
+from ..app import auth_app
 from ..settings import get_login_settings
 from ..utils import MOBILE_REGEX
 from .dataclasses import (
@@ -62,10 +62,9 @@ async def verify_signup_account(
 
 async def verify_new_account_when_send_code(
     body: SignUpSendCodeBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ):
     login_settings = get_login_settings()
-    signup_modes = await login_settings.get("signup_modes", client)
+    signup_modes = await login_settings.get("signup_modes", auth_app.db)
     if not signup_modes:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -82,7 +81,7 @@ async def verify_new_account_when_send_code(
             detail={"code_type": "不支持邮箱和验证码注册"},
         )
     await verify_signup_account(
-        client,
+        auth_app.db,
         mobile=body.account if body.code_type == AuthCodeType.SMS else None,
         email=body.account if body.code_type == AuthCodeType.EMAIL else None,
     )
@@ -90,10 +89,9 @@ async def verify_new_account_when_send_code(
 
 async def verify_account_when_sign_up(
     body: SignUpBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ):
     await verify_signup_account(
-        client,
+        auth_app.db,
         mobile=body.account if body.code_type == AuthCodeType.SMS else None,
         email=body.account if body.code_type == AuthCodeType.EMAIL else None,
     )
@@ -123,10 +121,11 @@ async def get_signin_account(
 
 async def verify_account_when_send_code(
     body: SignInSendCodeBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> GetUserByAccountResult:
     login_settings = get_login_settings()
-    code_signin_modes = await login_settings.get("code_signin_modes", client)
+    code_signin_modes = await login_settings.get(
+        "code_signin_modes", auth_app.db
+    )
     if not code_signin_modes:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -145,7 +144,7 @@ async def verify_account_when_send_code(
             detail={"account": "不支持邮箱和验证码登录"},
         )
     return await get_signin_account(
-        client,
+        auth_app.db,
         mobile=body.account if is_sms else None,
         email=body.account if not is_sms else None,
     )
@@ -153,11 +152,10 @@ async def verify_account_when_send_code(
 
 async def verify_account_when_sign_in_with_code(
     body: SignInCodeBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> GetUserByAccountResult:
     is_sms = re.match(MOBILE_REGEX, body.account)
     return await get_signin_account(
-        client,
+        auth_app.db,
         mobile=body.account if is_sms else None,
         email=body.account if not is_sms else None,
     )

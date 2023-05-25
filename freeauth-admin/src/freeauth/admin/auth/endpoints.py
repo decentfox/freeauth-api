@@ -7,7 +7,6 @@ import uuid
 from datetime import datetime, timedelta
 from http import HTTPStatus
 
-import edgedb
 from fastapi import Depends, HTTPException, Response
 from jose import jwt
 
@@ -31,10 +30,9 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     validate_pwd,
 )
 
-from .. import get_edgedb_client, logger
-from ..app import router
+from .. import logger
+from ..app import auth_app, router
 from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
-from ..dependencies import get_access_token, require_user
 from ..settings import get_login_settings
 from ..utils import (
     MOBILE_REGEX,
@@ -59,7 +57,6 @@ from .dependencies import (
 
 
 async def send_auth_code(
-    client: edgedb.AsyncIOClient,
     account: str,
     verify_type: AuthVerifyType,
     ttl: int | None,
@@ -84,7 +81,7 @@ async def send_auth_code(
         code_type.value,
     )
     rv = await send_code(
-        client,
+        auth_app.db,
         account=account,
         code_type=code_type.value,  # type: ignore
         verify_type=verify_type.value,  # type: ignore
@@ -104,7 +101,6 @@ async def send_auth_code(
 
 
 async def validate_auth_code(
-    client: edgedb.AsyncIOClient,
     account: str,
     verify_type: AuthVerifyType,
     code: str,
@@ -116,7 +112,7 @@ async def validate_auth_code(
     if re.match(MOBILE_REGEX, account):
         code_type = AuthCodeType.SMS
     rv: ValidateCodeResult = await validate_code(
-        client,
+        auth_app.db,
         account=account,
         code_type=code_type.value,  # type: ignore
         verify_type=verify_type.value,  # type: ignore
@@ -127,7 +123,7 @@ async def validate_auth_code(
     if status_code != AuthAuditStatusCode.OK:
         if user:
             await create_audit_log(
-                client,
+                auth_app.db,
                 user_id=user.id,
                 client_info=json.dumps(client_info),
                 status_code=status_code.value,  # type: ignore
@@ -139,13 +135,11 @@ async def validate_auth_code(
         )
 
 
-async def create_access_token(
-    client: edgedb.AsyncIOClient, response: Response, user_id: uuid.UUID
-) -> str:
+async def create_access_token(response: Response, user_id: uuid.UUID) -> str:
     now = datetime.utcnow()
     settings = get_settings()
     login_settings = get_login_settings()
-    jwt_token_ttl = await login_settings.get("jwt_token_ttl", client)
+    jwt_token_ttl = await login_settings.get("jwt_token_ttl", auth_app.db)
     payload = {
         "sub": str(user_id),
         "exp": now + timedelta(
@@ -175,12 +169,10 @@ async def create_access_token(
 )
 async def send_signup_code(
     body: SignUpSendCodeBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> SendCodeResult:
-    settings = await get_login_settings().get_all(client)
+    settings = await get_login_settings().get_all(auth_app.db)
     sending_limit_enabled = settings["signup_code_sending_limit_enabled"]
     return await send_auth_code(
-        client,
         account=body.account,
         verify_type=AuthVerifyType.SIGNUP,
         ttl=(
@@ -211,12 +203,10 @@ async def send_signup_code(
 async def sign_up_with_code(
     body: SignUpBody,
     response: Response,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     client_info: dict = Depends(get_client_info),
 ) -> GetUserByAccessTokenResult | None:
-    settings = await get_login_settings().get_all(client)
+    settings = await get_login_settings().get_all(auth_app.db)
     await validate_auth_code(
-        client,
         account=body.account,
         verify_type=AuthVerifyType.SIGNUP,
         code=body.code,
@@ -233,7 +223,7 @@ async def sign_up_with_code(
     password: str = gen_random_string(12, secret=True)
     client_info: str = json.dumps(client_info)
     user = await sign_up(
-        client,
+        auth_app.db,
         name=username,
         username=username,
         mobile=body.account if code_type == AuthCodeType.SMS else None,
@@ -241,9 +231,9 @@ async def sign_up_with_code(
         hashed_password=get_password_hash(password),
         client_info=client_info,
     )
-    token = await create_access_token(client, response, user.id)
+    token = await create_access_token(response, user.id)
     return await sign_in(
-        client,
+        auth_app.db,
         id=user.id,
         access_token=token,
         client_info=client_info,
@@ -259,12 +249,10 @@ async def sign_up_with_code(
 )
 async def send_signin_code(
     body: SignInSendCodeBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> SendCodeResult:
-    settings = await get_login_settings().get_all(client)
+    settings = await get_login_settings().get_all(auth_app.db)
     sending_limit_enabled = settings["signin_code_sending_limit_enabled"]
     return await send_auth_code(
-        client,
         account=body.account,
         verify_type=AuthVerifyType.SIGNIN,
         ttl=(
@@ -294,15 +282,13 @@ async def send_signin_code(
 async def sign_in_with_code(
     body: SignInCodeBody,
     response: Response,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     user: GetUserByAccountResult = Depends(
         verify_account_when_sign_in_with_code
     ),
     client_info: dict = Depends(get_client_info),
 ) -> GetUserByAccessTokenResult | None:
-    settings = await get_login_settings().get_all(client)
+    settings = await get_login_settings().get_all(auth_app.db)
     await validate_auth_code(
-        client,
         account=body.account,
         verify_type=AuthVerifyType.SIGNIN,
         code=body.code,
@@ -314,9 +300,9 @@ async def sign_in_with_code(
         user=user,
         client_info=client_info,
     )
-    token = await create_access_token(client, response, user.id)
+    token = await create_access_token(response, user.id)
     return await sign_in(
-        client,
+        auth_app.db,
         id=user.id,
         access_token=token,
         client_info=json.dumps(client_info),
@@ -332,10 +318,9 @@ async def sign_in_with_code(
 async def sign_in_with_pwd(
     body: SignInPwdBody,
     response: Response,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
     client_info: dict = Depends(get_client_info),
 ) -> GetUserByAccessTokenResult | None:
-    settings = await get_login_settings().get_all(client)
+    settings = await get_login_settings().get_all(auth_app.db)
     pwd_signin_modes = settings["pwd_signin_modes"]
     if not pwd_signin_modes:
         raise HTTPException(
@@ -343,7 +328,7 @@ async def sign_in_with_pwd(
             detail={"account": "系统不支持密码登录，请使用其他登录方式"},
         )
     user: ValidatePwdResult | None = await validate_pwd(
-        client,
+        auth_app.db,
         username=body.account if "username" in pwd_signin_modes else None,
         mobile=body.account if "mobile" in pwd_signin_modes else None,
         email=body.account if "email" in pwd_signin_modes else None,
@@ -382,7 +367,7 @@ async def sign_in_with_pwd(
 
     if status_code:
         await create_audit_log(
-            client,
+            auth_app.db,
             user_id=user.id,
             client_info=json.dumps(client_info),
             status_code=status_code.value,  # type: ignore
@@ -393,9 +378,9 @@ async def sign_in_with_pwd(
             detail={field: AUDIT_STATUS_CODE_MAPPING[status_code]},
         )
 
-    token = await create_access_token(client, response, user.id)
+    token = await create_access_token(response, user.id)
     return await sign_in(
-        client,
+        auth_app.db,
         id=user.id,
         access_token=token,
         client_info=json.dumps(client_info),
@@ -410,13 +395,12 @@ async def sign_in_with_pwd(
 )
 async def post_sign_out(
     response: Response,
-    access_token: str = Depends(get_access_token),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
+    access_token: str = Depends(auth_app.get_access_token),
 ) -> str:
     if not access_token:
         return "ok"
 
-    await sign_out(client, access_token=access_token)
+    await sign_out(auth_app.db, access_token=access_token)
     settings = get_settings()
     response.delete_cookie(
         key=settings.jwt_cookie_key,
@@ -434,6 +418,12 @@ async def post_sign_out(
     description="获取当前登录用户的个人信息",
 )
 async def get_user_me(
-    current_user: GetUserByAccessTokenResult = Depends(require_user),
+    current_user: GetUserByAccessTokenResult = Depends(
+        auth_app.get_current_user()
+    ),
 ) -> GetUserByAccessTokenResult:
+    if current_user is None:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED, detail="身份验证失败"
+        )
     return current_user

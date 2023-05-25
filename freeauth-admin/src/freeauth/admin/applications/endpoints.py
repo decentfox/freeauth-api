@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from http import HTTPStatus
 
-import edgedb
-from fastapi import Depends
-
 from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateApplicationResult,
     DeleteApplicationResult,
@@ -14,8 +11,7 @@ from freeauth.db.admin.admin_qry_async_edgeql import (
     update_application_status,
 )
 
-from .. import get_edgedb_client
-from ..app import router
+from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
 from .dataclasses import (
     ApplicationDeleteBody,
@@ -35,10 +31,9 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
 )
 async def post_application(
     body: BaseApplicationBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateApplicationResult:
     application = await create_application(
-        client,
+        auth_app.db,
         name=body.name,
         description=body.description,
     )
@@ -53,10 +48,9 @@ async def post_application(
 )
 async def toggle_applications_status(
     body: ApplicationStatusBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[UpdateApplicationStatusResult]:
     return await update_application_status(
-        client, ids=body.ids, is_deleted=body.is_deleted
+        auth_app.db, ids=body.ids, is_deleted=body.is_deleted
     )
 
 
@@ -68,9 +62,8 @@ async def toggle_applications_status(
 )
 async def delete_applications(
     body: ApplicationDeleteBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[DeleteApplicationResult]:
-    return await delete_application(client, ids=body.ids)
+    return await delete_application(auth_app.db, ids=body.ids)
 
 
 @router.post(
@@ -81,10 +74,9 @@ async def delete_applications(
 )
 async def get_applications(
     body: QueryBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
     filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
             with
                 page := <optional int64>$page ?? 1,

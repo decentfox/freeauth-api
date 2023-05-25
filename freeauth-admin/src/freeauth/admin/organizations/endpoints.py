@@ -34,8 +34,7 @@ from freeauth.db.admin.admin_qry_async_edgeql import (
     update_org_type_status,
 )
 
-from .. import get_edgedb_client
-from ..app import router
+from ..app import auth_app, router
 from ..dataclasses import PaginatedData
 from .dataclasses import (
     DepartmentPostOrPutBody,
@@ -68,11 +67,10 @@ from .dependencies import (
 )
 async def post_org_type(
     body: OrgTypePostBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateOrgTypeResult:
     try:
         org_type = await create_org_type(
-            client,
+            auth_app.db,
             name=body.name,
             code=body.code,
             description=body.description,
@@ -93,11 +91,10 @@ async def post_org_type(
 )
 async def toggle_org_types_status(
     body: OrgTypeStatusBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> dict[str, list[UpdateOrgTypeStatusResult]]:
     updated_org_types: list[UpdateOrgTypeStatusResult] = (
         await update_org_type_status(
-            client, ids=body.ids, is_deleted=body.is_deleted
+            auth_app.db, ids=body.ids, is_deleted=body.is_deleted
         )
     )
     return {"org_types": updated_org_types}
@@ -111,10 +108,9 @@ async def toggle_org_types_status(
 )
 async def delete_org_types(
     body: OrgTypeDeleteBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> dict[str, list[DeleteOrgTypeResult]]:
     deleted_org_types: list[DeleteOrgTypeResult] = await delete_org_type(
-        client, ids=body.ids
+        auth_app.db, ids=body.ids
     )
     return {"org_types": deleted_org_types}
 
@@ -127,10 +123,9 @@ async def delete_org_types(
 )
 async def get_org_type(
     id_or_code: uuid.UUID | str = Depends(parse_org_type_id_or_code),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateOrgTypeResult:
     org_type: CreateOrgTypeResult | None = await get_org_type_by_id_or_code(
-        client,
+        auth_app.db,
         id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
         code=id_or_code if isinstance(id_or_code, str) else None,
     )
@@ -150,11 +145,10 @@ async def get_org_type(
 async def put_org_type(
     body: OrgTypePutBody,
     id_or_code: uuid.UUID | str = Depends(parse_org_type_id_or_code),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateOrgTypeResult:
     try:
         org_type: CreateOrgTypeResult | None = await update_org_type(
-            client,
+            auth_app.db,
             name=body.name,
             code=body.code,
             description=body.description,
@@ -180,10 +174,8 @@ async def put_org_type(
     summary="获取组织类型列表",
     description="获取全部组织类型信息",
 )
-async def get_org_types(
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
-) -> dict[str, list[CreateOrgTypeResult]]:
-    org_types: list[CreateOrgTypeResult] = await query_org_types(client)
+async def get_org_types() -> dict[str, list[CreateOrgTypeResult]]:
+    org_types: list[CreateOrgTypeResult] = await query_org_types(auth_app.db)
     return {"org_types": org_types}
 
 
@@ -196,11 +188,10 @@ async def get_org_types(
 )
 async def post_enterprise(
     body: EnterprisePostBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateEnterpriseResult:
     try:
         enterprise: CreateEnterpriseResult | None = await create_enterprise(
-            client,
+            auth_app.db,
             name=body.name,
             code=body.code,
             tax_id=body.tax_id,
@@ -233,12 +224,11 @@ async def put_enterprise(
     params: tuple[str | uuid.UUID, str | uuid.UUID | None] = Depends(
         parse_enterprise_id_or_code
     ),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateEnterpriseResult:
     id_or_code, ot_id_or_code = params
     try:
         enterprise: CreateEnterpriseResult | None = await update_enterprise(
-            client,
+            auth_app.db,
             id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
             current_code=id_or_code if isinstance(id_or_code, str) else None,
             org_type_id=(
@@ -275,10 +265,9 @@ async def put_enterprise(
 )
 async def delete_organizations(
     body: OrganizationDeleteBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> dict[str, list[DeleteOrganizationResult]]:
     deleted_organizations: list[DeleteOrganizationResult] = (
-        await delete_organization(client, ids=body.ids)
+        await delete_organization(auth_app.db, ids=body.ids)
     )
     return {"organizations": deleted_organizations}
 
@@ -293,12 +282,11 @@ async def get_enterprise(
     params: tuple[str | uuid.UUID, str | uuid.UUID | None] = Depends(
         parse_enterprise_id_or_code
     ),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateEnterpriseResult:
     id_or_code, ot_id_or_code = params
     enterprise: CreateEnterpriseResult | None = (
         await get_enterprise_by_id_or_code(
-            client,
+            auth_app.db,
             id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
             code=id_or_code if isinstance(id_or_code, str) else None,
             org_type_id=(
@@ -324,9 +312,8 @@ async def get_enterprise(
 )
 async def get_enterprises_in_org_type(
     body: EnterpriseQueryBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
             WITH
                 page := <optional int64>$page ?? 1,
@@ -393,11 +380,10 @@ async def get_enterprises_in_org_type(
 )
 async def post_department(
     body: DepartmentPostOrPutBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateDepartmentResult:
     try:
         department: CreateDepartmentResult | None = await create_department(
-            client,
+            auth_app.db,
             name=body.name,
             code=body.code,
             description=body.description,
@@ -426,12 +412,11 @@ async def put_department(
     params: tuple[str | uuid.UUID, uuid.UUID | None] = Depends(
         parse_department_id_or_code
     ),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateDepartmentResult:
     id_or_code, enterprise_id = params
     try:
         department: CreateDepartmentResult | None = await update_department(
-            client,
+            auth_app.db,
             id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
             current_code=id_or_code if isinstance(id_or_code, str) else None,
             enterprise_id=enterprise_id,
@@ -462,12 +447,11 @@ async def get_department(
     params: tuple[str | uuid.UUID, uuid.UUID | None] = Depends(
         parse_department_id_or_code
     ),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateDepartmentResult:
     id_or_code, enterprise_id = params
     department: CreateDepartmentResult | None = (
         await get_department_by_id_or_code(
-            client,
+            auth_app.db,
             id=id_or_code if isinstance(id_or_code, uuid.UUID) else None,
             code=id_or_code if isinstance(id_or_code, str) else None,
             enterprise_id=enterprise_id,
@@ -488,14 +472,13 @@ async def get_department(
 )
 async def get_organization_tree_by_org_type(
     id_or_code: uuid.UUID | str = Depends(parse_org_type_id_or_code),
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[OrganizationNode]:
     async def get_child_nodes(
         parent_id: uuid.UUID | None = None,
     ) -> list[OrganizationNode]:
         children: list[OrganizationNode] = []
         nodes: list[GetOrganizationNodeResult] = await get_organization_node(
-            client,
+            auth_app.db,
             org_type_id=(
                 id_or_code if isinstance(id_or_code, uuid.UUID) else None
             ),
@@ -520,10 +503,9 @@ async def get_organization_tree_by_org_type(
 )
 async def bind_users_to_organizations(
     body: OrganizationUserBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[CreateUserResult]:
     return await organization_bind_users(
-        client,
+        auth_app.db,
         user_ids=body.user_ids,
         organization_ids=body.organization_ids,
         org_type_id=body.org_type_id,
@@ -538,10 +520,9 @@ async def bind_users_to_organizations(
 )
 async def unbind_users_to_organizations(
     body: OrganizationUnbindUserBody,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> list[CreateUserResult]:
     return await organization_unbind_users(
-        client,
+        auth_app.db,
         user_ids=body.user_ids,
         organization_ids=body.organization_ids,
     )
@@ -556,9 +537,8 @@ async def unbind_users_to_organizations(
 async def get_members_in_organization(
     body: OrganizationUserQueryBody,
     org_id: uuid.UUID,
-    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> PaginatedData:
-    result = await client.query_single_json(
+    result = await auth_app.db.query_single_json(
         f"""\
             WITH
                 page := <optional int64>$page ?? 1,
