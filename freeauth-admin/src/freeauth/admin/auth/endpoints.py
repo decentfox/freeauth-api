@@ -10,6 +10,7 @@ from http import HTTPStatus
 from fastapi import Depends, HTTPException, Response
 from jose import jwt
 
+from freeauth.conf.login_settings import LoginSettings
 from freeauth.conf.settings import get_settings
 from freeauth.db.auth.auth_qry_async_edgeql import (
     AuthAuditEventType,
@@ -33,7 +34,6 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
 from .. import logger
 from ..app import auth_app, router
 from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
-from ..settings import get_login_settings
 from ..utils import (
     MOBILE_REGEX,
     gen_random_string,
@@ -138,8 +138,8 @@ async def validate_auth_code(
 async def create_access_token(response: Response, user_id: uuid.UUID) -> str:
     now = datetime.utcnow()
     settings = get_settings()
-    login_settings = get_login_settings()
-    jwt_token_ttl = await login_settings.get("jwt_token_ttl", auth_app.db)
+    login_settings = await auth_app.get_login_settings()
+    jwt_token_ttl = login_settings.jwt_token_ttl
     payload = {
         "sub": str(user_id),
         "exp": now + timedelta(
@@ -169,24 +169,24 @@ async def create_access_token(response: Response, user_id: uuid.UUID) -> str:
 )
 async def send_signup_code(
     body: SignUpSendCodeBody,
+    settings: LoginSettings = Depends(auth_app.login_settings),
 ) -> SendCodeResult:
-    settings = await get_login_settings().get_all(auth_app.db)
-    sending_limit_enabled = settings["signup_code_sending_limit_enabled"]
+    sending_limit_enabled = settings.signup_code_sending_limit_enabled
     return await send_auth_code(
         account=body.account,
         verify_type=AuthVerifyType.SIGNUP,
         ttl=(
-            settings["signup_code_validating_interval"]
-            if settings["signup_code_validating_limit_enabled"]
+            settings.signup_code_validating_interval
+            if settings.signup_code_validating_limit_enabled
             else None
         ),
         max_attempts=(
-            settings["signup_code_sending_max_attempts"]
+            settings.signup_code_sending_max_attempts
             if sending_limit_enabled
             else None
         ),
         attempts_ttl=(
-            settings["signup_code_sending_interval"]
+            settings.signup_code_sending_interval
             if sending_limit_enabled
             else None
         ),
@@ -204,15 +204,15 @@ async def sign_up_with_code(
     body: SignUpBody,
     response: Response,
     client_info: dict = Depends(get_client_info),
+    settings: LoginSettings = Depends(auth_app.login_settings),
 ) -> GetUserByAccessTokenResult | None:
-    settings = await get_login_settings().get_all(auth_app.db)
     await validate_auth_code(
         account=body.account,
         verify_type=AuthVerifyType.SIGNUP,
         code=body.code,
         max_attempts=(
-            settings["signup_code_validating_max_attempts"]
-            if settings["signup_code_validating_limit_enabled"]
+            settings.signup_code_validating_max_attempts
+            if settings.signup_code_validating_limit_enabled
             else None
         ),
         user=None,
@@ -249,24 +249,24 @@ async def sign_up_with_code(
 )
 async def send_signin_code(
     body: SignInSendCodeBody,
+    settings: LoginSettings = Depends(auth_app.login_settings),
 ) -> SendCodeResult:
-    settings = await get_login_settings().get_all(auth_app.db)
-    sending_limit_enabled = settings["signin_code_sending_limit_enabled"]
+    sending_limit_enabled = settings.signin_code_sending_limit_enabled
     return await send_auth_code(
         account=body.account,
         verify_type=AuthVerifyType.SIGNIN,
         ttl=(
-            settings["signin_code_validating_interval"]
-            if settings["signin_code_validating_limit_enabled"]
+            settings.signin_code_validating_interval
+            if settings.signin_code_validating_limit_enabled
             else None
         ),
         max_attempts=(
-            settings["signin_code_sending_max_attempts"]
+            settings.signin_code_sending_max_attempts
             if sending_limit_enabled
             else None
         ),
         attempts_ttl=(
-            settings["signin_code_sending_interval"]
+            settings.signin_code_sending_interval
             if sending_limit_enabled
             else None
         ),
@@ -286,15 +286,15 @@ async def sign_in_with_code(
         verify_account_when_sign_in_with_code
     ),
     client_info: dict = Depends(get_client_info),
+    settings: LoginSettings = Depends(auth_app.login_settings),
 ) -> GetUserByAccessTokenResult | None:
-    settings = await get_login_settings().get_all(auth_app.db)
     await validate_auth_code(
         account=body.account,
         verify_type=AuthVerifyType.SIGNIN,
         code=body.code,
         max_attempts=(
-            settings["signin_code_validating_max_attempts"]
-            if settings["signin_code_validating_limit_enabled"]
+            settings.signin_code_validating_max_attempts
+            if settings.signin_code_validating_limit_enabled
             else None
         ),
         user=user,
@@ -319,9 +319,9 @@ async def sign_in_with_pwd(
     body: SignInPwdBody,
     response: Response,
     client_info: dict = Depends(get_client_info),
+    settings: LoginSettings = Depends(auth_app.login_settings),
 ) -> GetUserByAccessTokenResult | None:
-    settings = await get_login_settings().get_all(auth_app.db)
-    pwd_signin_modes = settings["pwd_signin_modes"]
+    pwd_signin_modes = settings.pwd_signin_modes
     if not pwd_signin_modes:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -333,8 +333,8 @@ async def sign_in_with_pwd(
         mobile=body.account if "mobile" in pwd_signin_modes else None,
         email=body.account if "email" in pwd_signin_modes else None,
         interval=(
-            settings["signin_pwd_validating_interval"]
-            if settings["signin_pwd_validating_limit_enabled"]
+            settings.signin_pwd_validating_interval
+            if settings.signin_pwd_validating_limit_enabled
             else None
         ),
     )
@@ -359,9 +359,9 @@ async def sign_in_with_pwd(
         field = "password"
         status_code = AuthAuditStatusCode.INVALID_PASSWORD
         if (
-            settings["signin_pwd_validating_limit_enabled"]
+            settings.signin_pwd_validating_limit_enabled
             and user.recent_failed_attempts
-            >= settings["signin_pwd_validating_max_attempts"]
+            >= settings.signin_pwd_validating_max_attempts
         ):
             status_code = AuthAuditStatusCode.PASSWORD_ATTEMPTS_EXCEEDED
 
@@ -419,11 +419,7 @@ async def post_sign_out(
 )
 async def get_user_me(
     current_user: GetUserByAccessTokenResult = Depends(
-        auth_app.get_current_user()
+        auth_app.current_user_or_401
     ),
 ) -> GetUserByAccessTokenResult:
-    if current_user is None:
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED, detail="身份验证失败"
-        )
     return current_user

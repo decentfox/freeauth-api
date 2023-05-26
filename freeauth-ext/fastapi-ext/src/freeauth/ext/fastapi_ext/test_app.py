@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import edgedb
-from fastapi import FastAPI  # type: ignore
+from fastapi import FastAPI
 
 from .app import FreeAuthApp
 
+__all__ = ["FreeAuthTestApp"]
+
 
 class FreeAuthTestApp(FreeAuthApp):
-    def __init__(self, app: FastAPI = None):
+    def __init__(self, app: FastAPI | None = None):
         self._edgedb_tx: edgedb.AsyncIOClient | None = None
 
         super().__init__(app)
@@ -27,7 +29,8 @@ class FreeAuthTestApp(FreeAuthApp):
 
     async def shutdown_edgedb(self) -> None:
         await self.db.__aexit__(Exception, Exception(), None)
-        await self._edgedb_client.aclose()
+        if self._edgedb_client:
+            await self._edgedb_client.aclose()
 
     @property
     def db(self) -> edgedb.AsyncIOClient:

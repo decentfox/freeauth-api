@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from freeauth import db as freeauth_db
 from freeauth.conf.settings import get_settings
 from freeauth.db.admin.admin_qry_async_edgeql import CreateUserResult
-from freeauth.ext.fastapi import FreeAuthTestApp
+from freeauth.ext.fastapi_ext import FreeAuthTestApp
 
 
 @pytest.fixture(scope="session")
@@ -85,7 +85,7 @@ async def edgedb_client(db) -> AsyncGenerator[edgedb.AsyncIOClient, None]:
 
 @pytest.fixture
 def app(mocker) -> FastAPI:
-    mocker.patch("freeauth.ext.fastapi.FreeAuthApp", FreeAuthTestApp)
+    mocker.patch("freeauth.ext.fastapi_ext.FreeAuthApp", FreeAuthTestApp)
 
     from . import app as freeauth_app
 

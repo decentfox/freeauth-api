@@ -6,17 +6,14 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from .. import get_login_settings
+from freeauth.conf.login_settings import LoginSettings
 
 
 def test_get_default_login_settings(test_client: TestClient):
-    get_login_settings.cache_clear()
-    settings = get_login_settings()
-    assert settings._empty
+    settings = LoginSettings()
     resp = test_client.get("/v1/login_settings")
     ret = resp.json()
     assert resp.status_code == HTTPStatus.OK, ret
-    assert not settings._empty
     for key, value in ret.items():
         snake_key = re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
         assert getattr(settings, snake_key) == value

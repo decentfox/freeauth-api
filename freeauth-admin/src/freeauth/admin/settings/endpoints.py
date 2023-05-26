@@ -1,22 +1,24 @@
 from __future__ import annotations
 
+import json
 import re
 from http import HTTPStatus
 from typing import Any
 
 from fastapi import Body, HTTPException
 
+from freeauth.conf.login_settings import LoginSettings
+from freeauth.db.auth.auth_qry_async_edgeql import upsert_login_setting
+
 from ..app import auth_app, router
-from . import get_login_settings
 
 
-async def load_login_configs():
-    settings = await get_login_settings().get_all(auth_app.db)
-    ret = {}
-    for key, value in settings.items():
-        camel_key = re.sub(r"_(\w)", lambda m: m.group(1).upper(), key)
-        ret[camel_key] = value
-    return ret
+async def load_login_configs() -> dict[str, Any]:
+    settings: LoginSettings = await auth_app.get_login_settings()
+    return {
+        re.sub(r"_(\w)", lambda m: m.group(1).upper(), k): v
+        for k, v in settings.dict().items()
+    }
 
 
 @router.get(
@@ -42,8 +44,7 @@ async def put_login_configs(
         description="登录配置项键值，支持任意 JSON 可解析的格式的配置值",
     ),
 ) -> dict[str, Any]:
-    settings = get_login_settings()
-    keys = settings.get_keys()
+    keys = LoginSettings.__fields__.keys()
     configs = {}
     for key in body.keys():
         snake_key = re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
@@ -55,5 +56,6 @@ async def put_login_configs(
             )
 
         configs[snake_key] = body[key]
-    await settings.patch(configs, auth_app.db)
+
+    await upsert_login_setting(auth_app.db, configs=json.dumps(configs))
     return await load_login_configs()

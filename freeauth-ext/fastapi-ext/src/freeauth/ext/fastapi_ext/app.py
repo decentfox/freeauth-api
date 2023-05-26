@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+import json
 import logging
+from http import HTTPStatus
+from typing import Callable
 
 import edgedb
-from fastapi import Depends, FastAPI, Request  # type: ignore
+from fastapi import Depends, FastAPI, HTTPException, Request
 from jose import ExpiredSignatureError, JWTError, jwt
 
+from freeauth.conf.login_settings import LoginSettings
 from freeauth.conf.settings import get_settings
 from freeauth.db.auth.auth_qry_async_edgeql import (
     GetUserByAccessTokenResult,
+    get_login_setting,
     get_user_by_access_token,
 )
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["FreeAuthApp"]
 
 
 class FreeAuthApp:
@@ -21,7 +28,7 @@ class FreeAuthApp:
     :param app: The FastAPI application to extend
     """
 
-    def __init__(self, app: FastAPI = None):
+    def __init__(self, app: FastAPI | None = None):
         self.app: FastAPI | None = None
         self._edgedb_client: edgedb.AsyncIOClient | None = None
         self.settings = get_settings()
@@ -61,10 +68,11 @@ class FreeAuthApp:
         )
         return access_token
 
-    def get_current_user(self):
-        async def current_user(
+    @property
+    def current_user(self) -> Callable:
+        async def dependency(
             access_token: str = Depends(self.get_access_token),
-        ):
+        ) -> GetUserByAccessTokenResult | None:
             if not access_token:
                 logger.info("missing token")
                 return None
@@ -104,4 +112,35 @@ class FreeAuthApp:
                 self._edgedb_client.with_globals({"current_user_id": user.id})
             return user
 
-        return current_user
+        return dependency
+
+    @property
+    def current_user_or_401(self) -> Callable:
+        async def dependency(
+            current_user: GetUserByAccessTokenResult
+            | None = Depends(self.current_user),
+        ) -> GetUserByAccessTokenResult:
+            if not current_user:
+                raise HTTPException(
+                    status_code=HTTPStatus.UNAUTHORIZED, detail="身份验证失败"
+                )
+            return current_user
+
+        return dependency
+
+    async def get_login_settings(self) -> LoginSettings:
+        settings = LoginSettings()
+        fields = settings.__fields__.keys()
+        settings_in_db = await get_login_setting(self.db)
+
+        for item in settings_in_db:
+            if item.key in fields:
+                setattr(settings, item.key, json.loads(item.value))
+        return settings
+
+    @property
+    def login_settings(self):
+        async def dependency() -> LoginSettings:
+            return await self.get_login_settings()
+
+        return dependency

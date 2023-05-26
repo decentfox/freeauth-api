@@ -12,7 +12,6 @@ from freeauth.db.auth.auth_qry_async_edgeql import AuthCodeType
 
 from ...users.tests.test_api import create_user
 from ...utils import gen_random_string
-from .. import get_login_settings
 
 
 @pytest.mark.parametrize(
@@ -47,7 +46,6 @@ from .. import get_login_settings
 def test_signup_modes(
     test_client: TestClient, signup_modes: list[str], data: dict, err_msg: str
 ):
-    get_login_settings.cache_clear()
     resp = test_client.put(
         "/v1/login_settings", json={"signupModes": signup_modes}
     )
@@ -91,7 +89,6 @@ def test_code_signin_modes(
     data: dict,
     err_msg: str,
 ):
-    get_login_settings.cache_clear()
     resp = test_client.put(
         "/v1/login_settings",
         json={"codeSigninModes": code_signin_modes},
@@ -135,7 +132,6 @@ def test_pwd_signin_modes(
     data: dict,
     err_msg: str,
 ):
-    get_login_settings.cache_clear()
     resp = test_client.put(
         "/v1/login_settings",
         json={"pwdSigninModes": pwd_signin_modes},
@@ -166,7 +162,6 @@ def test_pwd_signin_modes(
     ],
 )
 def test_jwt_token_ttl(test_client: TestClient, jwt_token_ttl: int):
-    get_login_settings.cache_clear()
     resp = test_client.put(
         "/v1/login_settings",
         json={"jwtTokenTtl": jwt_token_ttl},
@@ -234,7 +229,6 @@ def test_code_validating_limit(
             email="user@example.com",
             mobile="13800000000",
         )
-    get_login_settings.cache_clear()
     resp = test_client.put(
         "/v1/login_settings",
         json={f"{limit_type}CodeValidatingLimitEnabled": False},
@@ -313,7 +307,6 @@ def test_code_sending_limit(
             email="user@example.com",
             mobile="13800000000",
         )
-    get_login_settings.cache_clear()
     resp = test_client.put(
         "/v1/login_settings",
         json={f"{limit_type}CodeSendingLimitEnabled": False},
@@ -351,7 +344,6 @@ def test_pwd_validating_limit(test_client: TestClient):
     password = gen_random_string(12, secret=True)
     user = create_user(test_client, mobile="13800000000", password=password)
 
-    get_login_settings.cache_clear()
     resp = test_client.put(
         "/v1/login_settings",
         json={

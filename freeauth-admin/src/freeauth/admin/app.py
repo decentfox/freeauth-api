@@ -13,7 +13,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from freeauth.conf.settings import get_settings
-from freeauth.ext.fastapi import FreeAuthApp
+from freeauth.ext.fastapi_ext import FreeAuthApp
 
 from .log import configure_logging
 

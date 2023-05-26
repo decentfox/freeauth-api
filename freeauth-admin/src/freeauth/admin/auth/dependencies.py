@@ -4,9 +4,10 @@ import re
 from http import HTTPStatus
 
 import edgedb
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from user_agents import parse as ua_parse  # type: ignore
 
+from freeauth.conf.login_settings import LoginSettings
 from freeauth.db.auth.auth_qry_async_edgeql import (
     AuthCodeType,
     GetUserByAccountResult,
@@ -14,7 +15,6 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
 )
 
 from ..app import auth_app
-from ..settings import get_login_settings
 from ..utils import MOBILE_REGEX
 from .dataclasses import (
     SignInCodeBody,
@@ -62,9 +62,9 @@ async def verify_signup_account(
 
 async def verify_new_account_when_send_code(
     body: SignUpSendCodeBody,
+    login_settings: LoginSettings = Depends(auth_app.login_settings),
 ):
-    login_settings = get_login_settings()
-    signup_modes = await login_settings.get("signup_modes", auth_app.db)
+    signup_modes = login_settings.signup_modes
     if not signup_modes:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -121,11 +121,9 @@ async def get_signin_account(
 
 async def verify_account_when_send_code(
     body: SignInSendCodeBody,
+    login_settings: LoginSettings = Depends(auth_app.login_settings),
 ) -> GetUserByAccountResult:
-    login_settings = get_login_settings()
-    code_signin_modes = await login_settings.get(
-        "code_signin_modes", auth_app.db
-    )
+    code_signin_modes = login_settings.code_signin_modes
     if not code_signin_modes:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
