@@ -4,7 +4,7 @@ import uuid
 from http import HTTPStatus
 
 import edgedb
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 
 from freeauth.db.admin.admin_qry_async_edgeql import (
     CreatePermissionResult,
@@ -12,6 +12,7 @@ from freeauth.db.admin.admin_qry_async_edgeql import (
     DeletePermissionResult,
     GetPermissionByIdOrCodeResult,
     GetPermissionByIdOrCodeResultTagsItem,
+    QueryPermissionsResult,
     UpdatePermissionStatusResult,
     create_permission,
     delete_permission,
@@ -19,6 +20,7 @@ from freeauth.db.admin.admin_qry_async_edgeql import (
     perm_bind_roles,
     perm_unbind_roles,
     query_permission_tags,
+    query_permissions,
     update_permission,
     update_permission_status,
 )
@@ -189,6 +191,7 @@ async def get_permissions(
                         name,
                         code,
                         description,
+                        roles: {{ id, name }},
                         application: {{ name }},
                         tags: {{ name }},
                         is_deleted,
@@ -384,3 +387,26 @@ async def get_permission_tags() -> (
         await query_permission_tags(auth_app.db)
     )
     return {"permission_tags": permission_tags}
+
+
+@router.get(
+    "/permissions",
+    tags=["权限管理"],
+    summary="获取权限列表",
+    description="分页获取，支持关键字搜索、排序及条件过滤",
+)
+async def query_permissions_filter_by_role(
+    page: int | None = None,
+    per_page: int | None = None,
+    q: str | None = None,
+    application_id: uuid.UUID | None = None,
+    tag_ids: list[uuid.UUID] | None = Query(None),
+) -> QueryPermissionsResult:
+    return await query_permissions(
+        auth_app.db,
+        page=page,
+        per_page=per_page,
+        q=q,
+        application_id=application_id,
+        tag_ids=tag_ids,
+    )

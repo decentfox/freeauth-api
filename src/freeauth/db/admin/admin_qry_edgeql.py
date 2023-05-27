@@ -25,6 +25,7 @@
 #     'queries/perms/perm_unbind_roles.edgeql'
 #     'queries/orgs/query_org_types.edgeql'
 #     'queries/perms/query_permission_tags.edgeql'
+#     'queries/perms/query_permissions.edgeql'
 #     'queries/users/resign_user.edgeql'
 #     'queries/roles/role_bind_users.edgeql'
 #     'queries/roles/role_unbind_users.edgeql'
@@ -313,6 +314,35 @@ class GetUserByIdResultRolesItem(NoPydanticValidation):
     description: str | None
     is_deleted: bool
     org_type: CreateRoleResultOrgType | None
+
+
+@dataclasses.dataclass
+class QueryPermissionsResult(NoPydanticValidation):
+    id: uuid.UUID
+    total: int
+    per_page: int
+    page: int
+    last: float
+    rows: list[QueryPermissionsResultRowsItem]
+
+
+@dataclasses.dataclass
+class QueryPermissionsResultRowsItem(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    code: str
+    description: str | None
+    roles: list[QueryPermissionsResultRowsItemRolesItem]
+    application: CreatePermissionResultApplication
+    tags: list[CreatePermissionResultTagsItem]
+    is_deleted: bool
+
+
+@dataclasses.dataclass
+class QueryPermissionsResultRowsItemRolesItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
 
 
 @dataclasses.dataclass
@@ -1251,6 +1281,69 @@ def query_permission_tags(
             name
         } filter (.tag_type = TagType.Permission)\
         """,
+    )
+
+
+def query_permissions(
+    executor: edgedb.Executor,
+    *,
+    page: int | None,
+    per_page: int | None,
+    q: str | None,
+    application_id: uuid.UUID | None,
+    tag_ids: list[uuid.UUID] | None,
+) -> QueryPermissionsResult:
+    return executor.query_single(
+        """\
+        with
+            page := <optional int64>$page ?? 1,
+            per_page := <optional int64>$per_page ?? 20,
+            q := <optional str>$q,
+            application_id := <optional uuid>$application_id,
+            tag_ids := <optional array<uuid>>$tag_ids,
+            permissions := (
+                select Permission
+                filter (
+                    true if not exists q else
+                    .name ?? '' ilike q or
+                    .code ?? '' ilike q
+                ) and (
+                    true if not exists application_id else
+                    .application.id = application_id
+                ) and (
+                    all((
+                        for tag in array_unpack(tag_ids)
+                        union (tag in .tags.id)
+                    ))
+                )
+            ),
+            total := count(permissions)
+        select {
+            total := total,
+            per_page := per_page,
+            page := page,
+            last := math::ceil(total / per_page),
+            rows := array_agg((
+                select permissions {
+                    id,
+                    name,
+                    code,
+                    description,
+                    roles: { id, code, name },
+                    application: { name },
+                    tags: { name },
+                    is_deleted,
+                }
+                offset (page - 1) * per_page
+                limit per_page
+            ))
+        };\
+        """,
+        page=page,
+        per_page=per_page,
+        q=q,
+        application_id=application_id,
+        tag_ids=tag_ids,
     )
 
 
