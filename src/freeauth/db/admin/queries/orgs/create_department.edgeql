@@ -5,7 +5,10 @@ WITH
     enterprise := assert_single((
         SELECT Enterprise FILTER (
             .id = (
-                parent[is Enterprise].id ??
+                # https://github.com/edgedb/edgedb/issues/5474
+                # parent[is Enterprise].id ??
+                parent[is Enterprise].id if exists parent[is Enterprise] else
+
                 parent[is Department].enterprise.id
             )
         )
@@ -20,11 +23,7 @@ FOR _ IN (
             description := <optional str>$description,
             enterprise := enterprise,
             parent := parent,
-            ancestors := (
-                SELECT DISTINCT (
-                    SELECT .parent UNION .parent.ancestors
-                )
-            )
+            ancestors := DISTINCT (parent UNION parent.ancestors)
         }
     ) {
         name,
