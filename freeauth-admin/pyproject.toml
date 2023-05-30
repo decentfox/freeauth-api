@@ -15,7 +15,6 @@ httpx = "^0.23.3"
 pydantic = {extras = ["dotenv", "email"], version = "^1.10.7"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
-user-agents = "^2.2.0"
 freeauth = {path = "../", develop = true}
 freeauth-fastapi-ext = {path = "../freeauth-ext/fastapi-ext", develop = true}
 

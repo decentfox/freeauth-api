@@ -3,12 +3,9 @@ from __future__ import annotations
 import json
 import re
 import string
-import uuid
-from datetime import datetime, timedelta
 from http import HTTPStatus
 
 from fastapi import Depends, HTTPException, Response
-from jose import jwt
 
 from freeauth.conf.login_settings import LoginSettings
 from freeauth.conf.settings import get_settings
@@ -17,9 +14,10 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     AuthAuditStatusCode,
     AuthCodeType,
     AuthVerifyType,
+    GetCurrentUserResult,
     GetUserByAccessTokenResult,
-    GetUserByAccountResult,
     SendCodeResult,
+    SignInResult,
     ValidateCodeResult,
     ValidatePwdResult,
     create_audit_log,
@@ -30,6 +28,7 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     validate_code,
     validate_pwd,
 )
+from freeauth.ext.fastapi_ext.utils import get_client_info
 
 from .. import logger
 from ..app import auth_app, router
@@ -48,7 +47,6 @@ from .dataclasses import (
     SignUpSendCodeBody,
 )
 from .dependencies import (
-    get_client_info,
     verify_account_when_send_code,
     verify_account_when_sign_in_with_code,
     verify_account_when_sign_up,
@@ -105,7 +103,7 @@ async def validate_auth_code(
     verify_type: AuthVerifyType,
     code: str,
     max_attempts: int | None,
-    user: GetUserByAccountResult | None,
+    user: GetUserByAccessTokenResult | None,
     client_info: dict,
 ):
     code_type = AuthCodeType.EMAIL
@@ -133,31 +131,6 @@ async def validate_auth_code(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail={"code": AUDIT_STATUS_CODE_MAPPING[status_code]},
         )
-
-
-async def create_access_token(response: Response, user_id: uuid.UUID) -> str:
-    now = datetime.utcnow()
-    settings = get_settings()
-    login_settings = await auth_app.get_login_settings()
-    jwt_token_ttl = login_settings.jwt_token_ttl
-    payload = {
-        "sub": str(user_id),
-        "exp": now + timedelta(
-            minutes=jwt_token_ttl or settings.jwt_token_ttl
-        ),
-    }
-    token = jwt.encode(
-        payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
-    )
-    response.set_cookie(
-        key=settings.jwt_cookie_key,
-        value=token,
-        httponly=True,
-        secure=settings.jwt_cookie_secure,
-        max_age=jwt_token_ttl * 60 if jwt_token_ttl else None,
-        samesite="strict",
-    )
-    return token
 
 
 @router.post(
@@ -205,7 +178,7 @@ async def sign_up_with_code(
     response: Response,
     client_info: dict = Depends(get_client_info),
     settings: LoginSettings = Depends(auth_app.login_settings),
-) -> GetUserByAccessTokenResult | None:
+) -> SignInResult | None:
     await validate_auth_code(
         account=body.account,
         verify_type=AuthVerifyType.SIGNUP,
@@ -231,7 +204,7 @@ async def sign_up_with_code(
         hashed_password=get_password_hash(password),
         client_info=client_info,
     )
-    token = await create_access_token(response, user.id)
+    token = await auth_app.create_access_token(response, user.id)
     return await sign_in(
         auth_app.db,
         id=user.id,
@@ -282,12 +255,12 @@ async def send_signin_code(
 async def sign_in_with_code(
     body: SignInCodeBody,
     response: Response,
-    user: GetUserByAccountResult = Depends(
+    user: GetUserByAccessTokenResult = Depends(
         verify_account_when_sign_in_with_code
     ),
     client_info: dict = Depends(get_client_info),
     settings: LoginSettings = Depends(auth_app.login_settings),
-) -> GetUserByAccessTokenResult | None:
+) -> SignInResult | None:
     await validate_auth_code(
         account=body.account,
         verify_type=AuthVerifyType.SIGNIN,
@@ -300,7 +273,7 @@ async def sign_in_with_code(
         user=user,
         client_info=client_info,
     )
-    token = await create_access_token(response, user.id)
+    token = await auth_app.create_access_token(response, user.id)
     return await sign_in(
         auth_app.db,
         id=user.id,
@@ -320,7 +293,7 @@ async def sign_in_with_pwd(
     response: Response,
     client_info: dict = Depends(get_client_info),
     settings: LoginSettings = Depends(auth_app.login_settings),
-) -> GetUserByAccessTokenResult | None:
+) -> SignInResult | None:
     pwd_signin_modes = settings.pwd_signin_modes
     if not pwd_signin_modes:
         raise HTTPException(
@@ -378,7 +351,7 @@ async def sign_in_with_pwd(
             detail={field: AUDIT_STATUS_CODE_MAPPING[status_code]},
         )
 
-    token = await create_access_token(response, user.id)
+    token = await auth_app.create_access_token(response, user.id)
     return await sign_in(
         auth_app.db,
         id=user.id,
@@ -395,12 +368,12 @@ async def sign_in_with_pwd(
 )
 async def post_sign_out(
     response: Response,
-    access_token: str = Depends(auth_app.get_access_token),
+    token: GetUserByAccessTokenResult = Depends(auth_app.get_access_token),
 ) -> str:
-    if not access_token:
+    if not token:
         return "ok"
 
-    await sign_out(auth_app.db, access_token=access_token)
+    await sign_out(auth_app.db, access_token=token.access_token)
     settings = get_settings()
     response.delete_cookie(
         key=settings.jwt_cookie_key,
@@ -418,8 +391,6 @@ async def post_sign_out(
     description="获取当前登录用户的个人信息",
 )
 async def get_user_me(
-    current_user: GetUserByAccessTokenResult = Depends(
-        auth_app.current_user_or_401
-    ),
-) -> GetUserByAccessTokenResult:
+    current_user: GetCurrentUserResult = Depends(auth_app.current_user_or_401),
+) -> GetCurrentUserResult:
     return current_user

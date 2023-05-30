@@ -314,7 +314,7 @@ async def get_permissions_in_user(
                 select User filter .id = <uuid>$user_id
             ),
             permissions := (
-                select (user.roles.permissions)
+                select (user.permissions)
                 filter (
                     true if not exists q else
                     .name ?? '' ilike q or

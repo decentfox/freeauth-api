@@ -28,6 +28,7 @@
 #     'queries/users/resign_user.edgeql'
 #     'queries/roles/role_bind_users.edgeql'
 #     'queries/roles/role_unbind_users.edgeql'
+#     'queries/apps/update_application_secret.edgeql'
 #     'queries/apps/update_application_status.edgeql'
 #     'queries/orgs/update_department.edgeql'
 #     'queries/orgs/update_enterprise.edgeql'
@@ -66,7 +67,7 @@ class CreateApplicationResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
     description: str | None
-    secret_key: str | None
+    secret: str | None
     is_deleted: bool
     created_at: datetime.datetime
 
@@ -315,6 +316,12 @@ class GetUserByIdResultRolesItem(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class UpdateApplicationSecretResult(NoPydanticValidation):
+    id: uuid.UUID
+    secret: str | None
+
+
+@dataclasses.dataclass
 class UpdateApplicationStatusResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
@@ -357,6 +364,7 @@ async def create_application(
     *,
     name: str,
     description: str | None,
+    hashed_secret: str,
 ) -> CreateApplicationResult:
     return await executor.query_single(
         """\
@@ -364,17 +372,19 @@ async def create_application(
             insert Application {
                 name := <str>$name,
                 description := <optional str>$description,
+                hashed_secret := <str>$hashed_secret
             }
         ) {
             name,
             description,
-            secret_key,
+            secret := .hashed_secret,
             is_deleted,
             created_at
         }\
         """,
         name=name,
         description=description,
+        hashed_secret=hashed_secret,
     )
 
 
@@ -1350,6 +1360,25 @@ async def role_unbind_users(
         """,
         user_ids=user_ids,
         role_ids=role_ids,
+    )
+
+
+async def update_application_secret(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    id: uuid.UUID,
+    hashed_secret: str,
+) -> UpdateApplicationSecretResult | None:
+    return await executor.query_single(
+        """\
+        select (
+            update Application filter .id = <uuid>$id set {
+                hashed_secret := <str>$hashed_secret
+            }
+        ) { secret := .hashed_secret };\
+        """,
+        id=id,
+        hashed_secret=hashed_secret,
     )
 
 

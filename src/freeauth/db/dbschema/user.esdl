@@ -30,6 +30,7 @@ module default {
         link org_type -> OrganizationType {
             on target delete allow;
         };
+        multi link permissions := .roles.permissions;
 
         index on (.username);
         index on (.email);

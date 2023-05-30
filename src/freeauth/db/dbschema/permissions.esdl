@@ -13,6 +13,6 @@ module default {
             on target delete allow;
         };
 
-        constraint exclusive on (.code_upper)
+        constraint exclusive on ( (.code_upper, .application) );
     }
 }

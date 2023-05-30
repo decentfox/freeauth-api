@@ -40,10 +40,10 @@ db:
 up:
 	@poetry run freeauth-db migration apply
 
-dev: install up
+dev:
 	@(source $$(poetry env info --path)/bin/activate && \
 	cd freeauth-admin && \
-	poetry run uvicorn freeauth.admin.asgi:app --reload --host 0.0.0.0 --port 5001)
+	make dev)
 
 genqlapi:
 	@(cd src/freeauth/db/admin && \

@@ -41,3 +41,13 @@ class FreeAuthTestApp(FreeAuthApp):
     @db.setter
     def db(self, tx: edgedb.AsyncIOClient):
         self._edgedb_tx = tx
+
+    def with_globals(self, *args, **globals_):
+        state = self.db._get_state()
+        state_globals = state._globals
+        if args:
+            for k, v in args[0].items():
+                state_globals[state.resolve(k)] = v
+        for k, v in globals_.items():
+            state_globals[state.resolve(k)] = v
+        return self.db

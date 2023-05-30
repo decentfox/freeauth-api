@@ -1,18 +1,22 @@
 from __future__ import annotations
 
+import uuid
 from http import HTTPStatus
 
+from fastapi import HTTPException
+
 from freeauth.db.admin.admin_qry_async_edgeql import (
-    CreateApplicationResult,
     DeleteApplicationResult,
     UpdateApplicationStatusResult,
     create_application,
     delete_application,
+    update_application_secret,
     update_application_status,
 )
 
 from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
+from ..utils import gen_random_string, get_password_hash
 from .dataclasses import (
     ApplicationDeleteBody,
     ApplicationStatusBody,
@@ -28,16 +32,41 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
     tags=["应用管理"],
     summary="创建应用",
     description="创建新应用",
+    # dependencies=[Depends(auth_app.perm_accepted("manage:apps"))],
 )
 async def post_application(
     body: BaseApplicationBody,
-) -> CreateApplicationResult:
-    application = await create_application(
+) -> dict[str, str]:
+    secret: str = gen_random_string(32, secret=True)
+    await create_application(
         auth_app.db,
         name=body.name,
         description=body.description,
+        hashed_secret=get_password_hash(secret),
     )
-    return application
+    return {"secret": secret}
+
+
+@router.put(
+    "/applications/{app_id}/secret",
+    tags=["应用管理"],
+    summary="重新生成应用秘钥",
+    description="重新生成指定应用的秘钥",
+)
+async def gen_application_secret(
+    app_id: uuid.UUID,
+) -> dict[str, str]:
+    secret: str = gen_random_string(32, secret=True)
+    application = await update_application_secret(
+        auth_app.db,
+        id=app_id,
+        hashed_secret=get_password_hash(secret),
+    )
+    if not application:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="应用不存在"
+        )
+    return {"secret": secret}
 
 
 @router.put(
@@ -102,7 +131,6 @@ async def get_applications(
                         id,
                         name,
                         description,
-                        secret_key,
                         is_protected,
                         is_deleted,
                         created_at

@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     edgedb_dsn: str | None
     edgedb_database: str = "edgedb"
 
+    freeauth_app_id: str | None
+
     jwt_algorithm: str = "HS256"
     jwt_token_ttl: int = 1440  # 分钟，默认为一天
     jwt_secret_key: str = "secret_key"
