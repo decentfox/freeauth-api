@@ -45,7 +45,7 @@ dev:
 	cd freeauth-admin && \
 	make dev)
 
-genqlapi:
+genqlapi: up
 	@(cd src/freeauth/db/admin && \
 	poetry run edgedb-py -I FreeAuth --target async --file admin_qry_async_edgeql.py && \
 	poetry run edgedb-py -I FreeAuth --target blocking --file admin_qry_edgeql.py)
