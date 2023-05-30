@@ -401,6 +401,7 @@ async def query_permissions_filter_by_role(
     q: str | None = None,
     application_id: uuid.UUID | None = None,
     tag_ids: list[uuid.UUID] | None = Query(None),
+    role_id: uuid.UUID | None = None,
 ) -> QueryPermissionsResult:
     return await query_permissions(
         auth_app.db,
@@ -409,4 +410,5 @@ async def query_permissions_filter_by_role(
         q=q,
         application_id=application_id,
         tag_ids=tag_ids,
+        role_id=role_id,
     )

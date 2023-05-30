@@ -4,6 +4,10 @@ with
     q := <optional str>$q,
     application_id := <optional uuid>$application_id,
     tag_ids := <optional array<uuid>>$tag_ids,
+    role := (
+        select Role
+        filter .id = <optional uuid>$role_id
+    ),
     permissions := (
         select Permission
         filter (
@@ -18,6 +22,9 @@ with
                 for tag in array_unpack(tag_ids)
                 union (tag in .tags.id)
             ))
+        ) and (
+            true if not exists role else
+            role in .roles
         )
     ),
     total := count(permissions)

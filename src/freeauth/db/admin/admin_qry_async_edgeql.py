@@ -1292,6 +1292,7 @@ async def query_permissions(
     q: str | None,
     application_id: uuid.UUID | None,
     tag_ids: list[uuid.UUID] | None,
+    role_id: uuid.UUID | None,
 ) -> QueryPermissionsResult:
     return await executor.query_single(
         """\
@@ -1301,6 +1302,10 @@ async def query_permissions(
             q := <optional str>$q,
             application_id := <optional uuid>$application_id,
             tag_ids := <optional array<uuid>>$tag_ids,
+            role := (
+                select Role
+                filter .id = <optional uuid>$role_id
+            ),
             permissions := (
                 select Permission
                 filter (
@@ -1315,6 +1320,9 @@ async def query_permissions(
                         for tag in array_unpack(tag_ids)
                         union (tag in .tags.id)
                     ))
+                ) and (
+                    true if not exists role else
+                    role in .roles
                 )
             ),
             total := count(permissions)
@@ -1344,6 +1352,7 @@ async def query_permissions(
         q=q,
         application_id=application_id,
         tag_ids=tag_ids,
+        role_id=role_id,
     )
 
 
