@@ -15,11 +15,14 @@ class FreeAuthTestApp(FreeAuthApp):
         super().__init__(app)
 
     async def setup_edgedb(self) -> None:
-        self._edgedb_client = client = edgedb.create_async_client(
+        client = edgedb.create_async_client(
             dsn=self.settings.edgedb_dsn or self.settings.edgedb_instance,
             database=self.settings.edgedb_database,
         )
         await client.ensure_connected()
+        self._edgedb_client = client = client.with_globals(
+            current_app_id=self.settings.freeauth_app_id
+        )
         async for tx in client.with_retry_options(
             edgedb.RetryOptions(0)
         ).transaction():

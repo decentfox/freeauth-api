@@ -47,7 +47,7 @@ exclude = [".*_edgeql.py"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-addopts = "-ra -x -s --ff --cov-report=term-missing:skip-covered --cov=src/freeauth/conf --cov=src/freeauth/db"
+addopts = "-ra -x -s --ff --cov-report=term-missing:skip-covered --cov=src/freeauth/conf --cov=src/freeauth/db  --cov=src/freeauth/security"
 testpaths = [
     "tests",
 ]

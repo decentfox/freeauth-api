@@ -13,6 +13,7 @@ from jose import ExpiredSignatureError, JWTError, jwt
 
 from freeauth.conf.login_settings import LoginSettings
 from freeauth.conf.settings import get_settings
+from freeauth.db.admin.admin_qry_async_edgeql import add_missing_permissions
 from freeauth.db.auth.auth_qry_async_edgeql import (
     GetCurrentUserResult,
     GetUserByAccessTokenResult,
@@ -21,6 +22,7 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     get_user_by_access_token,
     has_any_permission,
 )
+from freeauth.security import FreeAuthSecurity
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,7 @@ class FreeAuthApp:
         self.app: FastAPI | None = None
         self._edgedb_client: edgedb.AsyncIOClient | None = None
         self.settings = get_settings()
+        self.security = FreeAuthSecurity()
 
         if app is not None:
             self.init_app(app)
@@ -45,17 +48,26 @@ class FreeAuthApp:
         self.app = app
 
         self.app.add_event_handler("startup", self.setup_edgedb)
+        self.app.add_event_handler("startup", self.migrate_perms)
         self.app.add_event_handler("shutdown", self.shutdown_edgedb)
 
     async def setup_edgedb(self) -> None:
-        self.db = edgedb.create_async_client(
+        client = edgedb.create_async_client(
             dsn=self.settings.edgedb_dsn or self.settings.edgedb_instance,
             database=self.settings.edgedb_database,
         )
-        await self.db.ensure_connected()
+        await client.ensure_connected()
+        self.db = client.with_globals(
+            current_app_id=self.settings.freeauth_app_id
+        )
 
     async def shutdown_edgedb(self) -> None:
         await self.db.aclose()
+
+    async def migrate_perms(self) -> None:
+        perm_codes = [perm.code for perm in self.security.permissions]
+        if perm_codes:
+            await add_missing_permissions(self.db, perm_codes=perm_codes)
 
     @property
     def db(self) -> edgedb.AsyncIOClient:
@@ -143,10 +155,7 @@ class FreeAuthApp:
         ) -> edgedb.AsyncIOClient | None:
             if not access_token:
                 return None
-            return self.with_globals(
-                current_user_id=access_token.user.id,
-                current_app_id=self.settings.freeauth_app_id,
-            )
+            return self.with_globals(current_user_id=access_token.user.id)
 
         return dependency
 
@@ -187,6 +196,7 @@ class FreeAuthApp:
                 )
             return user
 
+        self.security.add_perm(*perm_codes)
         return dependency
 
     async def get_login_settings(self) -> LoginSettings:

@@ -4,4 +4,4 @@ with
         select global current_user.permissions
         filter .application = global current_app
     )
-select any(user_perms.code in perm_codes);
+select any(user_perms.code_upper in perm_codes);

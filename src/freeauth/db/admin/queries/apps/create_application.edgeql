@@ -7,7 +7,6 @@ select (
 ) {
     name,
     description,
-    secret := .hashed_secret,
     is_deleted,
     created_at
 }

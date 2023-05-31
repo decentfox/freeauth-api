@@ -7,9 +7,9 @@ import edgedb
 from fastapi import Depends, HTTPException, Query
 
 from freeauth.db.admin.admin_qry_async_edgeql import (
+    AddMissingPermissionsResult,
     CreatePermissionResult,
     CreateRoleResult,
-    DeletePermissionResult,
     GetPermissionByIdOrCodeResult,
     GetPermissionByIdOrCodeResultTagsItem,
     QueryPermissionsResult,
@@ -89,7 +89,7 @@ async def toggle_permissions_status(
 )
 async def delete_permissions(
     body: PermissionDeleteBody,
-) -> list[DeletePermissionResult]:
+) -> list[AddMissingPermissionsResult]:
     return await delete_permission(auth_app.db, ids=body.ids)
 
 
