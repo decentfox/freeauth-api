@@ -677,6 +677,7 @@ def create_user(
     email: str | None,
     mobile: str | None,
     hashed_password: str | None,
+    reset_pwd_on_first_login: bool,
     organization_ids: list[uuid.UUID] | None,
     org_type_id: uuid.UUID | None,
 ) -> CreateUserResult:
@@ -688,6 +689,7 @@ def create_user(
             email := <optional str>$email,
             mobile := <optional str>$mobile,
             hashed_password := <optional str>$hashed_password,
+            reset_pwd_on_first_login := <bool>$reset_pwd_on_first_login,
             organization_ids := <optional array<uuid>>$organization_ids,
             org_type := (
                 SELECT OrganizationType FILTER (
@@ -714,7 +716,8 @@ def create_user(
                 mobile := mobile,
                 hashed_password := hashed_password,
                 org_type := org_type,
-                directly_organizations := organizations
+                directly_organizations := organizations,
+                reset_pwd_on_next_login := reset_pwd_on_first_login
             }
         ) {
             name,
@@ -736,6 +739,7 @@ def create_user(
         email=email,
         mobile=mobile,
         hashed_password=hashed_password,
+        reset_pwd_on_first_login=reset_pwd_on_first_login,
         organization_ids=organization_ids,
         org_type_id=org_type_id,
     )

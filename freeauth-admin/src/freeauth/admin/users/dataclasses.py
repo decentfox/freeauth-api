@@ -47,6 +47,11 @@ class UserPostBody:
         title="组织类型 ID",
         description="用户所属组织类型",
     )
+    reset_pwd_on_first_login: bool = Field(
+        False,
+        title="是否强制用户在首次登录时修改密码",
+        description="默认不强制",
+    )
 
     @validator("*", pre=True)
     def empty_str_to_none(cls, v):
@@ -88,6 +93,12 @@ class UserPutBody:
         title="手机号",
         description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
     )
+
+    @validator("*", pre=True)
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
 
 
 @dataclass(config=BaseModelConfig)

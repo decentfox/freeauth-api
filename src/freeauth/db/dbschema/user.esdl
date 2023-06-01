@@ -17,6 +17,9 @@ module default {
             constraint exclusive;
         };
         property last_login_at -> datetime;
+        property reset_pwd_on_next_login -> bool {
+            default := false
+        };
 
         multi link directly_organizations -> Organization {
             on target delete allow;

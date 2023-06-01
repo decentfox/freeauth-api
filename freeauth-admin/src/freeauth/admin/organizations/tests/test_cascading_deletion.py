@@ -84,6 +84,7 @@ async def user(
         hashed_password="password",
         organization_ids=[enterprise.id],
         org_type_id=org_type.id,
+        reset_pwd_on_first_login=False,
     )
     user = await update_user_roles(
         edgedb_client, id=user.id, role_ids=[role.id]

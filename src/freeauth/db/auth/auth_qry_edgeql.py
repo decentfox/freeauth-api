@@ -6,6 +6,7 @@
 #     'queries/get_user_by_access_token.edgeql'
 #     'queries/get_user_by_account.edgeql'
 #     'queries/has_any_permission.edgeql'
+#     'queries/reset_pwd.edgeql'
 #     'queries/send_code.edgeql'
 #     'queries/sign_in.edgeql'
 #     'queries/sign_out.edgeql'
@@ -39,6 +40,7 @@ class AuthAuditEventType(enum.Enum):
     SIGNIN = "SignIn"
     SIGNOUT = "SignOut"
     SIGNUP = "SignUp"
+    RESETPWD = "ResetPwd"
 
 
 class AuthAuditStatusCode(enum.Enum):
@@ -100,6 +102,7 @@ class GetCurrentUserResult(NoPydanticValidation):
     is_deleted: bool
     created_at: datetime.datetime
     last_login_at: datetime.datetime | None
+    reset_pwd_on_next_login: bool | None
 
 
 @dataclasses.dataclass
@@ -277,7 +280,8 @@ def get_current_user(
             ),
             is_deleted,
             created_at,
-            last_login_at
+            last_login_at,
+            reset_pwd_on_next_login
         };\
         """,
     )
@@ -370,6 +374,49 @@ def has_any_permission(
         select any(user_perms.code_upper in perm_codes);\
         """,
         perm_codes=perm_codes,
+    )
+
+
+def reset_pwd(
+    executor: edgedb.Executor,
+    *,
+    client_info: str,
+    id: uuid.UUID,
+    hashed_password: str,
+) -> GetUserByAccountResult | None:
+    return executor.query_single(
+        """\
+        with
+            module auth,
+            client_info := (
+                <tuple<client_ip: str, user_agent: json>><json>$client_info
+            ),
+            user := (
+                update default::User
+                filter
+                    .id = <uuid>$id and not .is_deleted
+                set {
+                    hashed_password := <str>$hashed_password,
+                    reset_pwd_on_next_login := false,
+                }
+            ),
+            audit_log := (
+                insert AuditLog {
+                    client_ip := client_info.client_ip,
+                    event_type := AuditEventType.ResetPwd,
+                    status_code := AuditStatusCode.OK,
+                    raw_ua := <str>client_info.user_agent['raw_ua'],
+                    os := <str>client_info.user_agent['os'],
+                    device := <str>client_info.user_agent['device'],
+                    browser := <str>client_info.user_agent['browser'],
+                    user := user
+                }
+            )
+        select user { id, is_deleted };\
+        """,
+        client_info=client_info,
+        id=id,
+        hashed_password=hashed_password,
     )
 
 

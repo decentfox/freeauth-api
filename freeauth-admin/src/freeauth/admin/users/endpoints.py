@@ -65,6 +65,7 @@ async def post_user(
             email=user.email,
             mobile=user.mobile,
             hashed_password=get_password_hash(password),
+            reset_pwd_on_first_login=user.reset_pwd_on_first_login,
             organization_ids=user.organization_ids,
             org_type_id=user.org_type_id,
         )

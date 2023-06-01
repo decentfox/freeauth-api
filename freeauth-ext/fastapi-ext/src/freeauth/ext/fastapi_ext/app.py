@@ -180,6 +180,13 @@ class FreeAuthApp:
                 raise HTTPException(
                     status_code=HTTPStatus.UNAUTHORIZED, detail="身份验证失败"
                 )
+            elif current_user.reset_pwd_on_next_login:
+                raise HTTPException(
+                    status_code=HTTPStatus.UNAUTHORIZED,
+                    detail=dict(
+                        reset_pwd_on_next_login="首次登录之前请更改密码"
+                    ),
+                )
 
             return current_user
 

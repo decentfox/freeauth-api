@@ -14,5 +14,6 @@ select global current_user {
     ),
     is_deleted,
     created_at,
-    last_login_at
+    last_login_at,
+    reset_pwd_on_next_login
 };

@@ -84,3 +84,12 @@ class SignInPwdBody:
         title="登录密码",
         description="登录密码",
     )
+
+
+@dataclass(config=BaseModelConfig)
+class ResetPwdBody:
+    password: str = Field(
+        ...,
+        title="新登录密码",
+        description="新登录密码",
+    )

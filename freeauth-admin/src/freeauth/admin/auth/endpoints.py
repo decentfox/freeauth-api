@@ -16,11 +16,13 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     AuthVerifyType,
     GetCurrentUserResult,
     GetUserByAccessTokenResult,
+    GetUserByAccountResult,
     SendCodeResult,
     SignInResult,
     ValidateCodeResult,
     ValidatePwdResult,
     create_audit_log,
+    reset_pwd,
     send_code,
     sign_in,
     sign_out,
@@ -40,6 +42,7 @@ from ..utils import (
     verify_password,
 )
 from .dataclasses import (
+    ResetPwdBody,
     SignInCodeBody,
     SignInPwdBody,
     SignInSendCodeBody,
@@ -103,7 +106,7 @@ async def validate_auth_code(
     verify_type: AuthVerifyType,
     code: str,
     max_attempts: int | None,
-    user: GetUserByAccessTokenResult | None,
+    user: GetUserByAccountResult | None,
     client_info: dict,
 ):
     code_type = AuthCodeType.EMAIL
@@ -255,7 +258,7 @@ async def send_signin_code(
 async def sign_in_with_code(
     body: SignInCodeBody,
     response: Response,
-    user: GetUserByAccessTokenResult = Depends(
+    user: GetUserByAccountResult = Depends(
         verify_account_when_sign_in_with_code
     ),
     client_info: dict = Depends(get_client_info),
@@ -361,6 +364,43 @@ async def sign_in_with_pwd(
 
 
 @router.post(
+    "/reset_pwd",
+    tags=["认证相关"],
+    summary="重置密码",
+    description="重置当前用户的登录密码",
+)
+async def reset_user_password(
+    body: ResetPwdBody,
+    client_info: dict = Depends(get_client_info),
+    current_user: GetCurrentUserResult = Depends(auth_app.current_user),
+):
+    if not current_user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="账号不存在"
+        )
+    if current_user.is_deleted:
+        await create_audit_log(
+            auth_app.db,
+            user_id=current_user.id,
+            client_info=json.dumps(client_info),
+            status_code=(
+                AuthAuditStatusCode.ACCOUNT_DISABLED.value  # type: ignore
+            ),
+            event_type=AuthAuditEventType.RESETPWD.value,  # type: ignore
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="您的账号已停用"
+        )
+    await reset_pwd(
+        auth_app.db,
+        id=current_user.id,
+        hashed_password=get_password_hash(body.password),
+        client_info=json.dumps(client_info),
+    )
+    return "ok"
+
+
+@router.post(
     "/sign_out",
     tags=["认证相关"],
     summary="退出登录",
@@ -368,12 +408,22 @@ async def sign_in_with_pwd(
 )
 async def post_sign_out(
     response: Response,
+    client_info: dict = Depends(get_client_info),
     token: GetUserByAccessTokenResult = Depends(auth_app.get_access_token),
+    current_user: GetCurrentUserResult = Depends(auth_app.current_user),
 ) -> str:
     if not token:
         return "ok"
 
     await sign_out(auth_app.db, access_token=token.access_token)
+    if current_user:
+        await create_audit_log(
+            auth_app.db,
+            user_id=current_user.id,
+            client_info=json.dumps(client_info),
+            status_code=AuthAuditStatusCode.OK.value,  # type: ignore
+            event_type=AuthAuditEventType.SIGNOUT.value,  # type: ignore
+        )
     settings = get_settings()
     response.delete_cookie(
         key=settings.jwt_cookie_key,

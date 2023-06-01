@@ -1,7 +1,7 @@
 module auth {
     scalar type CodeType extending enum<SMS, Email>;
     scalar type VerifyType extending enum<SignIn, SignUp>;
-    scalar type AuditEventType extending enum<SignIn, SignOut, SignUp>;
+    scalar type AuditEventType extending enum<SignIn, SignOut, SignUp, ResetPwd>;
     scalar type AuditStatusCode extending
     enum<
         OK,
