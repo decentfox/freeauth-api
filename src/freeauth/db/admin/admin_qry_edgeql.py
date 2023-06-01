@@ -601,12 +601,11 @@ def create_permission(
                 ),
                 tags :=  (
                     for item in array_unpack(tags) union (
-                        insert Tag {
+                        insert PermissionTag {
                             name := item,
-                            tag_type := TagType.Permission
                         } unless conflict on .name
                         else (
-                            select Tag filter .name = item and .tag_type = TagType.Permission
+                            select PermissionTag filter .name = item
                         )
                     )
                 )
@@ -1293,10 +1292,10 @@ def query_permission_tags(
 ) -> list[GetPermissionByIdOrCodeResultTagsItem]:
     return executor.query(
         """\
-        select Tag {
+        select PermissionTag {
             id,
             name
-        } filter (.tag_type = TagType.Permission)\
+        } order by .rank then .created_at\
         """,
     )
 
@@ -1767,12 +1766,11 @@ def update_permission(
                 description := <optional str>$description,
                 tags :=  (
                     for item in array_unpack(tags) union (
-                        insert Tag {
+                        insert PermissionTag {
                             name := item,
-                            tag_type := TagType.Permission
                         } unless conflict on .name
                         else (
-                            select Tag filter .name = item and .tag_type = TagType.Permission
+                            select PermissionTag filter .name = item
                         )
                     )
                 ),

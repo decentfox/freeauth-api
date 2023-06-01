@@ -16,12 +16,11 @@ select (
         ),
         tags :=  (
             for item in array_unpack(tags) union (
-                insert Tag {
+                insert PermissionTag {
                     name := item,
-                    tag_type := TagType.Permission
                 } unless conflict on .name
                 else (
-                    select Tag filter .name = item and .tag_type = TagType.Permission
+                    select PermissionTag filter .name = item
                 )
             )
         )

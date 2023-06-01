@@ -9,7 +9,7 @@ module default {
             on target delete delete source;
         };
         multi link roles := .<permissions[is Role];
-        multi link tags -> Tag {
+        multi link tags -> PermissionTag {
             on target delete allow;
         };
 
