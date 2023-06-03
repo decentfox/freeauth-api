@@ -31,16 +31,16 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     validate_pwd,
 )
 from freeauth.ext.fastapi_ext.utils import get_client_info
-
-from .. import logger
-from ..app import auth_app, router
-from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
-from ..utils import (
+from freeauth.security.utils import (
     MOBILE_REGEX,
     gen_random_string,
     get_password_hash,
     verify_password,
 )
+
+from .. import logger
+from ..app import auth_app, router
+from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
 from .dataclasses import (
     ResetPwdBody,
     SignInCodeBody,

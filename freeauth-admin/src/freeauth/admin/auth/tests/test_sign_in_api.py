@@ -13,10 +13,10 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     AuthCodeType,
     AuthVerifyType,
 )
+from freeauth.security.utils import gen_random_string
 
 from ...audit_logs.dataclasses import AuthAuditEventType
 from ...users.tests.test_api import create_user
-from ...utils import gen_random_string
 
 
 @pytest.fixture(autouse=True)

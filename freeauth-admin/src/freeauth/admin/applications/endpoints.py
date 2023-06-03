@@ -13,10 +13,10 @@ from freeauth.db.admin.admin_qry_async_edgeql import (
     update_application_secret,
     update_application_status,
 )
+from freeauth.security.utils import gen_random_string, get_password_hash
 
 from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
-from ..utils import gen_random_string, get_password_hash
 from .dataclasses import (
     ApplicationDeleteBody,
     ApplicationStatusBody,

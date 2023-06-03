@@ -17,9 +17,9 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     send_code,
     validate_code,
 )
+from freeauth.security.utils import gen_random_string
 
 from ...users.tests.test_api import create_user
-from ...utils import gen_random_string
 
 
 @pytest.fixture(autouse=True)

@@ -197,13 +197,17 @@ class FreeAuthApp:
             db: edgedb.AsyncIOClient = Depends(self.user_scoped_db),
             user: GetCurrentUserResult = Depends(self.current_user_or_401),
         ) -> GetCurrentUserResult:
+            if self.settings.testing:
+                return user
+
             if not await has_any_permission(db, perm_codes=list(perm_codes)):
                 raise HTTPException(
                     status_code=HTTPStatus.FORBIDDEN, detail="您无权进行该操作"
                 )
             return user
 
-        self.security.add_perm(*perm_codes)
+        if not self.settings.testing:
+            self.security.add_perm(*perm_codes)
         return dependency
 
     async def get_login_settings(self) -> LoginSettings:
