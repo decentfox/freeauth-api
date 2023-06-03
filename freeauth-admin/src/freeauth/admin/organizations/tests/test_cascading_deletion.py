@@ -132,16 +132,14 @@ async def test_delete_org_type(
     assert rv[0].code == org_type.code
 
     deleted_org_type = await get_org_type_by_id_or_code(
-        edgedb_client, id=org_type.id, code=None
+        edgedb_client,
+        id=org_type.id,
     )
     assert not deleted_org_type
 
     deleted_enterprise = await get_enterprise_by_id_or_code(
         edgedb_client,
         id=enterprise.id,
-        code=None,
-        org_type_id=None,
-        org_type_code=None,
     )
     assert not deleted_enterprise
 
@@ -149,15 +147,12 @@ async def test_delete_org_type(
         deleted_dept = await get_department_by_id_or_code(
             edgedb_client,
             id=dept.id,
-            code=None,
-            enterprise_id=None,
         )
         assert not deleted_dept
 
     assert not await get_role_by_id_or_code(
         edgedb_client,
         id=role.id,
-        code=None,
     )
 
     updated_user = await get_user_by_id(
@@ -184,9 +179,6 @@ async def test_delete_enterprise(
     deleted_enterprise = await get_enterprise_by_id_or_code(
         edgedb_client,
         id=enterprise.id,
-        code=None,
-        org_type_id=None,
-        org_type_code=None,
     )
     assert not deleted_enterprise
 
@@ -194,8 +186,6 @@ async def test_delete_enterprise(
         deleted_dept = await get_department_by_id_or_code(
             edgedb_client,
             id=dept.id,
-            code=None,
-            enterprise_id=None,
         )
         assert not deleted_dept
 
@@ -215,7 +205,5 @@ async def test_delete_department(
         deleted_dept = await get_department_by_id_or_code(
             edgedb_client,
             id=dept.id,
-            code=None,
-            enterprise_id=None,
         )
         assert not deleted_dept

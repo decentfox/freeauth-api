@@ -262,10 +262,9 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     rv = await validate_code(
         edgedb_client,
         account=account,
-        code_type=AuthCodeType.SMS.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
+        code_type=AuthCodeType.SMS,
+        verify_type=AuthVerifyType.SIGNUP,
         code="12345678",
-        max_attempts=None,
     )
     status_code = AuthAuditStatusCode(str(rv.status_code))
     assert status_code == AuthAuditStatusCode.INVALID_CODE
@@ -274,8 +273,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     await send_code(
         edgedb_client,
         account=account,
-        code_type=AuthCodeType.SMS.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
+        code_type=AuthCodeType.SMS,
+        verify_type=AuthVerifyType.SIGNUP,
         code=code,
         ttl=300,
         max_attempts=3,
@@ -286,8 +285,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
         rv = await validate_code(
             edgedb_client,
             account=account,
-            code_type=AuthCodeType.SMS.value,  # type: ignore
-            verify_type=AuthVerifyType.SIGNUP.value,  # type: ignore
+            code_type=AuthCodeType.SMS,
+            verify_type=AuthVerifyType.SIGNUP,
             code="12345678",
             max_attempts=3,
         )
@@ -301,8 +300,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     await send_code(
         edgedb_client,
         account=account,
-        code_type=AuthCodeType.SMS.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNIN.value,  # type: ignore
+        code_type=AuthCodeType.SMS,
+        verify_type=AuthVerifyType.SIGNIN,
         code=code,
         ttl=300,
         max_attempts=3,
@@ -312,8 +311,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     rv = await validate_code(
         edgedb_client,
         account=account,
-        code_type=AuthCodeType.SMS.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNIN.value,  # type: ignore
+        code_type=AuthCodeType.SMS,
+        verify_type=AuthVerifyType.SIGNIN,
         code="12345678",
         max_attempts=3,
     )
@@ -323,8 +322,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     rv = await validate_code(
         edgedb_client,
         account=account,
-        code_type=AuthCodeType.SMS.value,  # type: ignore
-        verify_type=AuthVerifyType.SIGNIN.value,  # type: ignore
+        code_type=AuthCodeType.SMS,
+        verify_type=AuthVerifyType.SIGNIN,
         code=code,
         max_attempts=3,
     )

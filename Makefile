@@ -46,9 +46,11 @@ dev:
 	make dev)
 
 genqlapi: up
-	@(cd src/freeauth/db/admin && \
-	poetry run edgedb-py -I FreeAuth --target async --file admin_qry_async_edgeql.py && \
-	poetry run edgedb-py -I FreeAuth --target blocking --file admin_qry_edgeql.py)
-	@(cd src/freeauth/db/auth && \
-	poetry run edgedb-py -I FreeAuth --target async --file auth_qry_async_edgeql.py && \
-	poetry run edgedb-py -I FreeAuth --target blocking --file auth_qry_edgeql.py)
+	@for target in async blocking; do \
+		for module in admin auth; do \
+			target_name=$$(if [ "$$target" = "async" ]; then echo "_async"; else echo ""; fi); \
+			file_path="src/freeauth/db/$${module}/$${module}_qry$${target_name}_edgeql.py"; \
+			command="poetry run edgedb-py -I FreeAuth --target $$target --dir src/freeauth/db/$$module --file $$file_path"; \
+			$$command; \
+		done \
+	done
