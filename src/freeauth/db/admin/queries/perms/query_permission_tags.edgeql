@@ -1,4 +1,4 @@
-select Tag {
+select PermissionTag {
     id,
     name
-} filter (.tag_type = TagType.Permission)
+} order by .rank then .created_at
