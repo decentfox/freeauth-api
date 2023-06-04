@@ -41,7 +41,9 @@ module auth {
     }
 
     type Token extending default::TimeStamped {
-        required link user -> default::User;
+        required link user -> default::User {
+            on target delete delete source;
+        };
         required property access_token -> str {
             constraint exclusive;
         }
@@ -50,7 +52,9 @@ module auth {
     }
 
     type AuditLog extending default::TimeStamped {
-        required link user -> default::User;
+        required link user -> default::User {
+            on target delete delete source;
+        };
         required property client_ip -> str {
             readonly := true;
         }
