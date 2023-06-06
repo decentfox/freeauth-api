@@ -46,6 +46,7 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
     tags=["权限管理"],
     summary="创建权限",
     description="创建新权限",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def post_permission(
     body: BasePermissionBody,
@@ -72,6 +73,7 @@ async def post_permission(
     tags=["权限管理"],
     summary="变更权限状态",
     description="批量变更权限状态",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def toggle_permissions_status(
     body: PermissionStatusBody,
@@ -86,6 +88,7 @@ async def toggle_permissions_status(
     tags=["权限管理"],
     summary="删除权限",
     description="批量删除权限",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def delete_permissions(
     body: PermissionDeleteBody,
@@ -98,6 +101,7 @@ async def delete_permissions(
     tags=["权限管理"],
     summary="获取权限信息",
     description="获取指定权限的信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def get_permission(
     id_or_code: uuid.UUID | str = Depends(parse_permission_id_or_code),
@@ -121,6 +125,7 @@ async def get_permission(
     tags=["权限管理"],
     summary="更新权限",
     description="更新指定权限的信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def put_permission(
     body: PermissionPutBody,
@@ -154,6 +159,7 @@ async def put_permission(
     tags=["权限管理"],
     summary="获取权限列表",
     description="分页获取，支持关键字搜索、排序及条件过滤",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def get_permissions(
     body: PermissionQueryBody,
@@ -216,6 +222,7 @@ async def get_permissions(
     tags=["权限管理"],
     summary="添加角色",
     description="关联一个或多个角色到权限",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def bind_roles_to_perm(
     body: PermRoleBody,
@@ -232,6 +239,7 @@ async def bind_roles_to_perm(
     tags=["权限管理"],
     summary="移除角色",
     description="将一个或多个角色的权限移除",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def unbind_roles_to_perm(
     body: PermRoleBody,
@@ -248,6 +256,7 @@ async def unbind_roles_to_perm(
     tags=["权限管理"],
     summary="获取权限绑定角色列表",
     description="获取指定权限下绑定的角色，分页获取，支持关键字搜索、排序",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def get_roles_in_permission(
     body: QueryBody,
@@ -310,6 +319,7 @@ async def get_roles_in_permission(
     tags=["权限管理"],
     summary="获取权限关联的用户列表",
     description="获取拥有指定权限的用户，分页获取，支持关键字搜索、排序",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def get_users_in_permission(
     body: QueryBody,
@@ -379,6 +389,9 @@ async def get_users_in_permission(
     tags=["权限管理"],
     summary="获取权限标签",
     description="获取指定权限的所有标签",
+    dependencies=[
+        Depends(auth_app.perm_accepted("manage:perms", "manage:roles"))
+    ],
 )
 async def get_permission_tags() -> (
     dict[str, list[GetPermissionByIdOrCodeResultTagsItem]]
@@ -394,6 +407,9 @@ async def get_permission_tags() -> (
     tags=["权限管理"],
     summary="获取权限列表",
     description="分页获取，支持关键字搜索、排序及条件过滤",
+    dependencies=[
+        Depends(auth_app.perm_accepted("manage:perms", "manage:roles"))
+    ],
 )
 async def query_permissions_filter_by_role(
     page: int | None = None,

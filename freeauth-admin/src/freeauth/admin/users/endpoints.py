@@ -5,7 +5,7 @@ from http import HTTPStatus
 from typing import List
 
 import edgedb
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateUserResult,
@@ -49,6 +49,7 @@ FILTER_TYPE_MAPPING = {
     tags=["用户管理"],
     summary="创建用户",
     description="姓名（选填）；用户名 + 手机号 + 邮箱（三选一必填）",
+    dependencies=[Depends(auth_app.perm_accepted("manage:users"))],
 )
 async def post_user(
     user: UserPostBody,
@@ -83,6 +84,7 @@ async def post_user(
     tags=["用户管理"],
     summary="变更用户状态",
     description="支持批量变更",
+    dependencies=[Depends(auth_app.perm_accepted("manage:users"))],
 )
 async def toggle_user_status(
     body: UserStatusBody,
@@ -96,7 +98,11 @@ async def toggle_user_status(
 
 
 @router.delete(
-    "/users", tags=["用户管理"], summary="删除用户", description="支持批量删除"
+    "/users",
+    tags=["用户管理"],
+    summary="删除用户",
+    description="支持批量删除",
+    dependencies=[Depends(auth_app.perm_accepted("manage:users"))],
 )
 async def delete_users(
     body: UserDeleteBody,
@@ -113,6 +119,7 @@ async def delete_users(
     tags=["用户管理"],
     summary="更新用户信息",
     description="更新指定用户的用户信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:users"))],
 )
 async def put_user(
     user_id: uuid.UUID,
@@ -145,6 +152,9 @@ async def put_user(
     tags=["组织管理"],
     summary="变更部门",
     description="变更指定用户的直属部门或企业机构",
+    dependencies=[
+        Depends(auth_app.perm_accepted("manage:users", "manage:orgs"))
+    ],
 )
 async def update_member_organizations(
     user_id: uuid.UUID,
@@ -168,6 +178,9 @@ async def update_member_organizations(
     tags=["角色管理"],
     summary="配置角色",
     description="给指定用户配置指定一个或多个角色，或清空",
+    dependencies=[
+        Depends(auth_app.perm_accepted("manage:users", "manage:roles"))
+    ],
 )
 async def update_member_roles(
     user_id: uuid.UUID,
@@ -188,6 +201,9 @@ async def update_member_roles(
     tags=["组织管理"],
     summary="办理离职",
     description="支持批量为多个成员办理离职",
+    dependencies=[
+        Depends(auth_app.perm_accepted("manage:users", "manage:orgs"))
+    ],
 )
 async def resign_users(
     body: UserResignationBody,
@@ -204,6 +220,7 @@ async def resign_users(
     tags=["用户管理"],
     summary="获取用户信息",
     description="获取指定用户的用户信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:users"))],
 )
 async def get_user(
     user_id: uuid.UUID,
@@ -223,6 +240,13 @@ async def get_user(
     tags=["用户管理"],
     summary="获取用户列表",
     description="分页获取，支持关键字搜索、排序及条件过滤",
+    dependencies=[
+        Depends(
+            auth_app.perm_accepted(
+                "manage:users", "manage:roles", "manage:orgs"
+            )
+        )
+    ],
 )
 async def query_users(
     body: UserQueryBody,
@@ -300,6 +324,7 @@ async def query_users(
     tags=["用户管理"],
     summary="获取指定用户的权限列表",
     description="获取指定用户的权限，分页获取，支持关键字搜索、排序及条件过滤",
+    dependencies=[Depends(auth_app.perm_accepted("manage:users"))],
 )
 async def get_permissions_in_user(
     body: QueryBody,

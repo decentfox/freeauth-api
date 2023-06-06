@@ -15,10 +15,10 @@ from freeauth.db.admin.admin_qry_async_edgeql import (
 
 
 @pytest.fixture
-def org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
+def org_type(bo_client: TestClient, faker) -> CreateOrgTypeResult:
     from ...organizations.tests.test_org_type_api import create_org_type
 
-    return create_org_type(test_client, faker)
+    return create_org_type(bo_client, faker)
 
 
 @pytest.mark.parametrize(
@@ -42,25 +42,25 @@ def org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
     ],
 )
 def test_create_role_validate_errors(
-    test_client: TestClient, field: str | None, value: str | None, msg: str
+    bo_client: TestClient, field: str | None, value: str | None, msg: str
 ):
     data: dict[str, str | None] = {}
     if field:
         data = {field: value}
-    resp = test_client.post("/v1/roles", json=data)
+    resp = bo_client.post("/v1/roles", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"][field] == msg
 
 
-def test_create_role(test_client: TestClient, faker, org_type):
+def test_create_role(bo_client: TestClient, faker, org_type):
     data: dict[str, Any] = {
         "name": faker.company_prefix() + "经理",
         "code": faker.lexify("?" * 10),
         "description": faker.sentence(),
         "org_type_id": None,
     }
-    resp = test_client.post("/v1/roles", json=data)
+    resp = bo_client.post("/v1/roles", json=data)
     role = resp.json()
     assert resp.status_code == HTTPStatus.CREATED, role
     assert role["name"] == data["name"]
@@ -70,23 +70,23 @@ def test_create_role(test_client: TestClient, faker, org_type):
 
     data["code"] = faker.lexify("?" * 10)
     data["org_type_id"] = str(org_type.id)
-    resp = test_client.post("/v1/roles", json=data)
+    resp = bo_client.post("/v1/roles", json=data)
     role = resp.json()
     assert resp.status_code == HTTPStatus.CREATED, role
     assert role["org_type"]["code"] == org_type.code
     assert role["org_type"]["name"] == org_type.name
 
     data["code"] = role["code"].upper()
-    resp = test_client.post("/v1/roles", json=data)
+    resp = bo_client.post("/v1/roles", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.BAD_REQUEST, error
     assert error["detail"]["errors"]["code"] == f"{data['code']} 已被使用"
 
 
 def create_role(
-    test_client: TestClient, faker, org_type_id: str | None = None
+    bo_client: TestClient, faker, org_type_id: str | None = None
 ) -> CreateRoleResult:
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/roles",
         json={
             "name": faker.company_prefix() + "经理",
@@ -99,23 +99,23 @@ def create_role(
 
 
 @pytest.fixture
-def role(test_client: TestClient, faker) -> CreateRoleResult:
-    return create_role(test_client, faker)
+def role(bo_client: TestClient, faker) -> CreateRoleResult:
+    return create_role(bo_client, faker)
 
 
-def test_update_role(test_client: TestClient, role: CreateRoleResult, faker):
+def test_update_role(bo_client: TestClient, role: CreateRoleResult, faker):
     data: dict[str, Any] = {
         "name": role.name,
         "code": role.code,
         "description": role.description,
         "is_deleted": role.is_deleted,
     }
-    resp = test_client.put(f"/v1/roles/{uuid.uuid4()}", json=data)
+    resp = bo_client.put(f"/v1/roles/{uuid.uuid4()}", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.NOT_FOUND, error
     assert error["detail"]["message"] == "更新角色失败：角色不存在"
 
-    resp = test_client.put(f"/v1/roles/{role.id}", json=data)
+    resp = bo_client.put(f"/v1/roles/{role.id}", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert CreateRoleResult(**rv) == role
@@ -125,7 +125,7 @@ def test_update_role(test_client: TestClient, role: CreateRoleResult, faker):
         "code": f"   {role.code}",
         "description": f"    {role.description}",
     }
-    resp = test_client.put(f"/v1/roles/{role.id}", json=data)
+    resp = bo_client.put(f"/v1/roles/{role.id}", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert CreateRoleResult(**rv) == role
@@ -134,7 +134,7 @@ def test_update_role(test_client: TestClient, role: CreateRoleResult, faker):
         "name": "new name",
         "is_deleted": True,
     }
-    resp = test_client.put(f"/v1/roles/{role.code}", json=data)
+    resp = bo_client.put(f"/v1/roles/{role.code}", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["name"] == "new name"
@@ -142,32 +142,32 @@ def test_update_role(test_client: TestClient, role: CreateRoleResult, faker):
     assert not rv["description"]
     assert rv["is_deleted"]
 
-    another_role = create_role(test_client, faker)
+    another_role = create_role(bo_client, faker)
     data["code"] = (another_role.code or "").upper()
-    resp = test_client.put(f"/v1/roles/{role.id}", json=data)
+    resp = bo_client.put(f"/v1/roles/{role.id}", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.BAD_REQUEST, error
     assert error["detail"]["errors"]["code"] == f"{data['code']} 已被使用"
 
 
-def test_get_role(test_client: TestClient, role: CreateRoleResult):
-    resp = test_client.get(f"/v1/roles/{uuid.uuid4()}")
+def test_get_role(bo_client: TestClient, role: CreateRoleResult):
+    resp = bo_client.get(f"/v1/roles/{uuid.uuid4()}")
     error = resp.json()
     assert resp.status_code == HTTPStatus.NOT_FOUND, error
     assert error["detail"]["message"] == "获取角色信息失败：角色不存在"
 
-    resp = test_client.get(f"/v1/roles/{role.id}")
+    resp = bo_client.get(f"/v1/roles/{role.id}")
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert CreateRoleResult(**resp.json()) == role
 
-    resp = test_client.get(f"/v1/roles/{role.code}")
+    resp = bo_client.get(f"/v1/roles/{role.code}")
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert CreateRoleResult(**resp.json()) == role
 
 
-def test_toggle_role_status(test_client: TestClient, faker):
+def test_toggle_role_status(bo_client: TestClient, faker):
     data: dict[str, Any] = {}
-    resp = test_client.put("/v1/roles/status", json=data)
+    resp = bo_client.put("/v1/roles/status", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     for msg in error["detail"]["errors"].values():
@@ -177,7 +177,7 @@ def test_toggle_role_status(test_client: TestClient, faker):
         "ids": ["invalid_id"],
         "is_deleted": True,
     }
-    resp = test_client.put("/v1/roles/status", json=data)
+    resp = bo_client.put("/v1/roles/status", json=data)
     error = resp.json()
     assert error["detail"]["errors"]["ids.0"] == "ID格式错误"
 
@@ -185,17 +185,17 @@ def test_toggle_role_status(test_client: TestClient, faker):
         "ids": [str(uuid.uuid4())],
         "is_deleted": True,
     }
-    resp = test_client.put("/v1/roles/status", json=data)
+    resp = bo_client.put("/v1/roles/status", json=data)
     assert resp.status_code == HTTPStatus.OK
     assert resp.json() == []
 
-    role_1 = create_role(test_client, faker)
-    role_2 = create_role(test_client, faker)
+    role_1 = create_role(bo_client, faker)
+    role_2 = create_role(bo_client, faker)
     data = {
         "ids": [str(role_1.id)],
         "is_deleted": True,
     }
-    resp = test_client.put("/v1/roles/status", json=data)
+    resp = bo_client.put("/v1/roles/status", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv) == 1
@@ -205,7 +205,7 @@ def test_toggle_role_status(test_client: TestClient, faker):
         "ids": [str(role_1.id), str(role_2.id)],
         "is_deleted": False,
     }
-    resp = test_client.put("/v1/roles/status", json=data)
+    resp = bo_client.put("/v1/roles/status", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv) == 2
@@ -213,31 +213,31 @@ def test_toggle_role_status(test_client: TestClient, faker):
     assert not rv[1]["is_deleted"]
 
 
-def test_delete_roles(test_client: TestClient, faker):
+def test_delete_roles(bo_client: TestClient, faker):
     data: dict[str, Any] = {}
-    resp = test_client.request("DELETE", "/v1/roles", json=data)
+    resp = bo_client.request("DELETE", "/v1/roles", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     for msg in error["detail"]["errors"].values():
         assert msg == "该字段为必填项"
 
     data = {"ids": ["invalid_id"]}
-    resp = test_client.request("DELETE", "/v1/roles", json=data)
+    resp = bo_client.request("DELETE", "/v1/roles", json=data)
     error = resp.json()
     assert error["detail"]["errors"]["ids.0"] == "ID格式错误"
 
     data = {"ids": [str(uuid.uuid4())]}
-    resp = test_client.request("DELETE", "/v1/roles", json=data)
+    resp = bo_client.request("DELETE", "/v1/roles", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv) == 0
 
-    role_1 = create_role(test_client, faker)
-    role_2 = create_role(test_client, faker)
+    role_1 = create_role(bo_client, faker)
+    role_2 = create_role(bo_client, faker)
 
     ids = [str(role_1.id), str(role_2.id)]
     data = {"ids": ids}
-    resp = test_client.request("DELETE", "/v1/roles", json=data)
+    resp = bo_client.request("DELETE", "/v1/roles", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv) == 2
@@ -245,40 +245,40 @@ def test_delete_roles(test_client: TestClient, faker):
 
 
 @pytest.fixture
-def org_types(test_client: TestClient, faker):
+def org_types(bo_client: TestClient, faker):
     from ...organizations.tests.test_org_type_api import create_org_type
 
     org_types = []
     for _ in range(3):
-        org_types.append(create_org_type(test_client, faker))
+        org_types.append(create_org_type(bo_client, faker))
     return org_types
 
 
 @pytest.fixture
-def roles(test_client: TestClient, org_types, faker):
+def roles(bo_client: TestClient, org_types, faker):
     roles = []
     for _ in range(2):
-        roles.append(create_role(test_client, faker))
+        roles.append(create_role(bo_client, faker))
     for _ in range(2):
         roles.append(
-            create_role(test_client, faker, org_type_id=str(org_types[0].id))
+            create_role(bo_client, faker, org_type_id=str(org_types[0].id))
         )
     for _ in range(2):
         roles.append(
-            create_role(test_client, faker, org_type_id=str(org_types[1].id))
+            create_role(bo_client, faker, org_type_id=str(org_types[1].id))
         )
     for _ in range(2):
         roles.append(
-            create_role(test_client, faker, org_type_id=str(org_types[2].id))
+            create_role(bo_client, faker, org_type_id=str(org_types[2].id))
         )
     return roles
 
 
-def test_get_roles(test_client: TestClient, roles, org_types):
+def test_get_roles(bo_client: TestClient, roles, org_types):
     data: dict[str, Any] = dict(
         per_page=3,
     )
-    resp = test_client.post("/v1/roles/query", json=data)
+    resp = bo_client.post("/v1/roles/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 8
@@ -287,14 +287,14 @@ def test_get_roles(test_client: TestClient, roles, org_types):
     assert rv["per_page"] == 3
 
     data["q"] = roles[0].name
-    resp = test_client.post("/v1/roles/query", json=data)
+    resp = bo_client.post("/v1/roles/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 1
     assert rv["rows"][0]["name"] == roles[0].name
 
     data["q"] = org_types[0].name
-    resp = test_client.post("/v1/roles/query", json=data)
+    resp = bo_client.post("/v1/roles/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 2
@@ -302,7 +302,7 @@ def test_get_roles(test_client: TestClient, roles, org_types):
     assert rv["rows"][1]["org_type"]["name"] == org_types[0].name
 
     data = {"include_global_roles": False}
-    resp = test_client.post("/v1/roles/query", json=data)
+    resp = bo_client.post("/v1/roles/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 6
@@ -313,7 +313,7 @@ def test_get_roles(test_client: TestClient, roles, org_types):
         "include_global_roles": False,
         "org_type_id": str(org_types[2].id),
     }
-    resp = test_client.post("/v1/roles/query", json=data)
+    resp = bo_client.post("/v1/roles/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 2
@@ -323,7 +323,7 @@ def test_get_roles(test_client: TestClient, roles, org_types):
     data = {
         "org_type_id": str(org_types[0].id),
     }
-    resp = test_client.post("/v1/roles/query", json=data)
+    resp = bo_client.post("/v1/roles/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 4
@@ -334,7 +334,7 @@ def test_get_roles(test_client: TestClient, roles, org_types):
         )
 
     data = {"include_org_type_roles": False}
-    resp = test_client.post("/v1/roles/query", json=data)
+    resp = bo_client.post("/v1/roles/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 2
@@ -345,24 +345,24 @@ def test_get_roles(test_client: TestClient, roles, org_types):
         "include_org_type_roles": False,
         "include_global_roles": False,
     }
-    resp = test_client.post("/v1/roles/query", json=data)
+    resp = bo_client.post("/v1/roles/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 0
 
 
 def test_bind_or_unbind_users_to_roles(
-    test_client: TestClient, roles, org_types, faker
+    bo_client: TestClient, roles, org_types, faker
 ):
     from ...users.tests.test_api import create_user
 
-    resp = test_client.post("/v1/roles/bind_users", json={})
+    resp = bo_client.post("/v1/roles/bind_users", json={})
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["user_ids"] == "该字段为必填项"
     assert error["detail"]["errors"]["role_ids"] == "该字段为必填项"
 
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/roles/bind_users",
         json={
             "user_ids": [],
@@ -375,23 +375,21 @@ def test_bind_or_unbind_users_to_roles(
     assert error["detail"]["errors"]["role_ids"] == "请至少选择一项"
 
     users: list[CreateUserResult] = [
+        create_user(bo_client, name=faker.name(), username=faker.user_name()),
         create_user(
-            test_client, name=faker.name(), username=faker.user_name()
-        ),
-        create_user(
-            test_client,
+            bo_client,
             name=faker.name(),
             username=faker.user_name(),
             org_type_id=str(org_types[0].id),
         ),
         create_user(
-            test_client,
+            bo_client,
             name=faker.name(),
             username=faker.user_name(),
             org_type_id=str(org_types[1].id),
         ),
     ]
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/roles/bind_users",
         json={
             "user_ids": [str(u.id) for u in users],
@@ -418,13 +416,13 @@ def test_bind_or_unbind_users_to_roles(
                     str(r.id) for r in (roles[0:2] + roles[4:6])
                 )
 
-    resp = test_client.post("/v1/roles/unbind_users", json={})
+    resp = bo_client.post("/v1/roles/unbind_users", json={})
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["user_ids"] == "该字段为必填项"
     assert error["detail"]["errors"]["role_ids"] == "该字段为必填项"
 
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/roles/unbind_users",
         json={
             "user_ids": [],
@@ -436,7 +434,7 @@ def test_bind_or_unbind_users_to_roles(
     assert error["detail"]["errors"]["user_ids"] == "请至少选择一项"
     assert error["detail"]["errors"]["role_ids"] == "请至少选择一项"
 
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/roles/unbind_users",
         json={
             "user_ids": [str(u.id) for u in users],
@@ -451,7 +449,7 @@ def test_bind_or_unbind_users_to_roles(
         else:
             assert len(user["roles"]) == 4  # global + org_type roles
 
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/roles/unbind_users",
         json={
             "user_ids": [str(u.id) for u in users],
@@ -466,7 +464,7 @@ def test_bind_or_unbind_users_to_roles(
         else:
             assert len(user["roles"]) == 2  # org_type roles left
 
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/roles/unbind_users",
         json={
             "user_ids": [str(u.id) for u in users],

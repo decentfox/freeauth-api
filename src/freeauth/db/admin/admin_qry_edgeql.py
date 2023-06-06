@@ -24,6 +24,7 @@
 #     'src/freeauth/db/admin/queries/orgs/organization_unbind_users.edgeql'
 #     'src/freeauth/db/admin/queries/perms/perm_bind_roles.edgeql'
 #     'src/freeauth/db/admin/queries/perms/perm_unbind_roles.edgeql'
+#     'src/freeauth/db/admin/queries/apps/query_application_options.edgeql'
 #     'src/freeauth/db/admin/queries/orgs/query_org_types.edgeql'
 #     'src/freeauth/db/admin/queries/perms/query_permission_tags.edgeql'
 #     'src/freeauth/db/admin/queries/perms/query_permissions.edgeql'
@@ -314,6 +315,15 @@ class GetUserByIdResultRolesItem(NoPydanticValidation):
     description: str | None
     is_deleted: bool
     org_type: CreateRoleResultOrgType | None
+
+
+@dataclasses.dataclass
+class QueryApplicationOptionsResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    description: str | None
+    is_deleted: bool
+    is_protected: bool
 
 
 @dataclasses.dataclass
@@ -1279,6 +1289,31 @@ def perm_unbind_roles(
         """,
         role_ids=role_ids,
         permission_ids=permission_ids,
+    )
+
+
+def query_application_options(
+    executor: edgedb.Executor,
+    *,
+    q: str | None = None,
+) -> list[QueryApplicationOptionsResult]:
+    return executor.query(
+        """\
+        with
+            q := <optional str>$q
+        select Application {
+            id,
+            name,
+            description,
+            is_deleted,
+            is_protected
+        } filter
+            true if not exists q else
+            .name ilike q or
+            .description ?? '' ilike q
+        order by .created_at desc;\
+        """,
+        q=q,
     )
 
 

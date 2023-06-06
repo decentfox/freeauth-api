@@ -64,6 +64,7 @@ from .dependencies import (
     tags=["组织管理"],
     summary="创建组织类型",
     description="包含字段：名称（必填）、Code（必填）、描述（选填）",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def post_org_type(
     body: OrgTypePostBody,
@@ -88,6 +89,7 @@ async def post_org_type(
     tags=["组织管理"],
     summary="变更组织类型状态",
     description="批量变更组织类型状态",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def toggle_org_types_status(
     body: OrgTypeStatusBody,
@@ -105,6 +107,7 @@ async def toggle_org_types_status(
     tags=["组织管理"],
     summary="删除组织类型",
     description="批量删除组织类型",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def delete_org_types(
     body: OrgTypeDeleteBody,
@@ -120,6 +123,7 @@ async def delete_org_types(
     tags=["组织管理"],
     summary="获取组织类型信息",
     description="获取指定组织类型的信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def get_org_type(
     id_or_code: uuid.UUID | str = Depends(parse_org_type_id_or_code),
@@ -141,6 +145,7 @@ async def get_org_type(
     tags=["组织管理"],
     summary="更新组织类型",
     description="更新指定组织类型的信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def put_org_type(
     body: OrgTypePutBody,
@@ -173,6 +178,13 @@ async def put_org_type(
     tags=["组织管理"],
     summary="获取组织类型列表",
     description="获取全部组织类型信息",
+    dependencies=[
+        Depends(
+            auth_app.perm_accepted(
+                "manage:orgs", "manage:roles", "manage:users"
+            )
+        )
+    ],
 )
 async def get_org_types() -> dict[str, list[CreateOrgTypeResult]]:
     org_types: list[CreateOrgTypeResult] = await query_org_types(auth_app.db)
@@ -185,6 +197,7 @@ async def get_org_types() -> dict[str, list[CreateOrgTypeResult]]:
     tags=["组织管理"],
     summary="创建企业机构",
     description="创建指定组织类型的企业机构",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def post_enterprise(
     body: EnterprisePostBody,
@@ -218,6 +231,7 @@ async def post_enterprise(
     tags=["组织管理"],
     summary="更新企业机构",
     description="通过企业机构 ID 或 Code，更新企业机构信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def put_enterprise(
     body: EnterprisePutBody,
@@ -262,6 +276,7 @@ async def put_enterprise(
     tags=["组织管理"],
     summary="删除企业机构或部门分支",
     description="批量删除企业机构或部门分支",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def delete_organizations(
     body: OrganizationDeleteBody,
@@ -277,6 +292,7 @@ async def delete_organizations(
     tags=["组织管理"],
     summary="获取企业机构信息",
     description="通过企业机构 ID 或 Code，获取指定企业机构的信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def get_enterprise(
     params: tuple[str | uuid.UUID, str | uuid.UUID | None] = Depends(
@@ -309,6 +325,7 @@ async def get_enterprise(
     tags=["组织管理"],
     summary="获取企业机构列表",
     description="分页获取，支持关键字搜索、排序，支持过滤指定组织类型下的企业机构",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def get_enterprises_in_org_type(
     body: EnterpriseQueryBody,
@@ -377,6 +394,7 @@ async def get_enterprises_in_org_type(
     tags=["组织管理"],
     summary="创建部门分支",
     description="创建属于指定父部门或企业机构的部门分支",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def post_department(
     body: DepartmentPostOrPutBody,
@@ -406,6 +424,7 @@ async def post_department(
     tags=["组织管理"],
     summary="更新部门分支",
     description="通过部门 ID 或 Code，更新部门分支信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def put_department(
     body: DepartmentPostOrPutBody,
@@ -442,6 +461,7 @@ async def put_department(
     tags=["组织管理"],
     summary="获取部门分支信息",
     description="通过部门 ID 或 Code，获取指定部门分支的信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def get_department(
     params: tuple[str | uuid.UUID, uuid.UUID | None] = Depends(
@@ -469,6 +489,13 @@ async def get_department(
     tags=["组织管理"],
     summary="获取组织树",
     description="通过组织类型 ID 或 Code，获取组织树信息",
+    dependencies=[
+        Depends(
+            auth_app.perm_accepted(
+                "manage:orgs", "manage:roles", "manage:users"
+            )
+        )
+    ],
 )
 async def get_organization_tree_by_org_type(
     id_or_code: uuid.UUID | str = Depends(parse_org_type_id_or_code),
@@ -500,6 +527,7 @@ async def get_organization_tree_by_org_type(
     tags=["组织管理"],
     summary="添加成员",
     description="添加成员到一个或多个部门分支、企业机构中，支持添加多个成员",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def bind_users_to_organizations(
     body: OrganizationUserBody,
@@ -517,6 +545,7 @@ async def bind_users_to_organizations(
     tags=["组织管理"],
     summary="移除成员",
     description="从一个或多个部门分支、企业机构中移除一个或多个成员",
+    dependencies=[Depends(auth_app.perm_accepted("manage:orgs"))],
 )
 async def unbind_users_to_organizations(
     body: OrganizationUnbindUserBody,
@@ -533,6 +562,9 @@ async def unbind_users_to_organizations(
     tags=["组织管理"],
     summary="获取组织成员列表",
     description="获取指定部门分支或企业机构下包含的成员，分页获取，支持关键字搜索、排序",
+    dependencies=[
+        Depends(auth_app.perm_accepted("manage:orgs", "manage:roles"))
+    ],
 )
 async def get_members_in_organization(
     body: OrganizationUserQueryBody,

@@ -41,6 +41,7 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
     tags=["角色管理"],
     summary="创建角色",
     description="创建新角色",
+    dependencies=[Depends(auth_app.perm_accepted("manage:roles"))],
 )
 async def post_role(
     body: RolePostBody,
@@ -66,6 +67,7 @@ async def post_role(
     tags=["角色管理"],
     summary="变更角色状态",
     description="批量变更角色状态",
+    dependencies=[Depends(auth_app.perm_accepted("manage:roles"))],
 )
 async def toggle_roles_status(
     body: RoleStatusBody,
@@ -80,6 +82,7 @@ async def toggle_roles_status(
     tags=["角色管理"],
     summary="删除角色",
     description="批量删除角色",
+    dependencies=[Depends(auth_app.perm_accepted("manage:roles"))],
 )
 async def delete_roles(
     body: RoleDeleteBody,
@@ -92,6 +95,7 @@ async def delete_roles(
     tags=["角色管理"],
     summary="获取角色信息",
     description="获取指定角色的信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:roles"))],
 )
 async def get_role(
     id_or_code: uuid.UUID | str = Depends(parse_role_id_or_code),
@@ -113,6 +117,7 @@ async def get_role(
     tags=["角色管理"],
     summary="更新角色",
     description="更新指定角色的信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:roles"))],
 )
 async def put_role(
     body: RolePutBody,
@@ -145,6 +150,13 @@ async def put_role(
     tags=["角色管理"],
     summary="获取角色列表",
     description="分页获取，支持关键字搜索、排序及条件过滤",
+    dependencies=[
+        Depends(
+            auth_app.perm_accepted(
+                "manage:roles", "manage:perms", "manage:users"
+            )
+        )
+    ],
 )
 async def get_roles(
     body: RoleQueryBody,
@@ -224,6 +236,7 @@ async def get_roles(
     tags=["角色管理"],
     summary="获取角色绑定用户列表",
     description="获取指定角色下绑定的用户，分页获取，支持关键字搜索、排序",
+    dependencies=[Depends(auth_app.perm_accepted("manage:roles"))],
 )
 async def get_users_in_role(
     body: QueryBody,
@@ -294,6 +307,7 @@ async def get_users_in_role(
     tags=["角色管理"],
     summary="添加用户",
     description="关联一个或多个用户到角色",
+    dependencies=[Depends(auth_app.perm_accepted("manage:roles"))],
 )
 async def bind_users_to_roles(
     body: RoleUserBody,
@@ -308,6 +322,7 @@ async def bind_users_to_roles(
     tags=["角色管理"],
     summary="移除用户",
     description="将一个或多个用户的角色移除",
+    dependencies=[Depends(auth_app.perm_accepted("manage:roles"))],
 )
 async def unbind_roles_from_users(
     body: RoleUserBody,

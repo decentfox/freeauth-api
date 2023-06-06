@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from freeauth import db as freeauth_db
 from freeauth.conf.settings import get_settings
-from freeauth.db.admin.admin_qry_async_edgeql import CreateUserResult
+from freeauth.db.auth.auth_qry_async_edgeql import AuthCodeType, SignInResult
 from freeauth.ext.fastapi_ext import FreeAuthTestApp
 
 
@@ -114,29 +114,29 @@ def faker_locale():
 
 
 @pytest.fixture
-def bo_user(test_client, faker) -> CreateUserResult:
-    username = faker.user_name()
+def bo_user(test_client, faker) -> SignInResult:
+    settings = get_settings()
+    mobile = faker.phone_number()
+    settings.demo_accounts.append(mobile)
+    test_client.post(
+        "/v1/sign_up/code",
+        json={
+            "account": mobile,
+            "code_type": AuthCodeType.SMS.value,
+        },
+    )
     resp = test_client.post(
-        "/v1/users",
-        json=dict(
-            name=faker.name(),
-            username=username,
-            mobile=faker.phone_number(),
-            email=faker.email(),
-            password=username,
-        ),
+        "/v1/sign_up/verify",
+        json={
+            "account": mobile,
+            "code_type": AuthCodeType.SMS.value,
+            "code": settings.demo_code,
+        },
     )
     user = resp.json()
-    return CreateUserResult(**user)
+    return SignInResult(**user)
 
 
 @pytest.fixture
-def bo_user_client(test_client, bo_user) -> TestClient:
-    test_client.post(
-        "/v1/sign_in",
-        json={
-            "account": bo_user.username,
-            "password": bo_user.username,
-        },
-    )
+def bo_client(test_client, bo_user) -> TestClient:
     return test_client

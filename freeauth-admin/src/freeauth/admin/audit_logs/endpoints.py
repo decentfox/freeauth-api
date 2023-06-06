@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fastapi import Depends
+
 from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
 
@@ -15,6 +17,7 @@ FILTER_TYPE_MAPPING = {
     tags=["审计日志"],
     summary="获取审计日志列表",
     description="分页获取，支持关键字搜索、排序及条件过滤",
+    dependencies=[Depends(auth_app.perm_accepted("manage:audit_logs"))],
 )
 async def query_audit_logs(
     body: QueryBody,

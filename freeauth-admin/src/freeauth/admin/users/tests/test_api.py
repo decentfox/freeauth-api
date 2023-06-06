@@ -18,7 +18,7 @@ from freeauth.db.admin.admin_qry_async_edgeql import (
 
 
 def create_user(
-    test_client: TestClient,
+    bo_client: TestClient,
     name: str | None = None,
     username: str | None = None,
     email: str | None = None,
@@ -27,7 +27,7 @@ def create_user(
     organization_ids: list[str] | None = None,
     org_type_id: str | None = None,
 ) -> CreateUserResult:
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/users",
         json=dict(
             name=name,
@@ -44,9 +44,9 @@ def create_user(
 
 
 @pytest.fixture
-async def user(test_client: TestClient) -> CreateUserResult:
+async def user(bo_client: TestClient) -> CreateUserResult:
     return create_user(
-        test_client,
+        bo_client,
         name="张三",
         username="user",
         email="user@example.com",
@@ -54,9 +54,9 @@ async def user(test_client: TestClient) -> CreateUserResult:
     )
 
 
-def test_create_user_at_least_one_field_error(test_client: TestClient):
+def test_create_user_at_least_one_field_error(bo_client: TestClient):
     data: Dict[str, str] = {}
-    resp = test_client.post("/v1/users", json=data)
+    resp = bo_client.post("/v1/users", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert (
@@ -101,10 +101,10 @@ def test_create_user_at_least_one_field_error(test_client: TestClient):
     ],
 )
 def test_create_user_validate_errors(
-    test_client: TestClient, field: str, value: str, msg: str
+    bo_client: TestClient, field: str, value: str, msg: str
 ):
     data: Dict[str, str] = {field: value}
-    resp = test_client.post("/v1/users", json=data)
+    resp = bo_client.post("/v1/users", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"][field] == msg
@@ -119,13 +119,13 @@ def test_create_user_validate_errors(
     ],
 )
 def test_create_user_exist_error(
-    test_client: TestClient, field: str, value: str
+    bo_client: TestClient, field: str, value: str
 ):
     data: Dict[str, str] = {field: value}
-    resp = test_client.post("/v1/users", json=data)
+    resp = bo_client.post("/v1/users", json=data)
     assert resp.status_code == HTTPStatus.CREATED, resp.json()
 
-    resp = test_client.post("/v1/users", json=data)
+    resp = bo_client.post("/v1/users", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.BAD_REQUEST, error
     assert error["detail"]["errors"][field] == f"{value} 已被使用"
@@ -141,12 +141,12 @@ def test_create_user_exist_error(
     ],
 )
 def test_create_user_strip_whitespace(
-    test_client: TestClient, field: str, value: str, db_value: str
+    bo_client: TestClient, field: str, value: str, db_value: str
 ):
     data: Dict[str, str] = {field: value}
     if field == "name":
         data.update(username="user")
-    resp = test_client.post("/v1/users", json=data)
+    resp = bo_client.post("/v1/users", json=data)
     user = resp.json()
     assert resp.status_code == HTTPStatus.CREATED, user
     assert data[field] != user[field] == db_value
@@ -160,7 +160,7 @@ def test_create_user_strip_whitespace(
     ],
 )
 def test_create_user_empty_string(
-    test_client: TestClient, field: str, value: str
+    bo_client: TestClient, field: str, value: str
 ):
     data: Dict[str, str] = dict(
         name="张三",
@@ -169,45 +169,45 @@ def test_create_user_empty_string(
         email="user@example.com",
     )
     data.update({field: value})
-    resp = test_client.post("/v1/users", json=data)
+    resp = bo_client.post("/v1/users", json=data)
     user = resp.json()
     assert resp.status_code == HTTPStatus.CREATED, user
     assert user[field] is None
 
 
 @pytest.fixture
-def org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
+def org_type(bo_client: TestClient, faker) -> CreateOrgTypeResult:
     from ...organizations.tests.test_org_type_api import create_org_type
 
-    return create_org_type(test_client, faker)
+    return create_org_type(bo_client, faker)
 
 
 @pytest.fixture
 def enterprise(
-    test_client: TestClient, org_type: CreateOrgTypeResult, faker
+    bo_client: TestClient, org_type: CreateOrgTypeResult, faker
 ) -> CreateEnterpriseResult:
     from ...organizations.tests.test_enterprise_api import create_enterprise
 
-    return create_enterprise(test_client, org_type, faker)
+    return create_enterprise(bo_client, org_type, faker)
 
 
 @pytest.fixture
 def department(
-    test_client: TestClient, enterprise: CreateEnterpriseResult, faker
+    bo_client: TestClient, enterprise: CreateEnterpriseResult, faker
 ) -> CreateDepartmentResult:
     from ...organizations.tests.test_department_api import create_department
 
-    return create_department(test_client, enterprise, faker)
+    return create_department(bo_client, enterprise, faker)
 
 
 def test_create_user_with_organizations(
-    test_client: TestClient,
+    bo_client: TestClient,
     org_type: CreateOrgTypeResult,
     enterprise: CreateEnterpriseResult,
     department: CreateDepartmentResult,
     faker,
 ):
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/users",
         json=dict(
             name=faker.name(),
@@ -223,9 +223,9 @@ def test_create_user_with_organizations(
     assert len(user["departments"]) == 2
 
 
-def test_toggle_user_status(test_client: TestClient, user: CreateUserResult):
+def test_toggle_user_status(bo_client: TestClient, user: CreateUserResult):
     data: Dict = {}
-    resp = test_client.put("/v1/users/status", json=data)
+    resp = bo_client.put("/v1/users/status", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     for msg in error["detail"]["errors"].values():
@@ -235,7 +235,7 @@ def test_toggle_user_status(test_client: TestClient, user: CreateUserResult):
         "user_ids": ["invalid_id"],
         "is_deleted": True,
     }
-    resp = test_client.put("/v1/users/status", json=data)
+    resp = bo_client.put("/v1/users/status", json=data)
     error = resp.json()
     assert error["detail"]["errors"]["user_ids.0"] == "ID格式错误"
 
@@ -243,7 +243,7 @@ def test_toggle_user_status(test_client: TestClient, user: CreateUserResult):
         "user_ids": ["12345678-1234-5678-1234-567812345678"],
         "is_deleted": False,
     }
-    resp = test_client.put("/v1/users/status", json=data)
+    resp = bo_client.put("/v1/users/status", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert resp.json()["users"] == []
 
@@ -251,7 +251,7 @@ def test_toggle_user_status(test_client: TestClient, user: CreateUserResult):
         "user_ids": [str(user.id)],
         "is_deleted": True,
     }
-    resp = test_client.put("/v1/users/status", json=data)
+    resp = bo_client.put("/v1/users/status", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert resp.json()["users"] == [
         {"id": str(user.id), "name": user.name, "is_deleted": True}
@@ -261,7 +261,7 @@ def test_toggle_user_status(test_client: TestClient, user: CreateUserResult):
         "user_ids": [str(user.id)],
         "is_deleted": False,
     }
-    resp = test_client.put("/v1/users/status", json=data)
+    resp = bo_client.put("/v1/users/status", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert resp.json()["users"] == [
         {"id": str(user.id), "name": user.name, "is_deleted": False}
@@ -269,12 +269,12 @@ def test_toggle_user_status(test_client: TestClient, user: CreateUserResult):
 
 
 def test_delete_users(
-    test_client: TestClient,
+    bo_client: TestClient,
     user: CreateUserResult,
     department: CreateDepartmentResult,
 ):
     data: Dict = {}
-    resp = test_client.request("DELETE", "/v1/users", json=data)
+    resp = bo_client.request("DELETE", "/v1/users", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     for msg in error["detail"]["errors"].values():
@@ -283,20 +283,20 @@ def test_delete_users(
     data: Dict = {
         "user_ids": ["invalid_id"],
     }
-    resp = test_client.request("DELETE", "/v1/users", json=data)
+    resp = bo_client.request("DELETE", "/v1/users", json=data)
     error = resp.json()
     assert error["detail"]["errors"]["user_ids.0"] == "ID格式错误"
 
     data: Dict = {
         "user_ids": ["12345678-1234-5678-1234-567812345678"],
     }
-    resp = test_client.request("DELETE", "/v1/users", json=data)
+    resp = bo_client.request("DELETE", "/v1/users", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert resp.json()["users"] == []
 
-    resp = test_client.post("/v1/users", json={"username": "user1"})
+    resp = bo_client.post("/v1/users", json={"username": "user1"})
     user1 = resp.json()
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/users",
         json={"username": "user2", "organization_ids": [str(department.id)]},
     )
@@ -305,7 +305,7 @@ def test_delete_users(
     data: Dict = {
         "user_ids": [str(user.id), user1["id"], user2["id"]],
     }
-    resp = test_client.request("DELETE", "/v1/users", json=data)
+    resp = bo_client.request("DELETE", "/v1/users", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert sorted(u["id"] for u in resp.json()["users"]) == sorted(
         [str(user.id), user1["id"], user2["id"]]
@@ -363,7 +363,7 @@ def test_delete_users(
     ],
 )
 def test_update_user_validate_errors(
-    test_client: TestClient,
+    bo_client: TestClient,
     user: CreateUserResult,
     field: str,
     value: str,
@@ -376,7 +376,7 @@ def test_update_user_validate_errors(
         mobile="13800000000",
     )
     data.update({field: value})
-    resp = test_client.put(f"/v1/users/{user.id}", json=data)
+    resp = bo_client.put(f"/v1/users/{user.id}", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"][field] == msg
@@ -391,10 +391,10 @@ def test_update_user_validate_errors(
     ],
 )
 def test_update_user_exist_error(
-    test_client: TestClient, user: CreateUserResult, field: str, value: str
+    bo_client: TestClient, user: CreateUserResult, field: str, value: str
 ):
     data: Dict[str, str] = {field: value}
-    resp = test_client.post("/v1/users", json=data)
+    resp = bo_client.post("/v1/users", json=data)
     assert resp.status_code == HTTPStatus.CREATED, resp.json()
 
     data: Dict = dict(
@@ -404,7 +404,7 @@ def test_update_user_exist_error(
         mobile=user.mobile,
     )
     data.update({field: value})
-    resp = test_client.put(f"/v1/users/{user.id}", json=data)
+    resp = bo_client.put(f"/v1/users/{user.id}", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.BAD_REQUEST, error
     assert error["detail"]["errors"][field] == f"{value} 已被使用"
@@ -420,7 +420,7 @@ def test_update_user_exist_error(
     ],
 )
 def test_update_user_strip_whitespace(
-    test_client: TestClient,
+    bo_client: TestClient,
     user: CreateUserResult,
     field: str,
     value: str,
@@ -433,34 +433,34 @@ def test_update_user_strip_whitespace(
         mobile=user.mobile,
     )
     data.update({field: value})
-    resp = test_client.put(f"/v1/users/{user.id}", json=data)
+    resp = bo_client.put(f"/v1/users/{user.id}", json=data)
     updated_user = resp.json()
     assert resp.status_code == HTTPStatus.OK, updated_user
     assert data[field] != updated_user[field] == db_value
 
 
 def test_change_user_organizations(
-    test_client: TestClient,
+    bo_client: TestClient,
     org_type: CreateOrgTypeResult,
     department: CreateDepartmentResult,
     faker,
 ):
     user = create_user(
-        test_client,
+        bo_client,
         name=faker.name(),
         username=faker.user_name(),
         mobile=faker.phone_number(),
         email=faker.email(),
         org_type_id=str(org_type.id),
     )
-    resp = test_client.put(f"/v1/users/{user.id}/organizations", json={})
+    resp = bo_client.put(f"/v1/users/{user.id}/organizations", json={})
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["organization_ids"] == "该字段为必填项"
 
     not_found_id = uuid.uuid4()
     ids = [str(department.id), str(uuid.uuid4())]
-    resp = test_client.put(
+    resp = bo_client.put(
         f"/v1/users/{not_found_id}/organizations",
         json=dict(organization_ids=ids),
     )
@@ -468,7 +468,7 @@ def test_change_user_organizations(
     assert resp.status_code == HTTPStatus.NOT_FOUND, error
     assert error["detail"]["message"] == "变更部门失败：用户不存在"
 
-    resp = test_client.put(
+    resp = bo_client.put(
         f"/v1/users/{user.id}/organizations",
         json=dict(organization_ids=ids),
     )
@@ -479,12 +479,12 @@ def test_change_user_organizations(
     from ...organizations.tests.test_enterprise_api import create_enterprise
     from ...organizations.tests.test_org_type_api import create_org_type
 
-    another_org_type = create_org_type(test_client, faker)
-    enterprise_1 = create_enterprise(test_client, org_type, faker)
-    enterprise_2 = create_enterprise(test_client, another_org_type, faker)
+    another_org_type = create_org_type(bo_client, faker)
+    enterprise_1 = create_enterprise(bo_client, org_type, faker)
+    enterprise_2 = create_enterprise(bo_client, another_org_type, faker)
 
     ids.extend([str(enterprise_1.id), str(enterprise_2.id)])
-    resp = test_client.put(
+    resp = bo_client.put(
         f"/v1/users/{user.id}/organizations",
         json=dict(organization_ids=ids, org_type_id=str(another_org_type.id)),
     )
@@ -497,7 +497,7 @@ def test_change_user_organizations(
 
 
 def test_set_user_organizations(
-    test_client: TestClient,
+    bo_client: TestClient,
     org_type: CreateOrgTypeResult,
     department: CreateDepartmentResult,
     faker,
@@ -506,17 +506,17 @@ def test_set_user_organizations(
     from ...organizations.tests.test_org_type_api import create_org_type
 
     user = create_user(
-        test_client,
+        bo_client,
         name=faker.name(),
         username=faker.user_name(),
         mobile=faker.phone_number(),
         email=faker.email(),
     )
-    another_org_type = create_org_type(test_client, faker)
-    enterprise = create_enterprise(test_client, another_org_type, faker)
+    another_org_type = create_org_type(bo_client, faker)
+    enterprise = create_enterprise(bo_client, another_org_type, faker)
 
     ids = [str(department.id), str(uuid.uuid4()), str(enterprise.id)]
-    resp = test_client.put(
+    resp = bo_client.put(
         f"/v1/users/{user.id}/organizations",
         json=dict(organization_ids=ids, org_type_id=None),
     )
@@ -525,7 +525,7 @@ def test_set_user_organizations(
     assert len(updated_user["departments"]) == 0
     assert updated_user["org_type"] is None
 
-    resp = test_client.put(
+    resp = bo_client.put(
         f"/v1/users/{user.id}/organizations",
         json=dict(organization_ids=ids, org_type_id=str(org_type.id)),
     )
@@ -537,27 +537,27 @@ def test_set_user_organizations(
 
 
 @pytest.fixture
-def roles(test_client: TestClient, org_type, faker) -> list[CreateRoleResult]:
+def roles(bo_client: TestClient, org_type, faker) -> list[CreateRoleResult]:
     from ...roles.tests.test_api import create_role
 
     roles = [
-        create_role(test_client, faker, org_type_id=str(org_type.id)),
-        create_role(test_client, faker),
+        create_role(bo_client, faker, org_type_id=str(org_type.id)),
+        create_role(bo_client, faker),
     ]
     return roles
 
 
 def test_update_member_roles(
-    test_client: TestClient, roles, org_type, enterprise, department, faker
+    bo_client: TestClient, roles, org_type, enterprise, department, faker
 ):
     user_1 = create_user(
-        test_client,
+        bo_client,
         name=faker.name(),
         username=faker.user_name(),
         mobile=faker.phone_number(),
         email=faker.email(),
     )
-    resp = test_client.put(
+    resp = bo_client.put(
         f"/v1/users/{user_1.id}/roles",
         json=dict(role_ids=[str(r.id) for r in roles]),
     )
@@ -568,7 +568,7 @@ def test_update_member_roles(
     assert rv["roles"][0]["code"] == roles[1].code
 
     user_2 = create_user(
-        test_client,
+        bo_client,
         name=faker.name(),
         username=faker.user_name(),
         mobile=faker.phone_number(),
@@ -576,7 +576,7 @@ def test_update_member_roles(
         organization_ids=[str(enterprise.id), str(department.id)],
         org_type_id=str(org_type.id),
     )
-    resp = test_client.put(
+    resp = bo_client.put(
         f"/v1/users/{user_2.id}/roles",
         json=dict(role_ids=[str(r.id) for r in roles]),
     )
@@ -585,7 +585,7 @@ def test_update_member_roles(
     assert len(rv["departments"]) == 2
     assert len(rv["roles"]) == 2
 
-    resp = test_client.put(
+    resp = bo_client.put(
         f"/v1/users/{user_2.id}/roles",
         json=dict(role_ids=[]),
     )
@@ -596,16 +596,16 @@ def test_update_member_roles(
 
     from ...organizations.tests.test_org_type_api import create_org_type
 
-    another_org_type = create_org_type(test_client, faker)
+    another_org_type = create_org_type(bo_client, faker)
     user_3 = create_user(
-        test_client,
+        bo_client,
         name=faker.name(),
         username=faker.user_name(),
         mobile=faker.phone_number(),
         email=faker.email(),
         org_type_id=str(another_org_type.id),
     )
-    resp = test_client.put(
+    resp = bo_client.put(
         f"/v1/users/{user_3.id}/roles",
         json=dict(role_ids=[str(r.id) for r in roles]),
     )
@@ -617,7 +617,7 @@ def test_update_member_roles(
 
 
 def test_resign_user(
-    test_client: TestClient,
+    bo_client: TestClient,
     org_type: CreateOrgTypeResult,
     enterprise: CreateEnterpriseResult,
     department: CreateDepartmentResult,
@@ -628,7 +628,7 @@ def test_resign_user(
     for _ in range(3):
         users.append(
             create_user(
-                test_client,
+                bo_client,
                 name=faker.name(),
                 username=faker.user_name(),
                 mobile=faker.phone_number(),
@@ -638,7 +638,7 @@ def test_resign_user(
             )
         )
 
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/users/resign",
         json=dict(user_ids=[str(u.id) for u in users]),
     )
@@ -647,7 +647,7 @@ def test_resign_user(
     assert len(resigned_user) == 3
 
     for user in users:
-        resp = test_client.get(f"/v1/users/{user.id}")
+        resp = bo_client.get(f"/v1/users/{user.id}")
         rv = resp.json()
         assert resp.status_code == HTTPStatus.OK, rv
         assert not rv["is_deleted"]
@@ -656,7 +656,7 @@ def test_resign_user(
 
 
 def test_resign_and_disable_user(
-    test_client: TestClient,
+    bo_client: TestClient,
     enterprise: CreateEnterpriseResult,
     department: CreateDepartmentResult,
     faker,
@@ -665,7 +665,7 @@ def test_resign_and_disable_user(
     for _ in range(3):
         users.append(
             create_user(
-                test_client,
+                bo_client,
                 name=faker.name(),
                 username=faker.user_name(),
                 mobile=faker.phone_number(),
@@ -673,7 +673,7 @@ def test_resign_and_disable_user(
                 organization_ids=[str(enterprise.id), str(department.id)],
             )
         )
-    resp = test_client.post(
+    resp = bo_client.post(
         "/v1/users/resign",
         json=dict(user_ids=[str(u.id) for u in users], is_deleted=True),
     )
@@ -682,7 +682,7 @@ def test_resign_and_disable_user(
     assert len(resigned_user) == 3
 
     for user in users:
-        resp = test_client.get(f"/v1/users/{user.id}")
+        resp = bo_client.get(f"/v1/users/{user.id}")
         rv = resp.json()
         assert resp.status_code == HTTPStatus.OK, rv
         assert rv["is_deleted"]
@@ -690,31 +690,31 @@ def test_resign_and_disable_user(
         assert not rv["departments"]
 
 
-def test_get_user(test_client: TestClient, user: CreateUserResult):
+def test_get_user(bo_client: TestClient, user: CreateUserResult):
     not_found_id = "12345678-1234-5678-1234-567812345678"
-    resp = test_client.get(f"/v1/users/{not_found_id}")
+    resp = bo_client.get(f"/v1/users/{not_found_id}")
     error = resp.json()
     assert resp.status_code == HTTPStatus.NOT_FOUND, error
     assert error["detail"]["message"] == "获取用户信息失败：用户不存在"
 
-    resp = test_client.get(f"/v1/users/{user.id}")
+    resp = bo_client.get(f"/v1/users/{user.id}")
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert CreateUserResult(**resp.json()) == user
 
 
-def test_query_users(test_client: TestClient, faker):
+def test_query_users(bo_client: TestClient, bo_user, faker):
     from ...organizations.tests.test_org_type_api import create_org_type
 
-    org_type_1 = create_org_type(test_client, faker)
-    org_type_2 = create_org_type(test_client, faker)
+    org_type_1 = create_org_type(bo_client, faker)
+    org_type_2 = create_org_type(bo_client, faker)
 
     users: List[CreateUserResult] = [
-        create_user(test_client, name=faker.name(), username=faker.user_name())
+        create_user(bo_client, name=faker.name(), username=faker.user_name())
     ]
     for _ in range(3):
         users.append(
             create_user(
-                test_client,
+                bo_client,
                 name=faker.name(),
                 username=faker.user_name(),
                 mobile=faker.phone_number(),
@@ -724,7 +724,7 @@ def test_query_users(test_client: TestClient, faker):
     for _ in range(3):
         users.append(
             create_user(
-                test_client,
+                bo_client,
                 name=faker.name(),
                 username=faker.user_name(),
                 email=faker.email(),
@@ -734,7 +734,7 @@ def test_query_users(test_client: TestClient, faker):
     for _ in range(3):
         users.append(
             create_user(
-                test_client,
+                bo_client,
                 name=faker.name(),
                 username=faker.user_name(),
                 mobile=faker.phone_number(),
@@ -749,26 +749,26 @@ def test_query_users(test_client: TestClient, faker):
     for idx in {3, 5, 7}:
         status_data["user_ids"].append(str(users[idx].id))
         users[idx].is_deleted = True
-    test_client.put("/v1/users/status", json=status_data)
+    bo_client.put("/v1/users/status", json=status_data)
 
     data: Dict = dict()
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert rv["total"] == 10
-    assert len(rv["rows"]) == 10
+    assert rv["total"] == 11
+    assert len(rv["rows"]) == 11
     assert rv["page"] == 1
     assert rv["per_page"] == 20
 
     data["q"] = users[0].name
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 1
     assert rv["rows"][0]["name"] == users[0].name
 
     data["q"] = "example.com"
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert all(data["q"] in u["email"] for u in rv["rows"])
@@ -777,45 +777,44 @@ def test_query_users(test_client: TestClient, faker):
         page=1,
         per_page=3,
     )
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["last"] == 4
     assert len(rv["rows"]) == 3
 
     data["page"] = 4
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["page"] == 4
-    assert len(rv["rows"]) == 1
+    assert len(rv["rows"]) == 2
 
     data = dict(
         order_by=["username"],
     )
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
+    username_list = [u.username or "" for u in users] + [bo_user.username]
     assert resp.status_code == HTTPStatus.OK, rv
-    assert sorted(u.username or "" for u in users) == [
-        u["username"] for u in rv["rows"]
-    ]
+    assert sorted(username_list) == [u["username"] for u in rv["rows"]]
 
     data["order_by"] = ["-username"]
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert sorted([u.username or "" for u in users], reverse=True) == [
+    assert sorted(username_list, reverse=True) == [
         u["username"] for u in rv["rows"]
     ]
 
     data["order_by"] = ["-is_deleted", "username"]
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert [
         str(u.id)
         for u in sorted(users, key=lambda u: (-u.is_deleted, u.username or ""))
-    ] == [u["id"] for u in rv["rows"]]
+    ] == [u["id"] for u in rv["rows"] if u["id"] != str(bo_user.id)]
 
     data = dict(
         filter_by=[
@@ -834,7 +833,7 @@ def test_query_users(test_client: TestClient, faker):
             ),
         ],
     )
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["rows"]) == 1
@@ -848,14 +847,14 @@ def test_query_users(test_client: TestClient, faker):
             value=True,
         ),
     ]
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert len(rv["rows"]) == 6
+    assert len(rv["rows"]) == 7
     assert users[0].username not in [u["username"] for u in rv["rows"]]
 
     data = {"include_unassigned_users": False}
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 6
@@ -865,7 +864,7 @@ def test_query_users(test_client: TestClient, faker):
         "include_unassigned_users": False,
         "org_type_id": str(org_type_1.id),
     }
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["total"] == 3
@@ -874,10 +873,10 @@ def test_query_users(test_client: TestClient, faker):
     data = {
         "org_type_id": str(org_type_2.id),
     }
-    resp = test_client.post("/v1/users/query", json=data)
+    resp = bo_client.post("/v1/users/query", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
-    assert rv["total"] == 7
+    assert rv["total"] == 8
     assert all(
         u["org_type"] is None or u["org_type"]["name"] == org_type_2.name
         for u in rv["rows"]

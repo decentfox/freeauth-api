@@ -5,7 +5,7 @@ import re
 from http import HTTPStatus
 from typing import Any
 
-from fastapi import Body, HTTPException
+from fastapi import Body, Depends, HTTPException
 
 from freeauth.conf.login_settings import LoginSettings
 from freeauth.db.auth.auth_qry_async_edgeql import upsert_login_setting
@@ -36,6 +36,7 @@ async def get_login_configs() -> dict[str, Any]:
     tags=["登录配置"],
     summary="更新登录配置项",
     description="更新一个或多个登录配置项值",
+    dependencies=[Depends(auth_app.perm_accepted("manage:login_settings"))],
 )
 async def put_login_configs(
     body: dict[str, Any] = Body(
