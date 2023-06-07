@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from http import HTTPStatus
+from typing import Any
 
 from fastapi import Depends, HTTPException, Query
 
@@ -38,15 +39,15 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
 )
 async def post_application(
     body: BaseApplicationBody,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     secret: str = gen_random_string(32, secret=True)
-    await create_application(
+    application = await create_application(
         auth_app.db,
         name=body.name,
         description=body.description,
         hashed_secret=get_password_hash(secret),
     )
-    return {"secret": secret}
+    return {"id": application.id, "secret": secret}
 
 
 @router.put(
@@ -58,7 +59,7 @@ async def post_application(
 )
 async def gen_application_secret(
     app_id: uuid.UUID,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     secret: str = gen_random_string(32, secret=True)
     application = await update_application_secret(
         auth_app.db,
@@ -69,7 +70,7 @@ async def gen_application_secret(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="应用不存在"
         )
-    return {"secret": secret}
+    return {"id": application.id, "secret": secret}
 
 
 @router.put(
