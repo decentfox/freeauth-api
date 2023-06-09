@@ -15,6 +15,7 @@ httpx = "^0.23.3"
 pydantic = {extras = ["dotenv", "email"], version = "^1.10.7"}
 freeauth = {path = "../", develop = true}
 freeauth-fastapi-ext = {path = "../freeauth-ext/fastapi-ext", develop = true}
+fastapi-mail = "^1.2.8"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"

@@ -2,4 +2,6 @@
 max-line-length = 79
 exclude =
     .venv,
+    .mypy_cache,
+    .pytest_cache,
     *_edgeql.py

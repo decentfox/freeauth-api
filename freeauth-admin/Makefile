@@ -6,7 +6,7 @@ lint:
 	@poetry run isort .
 	@poetry run black .
 	@poetry run flake8 .
-	@poetry run mypy .
+	@poetry run mypy --ignore-missing-imports .
 
 testdb:
 	@poetry run pytest --reset-db

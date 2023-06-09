@@ -1,0 +1,38 @@
+<!DOCTYPE html PUBLIC
+  "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html lang="zh-CN">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>账号已创建</title>
+</head>
+<body style="margin: 0; padding: 0;">
+<table border="0" cellspacing="0" cellpadding="0" style="padding-bottom:20px;max-width:516px;min-width:220px">
+  <tbody>
+  <tr>
+    <td width="8" style="width:8px"></td>
+    <td>
+      <div style="border-style:solid;border-width:thin;border-color:#dadce0;border-radius:8px;padding:40px 20px"
+           align="center">
+        <div
+          style="font-family:Roboto,RobotoDraft,Helvetica,Arial,sans-serif;border-bottom:thin solid #dadce0;color:rgba(0,0,0,0.87);line-height:32px;padding-bottom:24px;text-align:center;word-break:break-word">
+          <div style="font-size:24px">您好, {{ username or email }}!</div>
+        </div>
+        <div
+          style="font-family:Roboto-Regular,Helvetica,Arial,sans-serif;font-size:14px;color:rgba(0,0,0,0.87);line-height:20px;padding-top:20px;text-align:left">
+          管理员为您创建了账号，请使用此密码进行登录：<br>
+          <div style="text-align:center;font-size:36px;margin-top:20px;line-height:44px">
+            {{ password }}
+          </div>
+          <br>
+        </div>
+      </div>
+    </td>
+    <td width="8" style="width:8px"></td>
+  </tr>
+  </tbody>
+</table>
+</body>
+</html>

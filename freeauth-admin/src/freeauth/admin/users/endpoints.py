@@ -5,7 +5,7 @@ from http import HTTPStatus
 from typing import List
 
 import edgedb
-from fastapi import Depends, HTTPException
+from fastapi import BackgroundTasks, Depends, HTTPException
 
 from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateUserResult,
@@ -25,6 +25,7 @@ from freeauth.security.utils import gen_random_string, get_password_hash
 
 from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
+from ..tasks import send_email
 from .dataclasses import (
     UserDeleteBody,
     UserOrganizationBody,
@@ -52,7 +53,7 @@ FILTER_TYPE_MAPPING = {
     dependencies=[Depends(auth_app.perm_accepted("manage:users"))],
 )
 async def post_user(
-    user: UserPostBody,
+    user: UserPostBody, background_tasks: BackgroundTasks
 ) -> CreateUserResult:
     username: str | None = user.username
     if not username:
@@ -75,6 +76,18 @@ async def post_user(
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail={field: f"{getattr(user, field)} 已被使用"},
+        )
+    if user.send_first_login_email and user.email:
+        background_tasks.add_task(
+            send_email,
+            tpl="user_created.html",
+            subject="账号已创建",
+            to=user.email,
+            body=dict(
+                username=username,
+                email=user.email,
+                password=password,
+            ),
         )
     return created_user
 

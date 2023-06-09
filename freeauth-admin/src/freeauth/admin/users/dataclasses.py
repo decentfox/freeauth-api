@@ -52,6 +52,11 @@ class UserPostBody:
         title="是否强制用户在首次登录时修改密码",
         description="默认不强制",
     )
+    send_first_login_email: bool = Field(
+        False,
+        title="是否通过邮件发送初始默认登录信息",
+        description="默认不发送",
+    )
 
     @validator("*", pre=True)
     def empty_str_to_none(cls, v):
