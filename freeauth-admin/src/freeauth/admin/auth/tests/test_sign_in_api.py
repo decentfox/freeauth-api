@@ -13,16 +13,16 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     AuthCodeType,
     AuthVerifyType,
 )
+from freeauth.security.utils import gen_random_string
 
 from ...audit_logs.dataclasses import AuthAuditEventType
 from ...users.tests.test_api import create_user
-from ...utils import gen_random_string
 
 
 @pytest.fixture(autouse=True)
-def login_settings_for_signup(test_client: TestClient):
+def login_settings_for_signup(bo_client: TestClient):
     # enable all signup & signin modes
-    test_client.put(
+    bo_client.put(
         "/v1/login_settings",
         json={
             "codeSigninModes": ["mobile", "email"],
@@ -159,7 +159,7 @@ def test_validate_sign_in_code_failed(
     assert error["detail"]["errors"] == errors
 
 
-def test_sign_in_with_code(test_client: TestClient):
+def test_sign_in_with_code(test_client: TestClient, bo_client: TestClient):
     account: str = "13800000000"
     data: Dict = {
         "account": account,
@@ -214,7 +214,7 @@ def test_sign_in_with_code(test_client: TestClient):
     )
     assert payload["sub"] == user["id"]
 
-    resp = test_client.post("/v1/audit_logs/query", json={})
+    resp = test_client.post("/v1/audit_logs/query", json={"q": account})
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["rows"]) == 1
@@ -294,13 +294,13 @@ def test_sign_in_with_password(test_client: TestClient):
     )
 
 
-def test_get_user_me(bo_user_client: TestClient, bo_user):
-    resp = bo_user_client.get("/v1/me")
+def test_get_user_me(bo_client: TestClient, bo_user):
+    resp = bo_client.get("/v1/me")
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["id"] == str(bo_user.id)
 
-    resp = bo_user_client.put(
+    resp = bo_client.put(
         "/v1/users/status",
         json={
             "user_ids": [str(bo_user.id)],
@@ -308,26 +308,26 @@ def test_get_user_me(bo_user_client: TestClient, bo_user):
         },
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
-    resp = bo_user_client.get("/v1/me")
+    resp = bo_client.get("/v1/me")
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNAUTHORIZED, error
     assert "身份验证失败" in error["detail"]["message"]
 
 
-def test_sign_out(bo_user_client: TestClient, bo_user):
-    resp = bo_user_client.get("/v1/me")
+def test_sign_out(bo_client: TestClient, bo_user):
+    resp = bo_client.get("/v1/me")
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["id"] == str(bo_user.id)
 
-    resp = bo_user_client.post("/v1/sign_out")
+    resp = bo_client.post("/v1/sign_out")
     assert resp.status_code == HTTPStatus.OK, resp.json()
 
     settings = get_settings()
     token = resp.cookies.get(settings.jwt_cookie_key)
     assert token is None
 
-    resp = bo_user_client.get("/v1/me")
+    resp = bo_client.get("/v1/me")
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNAUTHORIZED, error
     assert "身份验证失败" in error["detail"]["message"]

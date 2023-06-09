@@ -12,9 +12,9 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     GetUserByAccountResult,
     get_user_by_account,
 )
+from freeauth.security.utils import MOBILE_REGEX
 
 from ..app import auth_app
-from ..utils import MOBILE_REGEX
 from .dataclasses import (
     SignInCodeBody,
     SignInSendCodeBody,

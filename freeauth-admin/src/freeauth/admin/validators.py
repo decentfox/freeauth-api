@@ -4,7 +4,7 @@ import re
 
 from pydantic.validators import anystr_strip_whitespace, str_validator
 
-from .utils import MOBILE_REGEX
+from freeauth.security.utils import MOBILE_REGEX
 
 
 class StrValidator(str):

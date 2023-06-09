@@ -98,7 +98,7 @@ class GetCurrentUserResult(NoPydanticValidation):
     org_type: GetCurrentUserResultOrgType | None
     departments: list[GetCurrentUserResultDepartmentsItem]
     roles: list[GetCurrentUserResultRolesItem]
-    permissions: list[GetCurrentUserResultPermissionsItem]
+    perms: list[str]
     is_deleted: bool
     created_at: datetime.datetime
     last_login_at: datetime.datetime | None
@@ -116,13 +116,6 @@ class GetCurrentUserResultDepartmentsItem(NoPydanticValidation):
 class GetCurrentUserResultOrgType(NoPydanticValidation):
     id: uuid.UUID
     code: str | None
-    name: str
-
-
-@dataclasses.dataclass
-class GetCurrentUserResultPermissionsItem(NoPydanticValidation):
-    id: uuid.UUID
-    code: str
     name: str
 
 
@@ -264,7 +257,13 @@ def get_current_user(
 ) -> GetCurrentUserResult | None:
     return executor.query_single(
         """\
-        select global current_user {
+        with
+            user := global current_user,
+            perms := (
+                select user.permissions
+                filter .application = global current_app
+            )
+        select user {
             name,
             username,
             email,
@@ -274,10 +273,7 @@ def get_current_user(
                 select .directly_organizations { code, name }
             ),
             roles: { code, name },
-            permissions := (
-                select .permissions { code, name }
-                filter .application = global current_app
-            ),
+            perms := array_agg(perms.code),
             is_deleted,
             created_at,
             last_login_at,
@@ -367,11 +363,20 @@ def has_any_permission(
         """\
         with
             perm_codes := str_upper(array_unpack(<array<str>>$perm_codes)),
+            wildcard_perm := (
+                select Permission
+                filter
+                    .application = global current_app
+                    and .code = '*'
+            ),
             user_perms := (
                 select global current_user.permissions
                 filter .application = global current_app
             )
-        select any(user_perms.code_upper in perm_codes);\
+        select any({
+            any(user_perms.code_upper in perm_codes),
+            wildcard_perm in user_perms
+        });\
         """,
         perm_codes=perm_codes,
     )

@@ -40,6 +40,12 @@ Do you want to use existing instance "FreeAuth" for the project? [y/n]
 make dev
 ```
 
+### Setup administrator account
+
+```bash
+poetry run freeauth-db admin setup
+```
+
 ### Open the EdgeDB UI
 
 ```bash

@@ -2,21 +2,24 @@ from __future__ import annotations
 
 import uuid
 from http import HTTPStatus
+from typing import Any
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException, Query
 
 from freeauth.db.admin.admin_qry_async_edgeql import (
     DeleteApplicationResult,
+    QueryApplicationOptionsResult,
     UpdateApplicationStatusResult,
     create_application,
     delete_application,
+    query_application_options,
     update_application_secret,
     update_application_status,
 )
+from freeauth.security.utils import gen_random_string, get_password_hash
 
 from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
-from ..utils import gen_random_string, get_password_hash
 from .dataclasses import (
     ApplicationDeleteBody,
     ApplicationStatusBody,
@@ -32,19 +35,19 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
     tags=["应用管理"],
     summary="创建应用",
     description="创建新应用",
-    # dependencies=[Depends(auth_app.perm_accepted("manage:apps"))],
+    dependencies=[Depends(auth_app.perm_accepted("manage:apps"))],
 )
 async def post_application(
     body: BaseApplicationBody,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     secret: str = gen_random_string(32, secret=True)
-    await create_application(
+    application = await create_application(
         auth_app.db,
         name=body.name,
         description=body.description,
         hashed_secret=get_password_hash(secret),
     )
-    return {"secret": secret}
+    return {"id": application.id, "secret": secret}
 
 
 @router.put(
@@ -52,10 +55,11 @@ async def post_application(
     tags=["应用管理"],
     summary="重新生成应用秘钥",
     description="重新生成指定应用的秘钥",
+    dependencies=[Depends(auth_app.perm_accepted("manage:apps"))],
 )
 async def gen_application_secret(
     app_id: uuid.UUID,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     secret: str = gen_random_string(32, secret=True)
     application = await update_application_secret(
         auth_app.db,
@@ -66,7 +70,7 @@ async def gen_application_secret(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="应用不存在"
         )
-    return {"secret": secret}
+    return {"id": application.id, "secret": secret}
 
 
 @router.put(
@@ -74,6 +78,7 @@ async def gen_application_secret(
     tags=["应用管理"],
     summary="变更应用状态",
     description="批量变更应用状态",
+    dependencies=[Depends(auth_app.perm_accepted("manage:apps"))],
 )
 async def toggle_applications_status(
     body: ApplicationStatusBody,
@@ -88,6 +93,7 @@ async def toggle_applications_status(
     tags=["应用管理"],
     summary="删除应用",
     description="批量删除应用",
+    dependencies=[Depends(auth_app.perm_accepted("manage:apps"))],
 )
 async def delete_applications(
     body: ApplicationDeleteBody,
@@ -100,6 +106,7 @@ async def delete_applications(
     tags=["应用管理"],
     summary="获取应用列表",
     description="分页获取，支持关键字搜索、排序及条件过滤",
+    dependencies=[Depends(auth_app.perm_accepted("manage:apps"))],
 )
 async def get_applications(
     body: QueryBody,
@@ -146,3 +153,25 @@ async def get_applications(
         per_page=body.per_page,
     )
     return PaginatedData.parse_raw(result)
+
+
+@router.get(
+    "/applications/options",
+    tags=["应用管理"],
+    summary="获取应用选项列表",
+    description="获取应用选项列表，支持关键字搜索",
+    dependencies=[
+        Depends(auth_app.perm_accepted("manage:perms", "manage:roles"))
+    ],
+)
+async def list_application_options(
+    q: str
+    | None = Query(
+        None,
+        title="搜索关键字",
+        description="支持搜索应用名、应用描述",
+    )
+) -> list[QueryApplicationOptionsResult]:
+    return await query_application_options(
+        auth_app.db, q=f"%{q}%" if q else None
+    )

@@ -14,5 +14,11 @@ module default {
         };
 
         constraint exclusive on ( (.code_upper, .application) );
+
+        access policy full_access
+            allow all;
+        access policy readonly_wildcard_perm
+            deny delete, update
+            using (.code = '*');
     }
 }

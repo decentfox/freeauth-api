@@ -50,20 +50,20 @@ from freeauth.db.admin.admin_qry_async_edgeql import CreateOrgTypeResult
     ],
 )
 def test_create_org_type_validate_errors(
-    test_client: TestClient, field: str | None, value: str | None, msg: str
+    bo_client: TestClient, field: str | None, value: str | None, msg: str
 ):
     data: dict[str, str | None] = {}
     if field:
         data = {field: value}
-    resp = test_client.post("/v1/org_types", json=data)
+    resp = bo_client.post("/v1/org_types", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"][field] == msg
 
 
-def test_create_org_type(test_client: TestClient):
+def test_create_org_type(bo_client: TestClient):
     data: dict[str, str] = {"name": "集团", "code": "org_type"}
-    resp = test_client.post("/v1/org_types", json=data)
+    resp = bo_client.post("/v1/org_types", json=data)
     org_type = resp.json()
     assert resp.status_code == HTTPStatus.CREATED, org_type
     assert org_type["name"] == "集团"
@@ -73,14 +73,14 @@ def test_create_org_type(test_client: TestClient):
     assert not org_type["description"]
 
     data["description"] = "集团描述"
-    resp = test_client.post("/v1/org_types", json=data)
+    resp = bo_client.post("/v1/org_types", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.BAD_REQUEST, error
     assert error["detail"]["errors"]["code"] == "ORG_TYPE 已被使用"
 
 
-def create_org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
-    resp = test_client.post(
+def create_org_type(bo_client: TestClient, faker) -> CreateOrgTypeResult:
+    resp = bo_client.post(
         "/v1/org_types",
         json={
             "name": faker.company_prefix(),
@@ -92,29 +92,29 @@ def create_org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
 
 
 @pytest.fixture
-def org_type(test_client: TestClient, faker) -> CreateOrgTypeResult:
-    return create_org_type(test_client, faker)
+def org_type(bo_client: TestClient, faker) -> CreateOrgTypeResult:
+    return create_org_type(bo_client, faker)
 
 
 @pytest.fixture
-def default_org_type(test_client: TestClient) -> CreateOrgTypeResult:
-    resp = test_client.get("/v1/org_types/INNER")
+def default_org_type(bo_client: TestClient) -> CreateOrgTypeResult:
+    resp = bo_client.get("/v1/org_types/INNER")
     return CreateOrgTypeResult(**resp.json())
 
 
 def test_update_org_type(
-    test_client: TestClient,
+    bo_client: TestClient,
     org_type: CreateOrgTypeResult,
     default_org_type,
 ):
     not_found_id = "12345678-1234-5678-1234-567812345678"
-    resp = test_client.put(f"/v1/org_types/{not_found_id}", json={})
+    resp = bo_client.put(f"/v1/org_types/{not_found_id}", json={})
     error = resp.json()
     assert resp.status_code == HTTPStatus.NOT_FOUND, error
     assert error["detail"]["message"] == "更新组织类型失败：组织类型不存在"
 
     data: dict[str, Any] = {}
-    resp = test_client.put(f"/v1/org_types/{org_type.id}", json=data)
+    resp = bo_client.put(f"/v1/org_types/{org_type.id}", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert CreateOrgTypeResult(**rv) == org_type
@@ -125,7 +125,7 @@ def test_update_org_type(
         "description": "    ",
         "is_deleted": True,
     }
-    resp = test_client.put(f"/v1/org_types/{org_type.id}", json=data)
+    resp = bo_client.put(f"/v1/org_types/{org_type.id}", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["name"] == org_type.name
@@ -137,7 +137,7 @@ def test_update_org_type(
         "code": "   new_code",
         "description": "    商家描述",
     }
-    resp = test_client.put(f"/v1/org_types/{org_type.id}", json=data)
+    resp = bo_client.put(f"/v1/org_types/{org_type.id}", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["name"] == "合作商家"
@@ -145,7 +145,7 @@ def test_update_org_type(
     assert rv["description"] == "商家描述"
 
     data["name"] = "很长的名字" * 5
-    resp = test_client.put(f"/v1/org_types/{org_type.id}", json=data)
+    resp = bo_client.put(f"/v1/org_types/{org_type.id}", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["name"] == "最大支持的长度为20个字符"
@@ -156,7 +156,7 @@ def test_update_org_type(
         "description": "系统默认组织类型",
         "is_deleted": True,
     }
-    resp = test_client.put(f"/v1/org_types/{default_org_type.id}", json=data)
+    resp = bo_client.put(f"/v1/org_types/{default_org_type.id}", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert rv["name"] == "默认内部组织"
@@ -164,7 +164,7 @@ def test_update_org_type(
     assert not rv["is_deleted"]
 
     data = {"code": default_org_type.code}
-    resp = test_client.put(f"/v1/org_types/{org_type.id}", json=data)
+    resp = bo_client.put(f"/v1/org_types/{org_type.id}", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.BAD_REQUEST, error
     assert (
@@ -173,23 +173,23 @@ def test_update_org_type(
     )
 
 
-def test_get_org_type(test_client: TestClient, org_type: CreateOrgTypeResult):
+def test_get_org_type(bo_client: TestClient, org_type: CreateOrgTypeResult):
     not_found_id = "12345678-1234-5678-1234-567812345678"
-    resp = test_client.get(f"/v1/org_types/{not_found_id}")
+    resp = bo_client.get(f"/v1/org_types/{not_found_id}")
     error = resp.json()
     assert resp.status_code == HTTPStatus.NOT_FOUND, error
     assert error["detail"]["message"] == "获取组织类型信息失败：组织类型不存在"
 
-    resp = test_client.get(f"/v1/org_types/{org_type.id}")
+    resp = bo_client.get(f"/v1/org_types/{org_type.id}")
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert CreateOrgTypeResult(**resp.json()) == org_type
 
 
 def test_toggle_org_type_status(
-    test_client: TestClient, org_type: CreateOrgTypeResult, default_org_type
+    bo_client: TestClient, org_type: CreateOrgTypeResult, default_org_type
 ):
     data: dict[str, Any] = {}
-    resp = test_client.put("/v1/org_types/status", json=data)
+    resp = bo_client.put("/v1/org_types/status", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     for msg in error["detail"]["errors"].values():
@@ -199,7 +199,7 @@ def test_toggle_org_type_status(
         "ids": ["invalid_id"],
         "is_deleted": True,
     }
-    resp = test_client.put("/v1/org_types/status", json=data)
+    resp = bo_client.put("/v1/org_types/status", json=data)
     error = resp.json()
     assert error["detail"]["errors"]["ids.0"] == "ID格式错误"
 
@@ -207,7 +207,7 @@ def test_toggle_org_type_status(
         "ids": ["12345678-1234-5678-1234-567812345678"],
         "is_deleted": False,
     }
-    resp = test_client.put("/v1/org_types/status", json=data)
+    resp = bo_client.put("/v1/org_types/status", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert resp.json()["org_types"] == []
 
@@ -215,7 +215,7 @@ def test_toggle_org_type_status(
         "ids": [str(org_type.id)],
         "is_deleted": True,
     }
-    resp = test_client.put("/v1/org_types/status", json=data)
+    resp = bo_client.put("/v1/org_types/status", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["org_types"]) == 1
@@ -230,7 +230,7 @@ def test_toggle_org_type_status(
         "ids": [str(org_type.id)],
         "is_deleted": False,
     }
-    resp = test_client.put("/v1/org_types/status", json=data)
+    resp = bo_client.put("/v1/org_types/status", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["org_types"]) == 1
@@ -245,20 +245,20 @@ def test_toggle_org_type_status(
         "ids": [str(default_org_type.id)],
         "is_deleted": True,
     }
-    resp = test_client.put("/v1/org_types/status", json=data)
+    resp = bo_client.put("/v1/org_types/status", json=data)
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["org_types"]) == 0
 
 
 def test_delete_org_types(
-    test_client: TestClient,
+    bo_client: TestClient,
     org_type: CreateOrgTypeResult,
     default_org_type,
     faker,
 ):
     data: dict[str, Any] = {}
-    resp = test_client.request("DELETE", "/v1/org_types", json=data)
+    resp = bo_client.request("DELETE", "/v1/org_types", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     for msg in error["detail"]["errors"].values():
@@ -267,23 +267,23 @@ def test_delete_org_types(
     data = {
         "ids": ["invalid_id"],
     }
-    resp = test_client.request("DELETE", "/v1/org_types", json=data)
+    resp = bo_client.request("DELETE", "/v1/org_types", json=data)
     error = resp.json()
     assert error["detail"]["errors"]["ids.0"] == "ID格式错误"
 
     data = {
         "ids": ["12345678-1234-5678-1234-567812345678"],
     }
-    resp = test_client.request("DELETE", "/v1/org_types", json=data)
+    resp = bo_client.request("DELETE", "/v1/org_types", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert len(resp.json()["org_types"]) == 0
 
-    org_type1 = create_org_type(test_client, faker)
-    org_type2 = create_org_type(test_client, faker)
+    org_type1 = create_org_type(bo_client, faker)
+    org_type2 = create_org_type(bo_client, faker)
 
     ids = [str(org_type.id), str(org_type1.id), str(org_type2.id)]
     data = {"ids": ids}
-    resp = test_client.request("DELETE", "/v1/org_types", json=data)
+    resp = bo_client.request("DELETE", "/v1/org_types", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert sorted(
         org_type["id"] for org_type in resp.json()["org_types"]
@@ -292,15 +292,15 @@ def test_delete_org_types(
     data = {
         "ids": [str(default_org_type.id)],
     }
-    resp = test_client.request("DELETE", "/v1/org_types", json=data)
+    resp = bo_client.request("DELETE", "/v1/org_types", json=data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     assert len(resp.json()["org_types"]) == 0
 
 
 def test_get_org_types(
-    test_client: TestClient, default_org_type, org_type: CreateOrgTypeResult
+    bo_client: TestClient, default_org_type, org_type: CreateOrgTypeResult
 ):
-    resp = test_client.get("/v1/org_types")
+    resp = bo_client.get("/v1/org_types")
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["org_types"]) == 2

@@ -17,15 +17,15 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     send_code,
     validate_code,
 )
+from freeauth.security.utils import gen_random_string
 
 from ...users.tests.test_api import create_user
-from ...utils import gen_random_string
 
 
 @pytest.fixture(autouse=True)
-def login_settings_for_signup(test_client: TestClient):
+def login_settings_for_signup(bo_client: TestClient):
     # enable all signup modes
-    test_client.put(
+    bo_client.put(
         "/v1/login_settings",
         json={
             "signupModes": ["mobile", "email"],
@@ -250,7 +250,7 @@ def test_sign_up(test_client: TestClient):
     )
     assert payload["sub"] == user["id"]
 
-    resp = test_client.post("/v1/audit_logs/query", json={})
+    resp = test_client.post("/v1/audit_logs/query", json={"q": account})
     rv = resp.json()
     assert resp.status_code == HTTPStatus.OK, rv
     assert len(rv["rows"]) == 2

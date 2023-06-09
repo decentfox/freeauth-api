@@ -24,6 +24,7 @@
 #     'src/freeauth/db/admin/queries/orgs/organization_unbind_users.edgeql'
 #     'src/freeauth/db/admin/queries/perms/perm_bind_roles.edgeql'
 #     'src/freeauth/db/admin/queries/perms/perm_unbind_roles.edgeql'
+#     'src/freeauth/db/admin/queries/apps/query_application_options.edgeql'
 #     'src/freeauth/db/admin/queries/orgs/query_org_types.edgeql'
 #     'src/freeauth/db/admin/queries/perms/query_permission_tags.edgeql'
 #     'src/freeauth/db/admin/queries/perms/query_permissions.edgeql'
@@ -317,6 +318,15 @@ class GetUserByIdResultRolesItem(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class QueryApplicationOptionsResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    description: str | None
+    is_deleted: bool
+    is_protected: bool
+
+
+@dataclasses.dataclass
 class QueryPermissionsResult(NoPydanticValidation):
     id: uuid.UUID
     total: int
@@ -412,13 +422,23 @@ async def create_application(
 ) -> CreateApplicationResult:
     return await executor.query_single(
         """\
-        select (
-            insert Application {
-                name := <str>$name,
-                description := <optional str>$description,
-                hashed_secret := <str>$hashed_secret
-            }
-        ) {
+        with
+            app := (
+                insert Application {
+                    name := <str>$name,
+                    description := <optional str>$description,
+                    hashed_secret := <str>$hashed_secret
+                }
+            ),
+            wildcard_perm := (
+                insert Permission {
+                    name := '通配符权限',
+                    code := '*',
+                    description := '通配符权限授予应用的所有访问权限',
+                    application := app
+                }
+            )
+        select app {
             name,
             description,
             is_deleted,
@@ -1269,6 +1289,31 @@ async def perm_unbind_roles(
         """,
         role_ids=role_ids,
         permission_ids=permission_ids,
+    )
+
+
+async def query_application_options(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    q: str | None = None,
+) -> list[QueryApplicationOptionsResult]:
+    return await executor.query(
+        """\
+        with
+            q := <optional str>$q
+        select Application {
+            id,
+            name,
+            description,
+            is_deleted,
+            is_protected
+        } filter
+            true if not exists q else
+            .name ilike q or
+            .description ?? '' ilike q
+        order by .created_at desc;\
+        """,
+        q=q,
     )
 
 

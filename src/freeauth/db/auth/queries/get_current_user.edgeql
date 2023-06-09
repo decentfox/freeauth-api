@@ -1,4 +1,10 @@
-select global current_user {
+with
+    user := global current_user,
+    perms := (
+        select user.permissions
+        filter .application = global current_app
+    )
+select user {
     name,
     username,
     email,
@@ -8,10 +14,7 @@ select global current_user {
         select .directly_organizations { code, name }
     ),
     roles: { code, name },
-    permissions := (
-        select .permissions { code, name }
-        filter .application = global current_app
-    ),
+    perms := array_agg(perms.code),
     is_deleted,
     created_at,
     last_login_at,

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import string
 
-from ..utils import gen_random_string, get_password_hash, verify_password
+from freeauth.security.utils import (
+    gen_random_string,
+    get_password_hash,
+    verify_password,
+)
 
 
 def test_generate_random_string():
