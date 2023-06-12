@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from jose import jwt
 
 from freeauth.conf.settings import get_settings
-from freeauth.db.auth.auth_qry_async_edgeql import AuthCodeType
+from freeauth.db.auth.auth_qry_async_edgeql import FreeauthCodeType
 from freeauth.security.utils import gen_random_string
 
 from ...users.tests.test_api import create_user
@@ -21,7 +21,7 @@ from ...users.tests.test_api import create_user
             [],
             dict(
                 account="13800000000",
-                code_type=AuthCodeType.SMS.value,
+                code_type=FreeauthCodeType.SMS.value,
             ),
             "系统不支持注册，如您已有账号，请直接登录",
         ),
@@ -29,7 +29,7 @@ from ...users.tests.test_api import create_user
             ["mobile"],
             dict(
                 account="user@example.com",
-                code_type=AuthCodeType.EMAIL.value,
+                code_type=FreeauthCodeType.EMAIL.value,
             ),
             "不支持邮箱和验证码注册",
         ),
@@ -37,7 +37,7 @@ from ...users.tests.test_api import create_user
             ["email"],
             dict(
                 account="13800000000",
-                code_type=AuthCodeType.SMS.value,
+                code_type=FreeauthCodeType.SMS.value,
             ),
             "不支持手机号和验证码注册",
         ),
@@ -172,7 +172,7 @@ def test_jwt_token_ttl(bo_client: TestClient, jwt_token_ttl: int):
         "/v1/sign_up/code",
         json=dict(
             account="13800000000",
-            code_type=AuthCodeType.SMS.value,
+            code_type=FreeauthCodeType.SMS.value,
         ),
     )
     assert resp.status_code == HTTPStatus.OK, resp.json()
@@ -180,7 +180,7 @@ def test_jwt_token_ttl(bo_client: TestClient, jwt_token_ttl: int):
         "/v1/sign_up/verify",
         json=dict(
             account="13800000000",
-            code_type=AuthCodeType.SMS.value,
+            code_type=FreeauthCodeType.SMS.value,
             code="888888",
         ),
     )
@@ -214,7 +214,7 @@ def test_jwt_token_ttl(bo_client: TestClient, jwt_token_ttl: int):
             {
                 "account": "13800000000",
                 "code": "12345678",
-                "code_type": AuthCodeType.SMS.value,
+                "code_type": FreeauthCodeType.SMS.value,
             },
         ),
         ("signin", "sign_in", {"account": "13800000000", "code": "12345678"}),
@@ -244,7 +244,7 @@ def test_code_validating_limit(
 
     code_data: dict = {"account": "13800000000"}
     if limit_type == "signup":
-        code_data["code_type"] = AuthCodeType.SMS.value
+        code_data["code_type"] = FreeauthCodeType.SMS.value
     resp = bo_client.post(f"/v1/{ep}/code", json=code_data)
     assert resp.status_code == HTTPStatus.OK, resp.json()
     for i in range(5):
@@ -293,7 +293,10 @@ def test_code_validating_limit(
         (
             "signup",
             "sign_up",
-            {"account": "13800000000", "code_type": AuthCodeType.SMS.value},
+            {
+                "account": "13800000000",
+                "code_type": FreeauthCodeType.SMS.value,
+            },
         ),
         ("signin", "sign_in", {"account": "13800000000"}),
     ],

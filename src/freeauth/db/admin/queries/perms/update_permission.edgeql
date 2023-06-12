@@ -1,4 +1,5 @@
 with
+    module freeauth,
     id := <optional uuid>$id,
     current_code := <optional str>$current_code,
     is_deleted := <optional bool>$is_deleted,
@@ -27,8 +28,8 @@ select (
             )
         ),
         deleted_at := (
-            .deleted_at IF NOT EXISTS is_deleted ELSE
-            datetime_of_transaction() IF is_deleted ELSE {}
+            .deleted_at if not exists is_deleted else
+            datetime_of_transaction() if is_deleted else {}
         )
     }
 ) {

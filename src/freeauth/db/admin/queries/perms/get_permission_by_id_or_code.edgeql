@@ -3,7 +3,7 @@ with
     code := <optional str>$code
 select assert_single(
     (
-        select Permission {
+        select freeauth::Permission {
             name,
             code,
             description,

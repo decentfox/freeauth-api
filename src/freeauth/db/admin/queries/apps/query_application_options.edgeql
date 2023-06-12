@@ -1,6 +1,6 @@
 with
     q := <optional str>$q
-select Application {
+select freeauth::Application {
     id,
     name,
     description,

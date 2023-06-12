@@ -1,4 +1,6 @@
-SELECT
+with
+    module freeauth
+select
     User {
         name,
         username,
@@ -6,18 +8,18 @@ SELECT
         mobile,
         org_type: { code, name },
         departments := (
-            SELECT .directly_organizations {
+            select .directly_organizations {
                 id,
                 code,
                 name,
                 enterprise := assert_single(.ancestors {
                     id,
                     name
-                } FILTER EXISTS [is Enterprise]),
+                } filter exists [is Enterprise]),
                 org_type := assert_single(.ancestors {
                     id,
                     name
-                } FILTER EXISTS [is OrganizationType])
+                } filter exists [is OrganizationType])
             }
         ),
         roles: {
@@ -32,4 +34,4 @@ SELECT
         created_at,
         last_login_at
     }
-FILTER .id = <uuid>$id;
+filter .id = <uuid>$id;

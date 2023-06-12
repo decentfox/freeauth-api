@@ -373,6 +373,11 @@ class QueryPermissionsResultRowsItemRolesItem(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class UpdateApplicationSecretResult(NoPydanticValidation):
+    id: uuid.UUID
+
+
+@dataclasses.dataclass
 class UpdateApplicationStatusResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
@@ -417,6 +422,8 @@ async def add_missing_permissions(
 ) -> list[AddMissingPermissionsResult]:
     return await executor.query(
         """\
+        with
+            module freeauth
         for code in array_unpack(<array<str>>$perm_codes)
         union (
             insert Permission {
@@ -440,6 +447,7 @@ async def create_application(
     return await executor.query_single(
         """\
         with
+            module freeauth,
             app := (
                 insert Application {
                     name := <str>$name,
@@ -478,32 +486,32 @@ async def create_department(
 ) -> CreateDepartmentResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
+            module freeauth,
             parent := (
-                SELECT Organization FILTER .id = <uuid>$parent_id
+                select Organization filter .id = <uuid>$parent_id
             ),
             enterprise := assert_single((
-                SELECT Enterprise FILTER (
+                select Enterprise filter (
                     .id = (
                         # https://github.com/edgedb/edgedb/issues/5474
                         # parent[is Enterprise].id ??
                         parent[is Enterprise].id if exists parent[is Enterprise] else
-
                         parent[is Department].enterprise.id
                     )
                 )
             ))
-        FOR _ IN (
-            SELECT true FILTER EXISTS parent
-        ) UNION (
-            SELECT (
-                INSERT Department {
+        for _ in (
+            select true filter exists parent
+        ) union (
+            select (
+                insert Department {
                     name := <str>$name,
                     code := <optional str>$code,
                     description := <optional str>$description,
                     enterprise := enterprise,
                     parent := parent,
-                    ancestors := DISTINCT (parent UNION parent.ancestors)
+                    ancestors := distinct (parent union parent.ancestors)
                 }
             ) {
                 name,
@@ -541,15 +549,16 @@ async def create_enterprise(
 ) -> CreateEnterpriseResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
+            module freeauth,
             org_type := (
-                SELECT OrganizationType FILTER .id = <uuid>$org_type_id
+                select OrganizationType filter .id = <uuid>$org_type_id
             )
-        FOR _ IN (
-            SELECT true FILTER EXISTS org_type
-        ) UNION (
-            SELECT (
-                INSERT Enterprise {
+        for _ in (
+            select true filter exists org_type
+        ) union (
+            select (
+                insert Enterprise {
                     name := <str>$name,
                     code := <optional str>$code,
                     tax_id := <optional str>$tax_id,
@@ -558,7 +567,7 @@ async def create_enterprise(
                     contact_address := <optional str>$contact_address,
                     contact_phone_num := <optional str>$contact_phone_num,
                     org_type := org_type,
-                    ancestors := ( SELECT org_type )
+                    ancestors := ( select org_type )
                 }
             ) {
                 name,
@@ -591,12 +600,12 @@ async def create_org_type(
 ) -> CreateOrgTypeResult:
     return await executor.query_single(
         """\
-        WITH
+        with
             name := <str>$name,
             code := <str>$code,
             description := <optional str>$description
-        SELECT (
-            INSERT OrganizationType {
+        select (
+            insert freeauth::OrganizationType {
                 name := name,
                 code := code,
                 description := description
@@ -621,6 +630,7 @@ async def create_permission(
     return await executor.query_single(
         """\
         with
+            module freeauth,
             name := <str>$name,
             code := <str>$code,
             description := <optional str>$description,
@@ -699,14 +709,16 @@ async def create_role(
 ) -> CreateRoleResult:
     return await executor.query_single(
         """\
-        SELECT (
-            INSERT Role {
+        with
+            module freeauth
+        select (
+            insert Role {
                 name := <str>$name,
                 code := <optional str>$code,
                 description := <optional str>$description,
                 org_type := (
-                    SELECT OrganizationType
-                    FILTER .id = <optional uuid>$org_type_id
+                    select OrganizationType
+                    filter .id = <optional uuid>$org_type_id
                 )
             }
         ) {
@@ -742,7 +754,8 @@ async def create_user(
 ) -> CreateUserResult:
     return await executor.query_single(
         """\
-        WITH
+        with
+            module freeauth,
             name := <optional str>$name,
             username := <optional str>$username,
             email := <optional str>$email,
@@ -751,19 +764,19 @@ async def create_user(
             reset_pwd_on_first_login := <bool>$reset_pwd_on_first_login,
             organization_ids := <optional array<uuid>>$organization_ids,
             org_type := (
-                SELECT OrganizationType FILTER (
+                select OrganizationType filter (
                     .id = <optional uuid>$org_type_id
                 )
             ),
             organizations := (
-                SELECT Organization
-                FILTER
-                    ( Organization IS NOT OrganizationType ) AND
+                select Organization
+                filter
+                    ( Organization is not OrganizationType ) and
                     (
-                        false IF NOT EXISTS org_type ELSE
+                        false if not exists org_type else
                         (
-                            .id IN array_unpack(organization_ids) AND
-                            org_type IN .ancestors
+                            .id in array_unpack(organization_ids) and
+                            org_type in .ancestors
                         )
                     )
             )
@@ -785,7 +798,7 @@ async def create_user(
             mobile,
             org_type: { code, name },
             departments := (
-                SELECT .directly_organizations { code, name }
+                select .directly_organizations { code, name }
             ),
             roles: { code, name },
             is_deleted,
@@ -811,7 +824,7 @@ async def delete_application(
 ) -> list[DeleteApplicationResult]:
     return await executor.query(
         """\
-        delete Application
+        delete freeauth::Application
         filter .id in array_unpack(<array<uuid>>$ids) and not .is_protected\
         """,
         ids=ids,
@@ -825,9 +838,9 @@ async def delete_org_type(
 ) -> list[DeleteOrgTypeResult]:
     return await executor.query(
         """\
-        SELECT (
-            DELETE OrganizationType
-            FILTER .id in array_unpack(<array<uuid>>$ids) AND NOT .is_protected
+        select (
+            delete freeauth::OrganizationType
+            filter .id in array_unpack(<array<uuid>>$ids) and not .is_protected
         ) { name, code };\
         """,
         ids=ids,
@@ -841,7 +854,7 @@ async def delete_organization(
 ) -> list[DeleteOrganizationResult]:
     return await executor.query(
         """\
-        DELETE Organization FILTER .id in array_unpack(<array<uuid>>$ids);\
+        delete freeauth::Organization filter .id in array_unpack(<array<uuid>>$ids);\
         """,
         ids=ids,
     )
@@ -854,7 +867,7 @@ async def delete_permission(
 ) -> list[AddMissingPermissionsResult]:
     return await executor.query(
         """\
-        delete Permission filter .id in array_unpack(<array<uuid>>$ids);\
+        delete freeauth::Permission filter .id in array_unpack(<array<uuid>>$ids);\
         """,
         ids=ids,
     )
@@ -880,7 +893,7 @@ async def delete_role(
 ) -> list[DeleteRoleResult]:
     return await executor.query(
         """\
-        DELETE Role FILTER .id in array_unpack(<array<uuid>>$ids);\
+        delete freeauth::Role filter .id in array_unpack(<array<uuid>>$ids);\
         """,
         ids=ids,
     )
@@ -893,9 +906,9 @@ async def delete_user(
 ) -> list[DeleteUserResult]:
     return await executor.query(
         """\
-        SELECT (
-            DELETE User FILTER .id in array_unpack(<array<uuid>>$user_ids)
-        ) { name } ORDER BY .created_at DESC;\
+        select (
+            delete freeauth::User filter .id in array_unpack(<array<uuid>>$user_ids)
+        ) { name } order by .created_at desc;\
         """,
         user_ids=user_ids,
     )
@@ -910,13 +923,13 @@ async def get_department_by_id_or_code(
 ) -> CreateDepartmentResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
             id := <optional uuid>$id,
             code := <optional str>$code,
             enterprise_id := <optional uuid>$enterprise_id
-        SELECT assert_single(
+        select assert_single(
             (
-                SELECT Department {
+                select freeauth::Department {
                     name,
                     code,
                     description,
@@ -929,9 +942,9 @@ async def get_department_by_id_or_code(
                         code,
                     }
                 }
-                FILTER
+                filter
                     (.id = id) ??
-                    (.code ?= code AND .enterprise.id = enterprise_id)
+                    (.code ?= code and .enterprise.id = enterprise_id)
             )
         );\
         """,
@@ -951,14 +964,14 @@ async def get_enterprise_by_id_or_code(
 ) -> CreateEnterpriseResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
             id := <optional uuid>$id,
             code := <optional str>$code,
             org_type_id := <optional uuid>$org_type_id,
             org_type_code := <optional str>$org_type_code
-        SELECT assert_single(
+        select assert_single(
             (
-                SELECT Enterprise {
+                select freeauth::Enterprise {
                     name,
                     code,
                     tax_id,
@@ -967,10 +980,10 @@ async def get_enterprise_by_id_or_code(
                     contact_address,
                     contact_phone_num
                 }
-                FILTER
+                filter
                     (.id = id) ??
-                    (.code ?= code AND .org_type.id = org_type_id) ??
-                    (.code ?= code AND .org_type.code = org_type_code)
+                    (.code ?= code and .org_type.id = org_type_id) ??
+                    (.code ?= code and .org_type.code = org_type_code)
             )
         );\
         """,
@@ -989,19 +1002,19 @@ async def get_org_type_by_id_or_code(
 ) -> CreateOrgTypeResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
             id := <optional uuid>$id,
             code := <optional str>$code
-        SELECT assert_single(
+        select assert_single(
             (
-                SELECT OrganizationType {
+                select freeauth::OrganizationType {
                     name,
                     code,
                     description,
                     is_deleted,
                     is_protected
                 }
-                FILTER (.id = id) ?? (.code = code)
+                filter (.id = id) ?? (.code = code)
             )
         );\
         """,
@@ -1019,25 +1032,26 @@ async def get_organization_node(
 ) -> list[GetOrganizationNodeResult]:
     return await executor.query(
         """\
-        WITH
+        with
+            module freeauth,
             ot_id := <optional uuid>$org_type_id,
             ot_code := <optional str>$org_type_code,
             parent_id := <optional uuid>$parent_id
-        SELECT
+        select
             Organization {
                 name,
                 code,
-                [IS Department].description,
-                parent_id := [IS Department].parent.id,
+                [is Department].description,
+                parent_id := [is Department].parent.id,
                 is_enterprise := Organization is Enterprise,
-                has_children := EXISTS .directly_children
+                has_children := exists .directly_children
             }
-        FILTER (
-            [IS Department].parent.id ?= parent_id IF EXISTS parent_id ELSE
-            [IS Enterprise].org_type.id ?= ot_id IF EXISTS ot_id ELSE
-            ([IS Enterprise].org_type.code = ot_code)
+        filter (
+            [is Department].parent.id ?= parent_id if exists parent_id else
+            [is Enterprise].org_type.id ?= ot_id if exists ot_id else
+            ([is Enterprise].org_type.code = ot_code)
         )
-        ORDER BY .created_at;\
+        order by .created_at;\
         """,
         org_type_id=org_type_id,
         org_type_code=org_type_code,
@@ -1058,7 +1072,7 @@ async def get_permission_by_id_or_code(
             code := <optional str>$code
         select assert_single(
             (
-                select Permission {
+                select freeauth::Permission {
                     name,
                     code,
                     description,
@@ -1092,12 +1106,12 @@ async def get_role_by_id_or_code(
 ) -> CreateRoleResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
             id := <optional uuid>$id,
             code := <optional str>$code
-        SELECT assert_single(
+        select assert_single(
             (
-                SELECT Role {
+                select freeauth::Role {
                     name,
                     code,
                     description,
@@ -1108,7 +1122,7 @@ async def get_role_by_id_or_code(
                     is_deleted,
                     created_at
                 }
-                FILTER (.id = id) ?? (.code_upper = str_upper(code))
+                filter (.id = id) ?? (.code_upper = str_upper(code))
             )
         );\
         """,
@@ -1124,7 +1138,9 @@ async def get_user_by_id(
 ) -> GetUserByIdResult | None:
     return await executor.query_single(
         """\
-        SELECT
+        with
+            module freeauth
+        select
             User {
                 name,
                 username,
@@ -1132,18 +1148,18 @@ async def get_user_by_id(
                 mobile,
                 org_type: { code, name },
                 departments := (
-                    SELECT .directly_organizations {
+                    select .directly_organizations {
                         id,
                         code,
                         name,
                         enterprise := assert_single(.ancestors {
                             id,
                             name
-                        } FILTER EXISTS [is Enterprise]),
+                        } filter exists [is Enterprise]),
                         org_type := assert_single(.ancestors {
                             id,
                             name
-                        } FILTER EXISTS [is OrganizationType])
+                        } filter exists [is OrganizationType])
                     }
                 ),
                 roles: {
@@ -1158,7 +1174,7 @@ async def get_user_by_id(
                 created_at,
                 last_login_at
             }
-        FILTER .id = <uuid>$id;\
+        filter .id = <uuid>$id;\
         """,
         id=id,
     )
@@ -1173,34 +1189,35 @@ async def organization_bind_users(
 ) -> list[CreateUserResult]:
     return await executor.query(
         """\
-        WITH
+        with
+            module freeauth,
             user_ids := <array<uuid>>$user_ids,
             organization_ids := <array<uuid>>$organization_ids,
             org_type := (
-                SELECT OrganizationType FILTER (
+                select OrganizationType filter (
                     .id = <uuid>$org_type_id
                 )
             ),
             organizations := (
-                SELECT Organization
-                FILTER
-                    ( Organization IS NOT OrganizationType ) AND
+                select Organization
+                filter
+                    ( Organization is not OrganizationType ) and
                     (
-                        false IF NOT EXISTS org_type ELSE
+                        false if not exists org_type else
                         (
-                            .id IN array_unpack(organization_ids) AND
-                            org_type IN .ancestors
+                            .id in array_unpack(organization_ids) and
+                            org_type in .ancestors
                         )
                     )
             )
-        SELECT (
-            UPDATE User FILTER
-                .id in array_unpack(user_ids) AND
+        select (
+            update User filter
+                .id in array_unpack(user_ids) and
                 (
-                    NOT EXISTS .org_type OR
+                    not exists .org_type or
                     .org_type ?= org_type
                 )
-            SET {
+            set {
                 org_type := org_type,
                 directly_organizations += organizations
             }
@@ -1211,7 +1228,7 @@ async def organization_bind_users(
             mobile,
             org_type: { code, name },
             departments := (
-                SELECT .directly_organizations { code, name }
+                select .directly_organizations { code, name }
             ),
             roles: { code, name },
             is_deleted,
@@ -1234,6 +1251,7 @@ async def organization_unbind_users(
     return await executor.query(
         """\
         with
+            module freeauth,
             user_ids := <array<uuid>>$user_ids,
             organization_ids := <array<uuid>>$organization_ids,
             organizations := (
@@ -1282,6 +1300,7 @@ async def perm_bind_roles(
     return await executor.query(
         """\
         with
+            module freeauth,
             role_ids := <array<uuid>>$role_ids,
             permission_ids := <array<uuid>>$permission_ids
         select (
@@ -1318,6 +1337,7 @@ async def perm_unbind_roles(
     return await executor.query(
         """\
         with
+            module freeauth,
             role_ids := <array<uuid>>$role_ids,
             permission_ids := <array<uuid>>$permission_ids
         select (
@@ -1354,7 +1374,7 @@ async def query_application_options(
         """\
         with
             q := <optional str>$q
-        select Application {
+        select freeauth::Application {
             id,
             name,
             description,
@@ -1375,11 +1395,11 @@ async def query_org_types(
 ) -> list[CreateOrgTypeResult]:
     return await executor.query(
         """\
-        SELECT OrganizationType {
+        select freeauth::OrganizationType {
             name, code, description, is_deleted, is_protected
-        } ORDER BY
-            .is_deleted THEN
-            .is_protected DESC THEN
+        } order by
+            .is_deleted then
+            .is_protected desc then
             .code;\
         """,
     )
@@ -1390,7 +1410,7 @@ async def query_permission_tags(
 ) -> list[GetPermissionByIdOrCodeResultTagsItem]:
     return await executor.query(
         """\
-        select PermissionTag {
+        select freeauth::PermissionTag {
             id,
             name
         } order by .rank then .created_at\
@@ -1411,6 +1431,7 @@ async def query_permissions(
     return await executor.query_single(
         """\
         with
+            module freeauth,
             page := <optional int64>$page ?? 1,
             per_page := <optional int64>$per_page ?? 20,
             q := <optional str>$q,
@@ -1503,18 +1524,18 @@ async def resign_user(
 ) -> list[DeleteUserResult]:
     return await executor.query(
         """\
-        SELECT (
-            WITH is_deleted := <optional bool>$is_deleted,
-            UPDATE User FILTER .id in array_unpack(<array<uuid>>$user_ids)
-            SET {
+        select (
+            with is_deleted := <optional bool>$is_deleted,
+            update freeauth::User filter .id in array_unpack(<array<uuid>>$user_ids)
+            set {
                 directly_organizations := {},
                 org_type := {},
                 roles := {},
                 deleted_at := (
-                    datetime_of_transaction() IF is_deleted ELSE .deleted_at
+                    datetime_of_transaction() if is_deleted else .deleted_at
                 )
             }
-        ) { name } ORDER BY .created_at DESC;\
+        ) { name } order by .created_at desc;\
         """,
         is_deleted=is_deleted,
         user_ids=user_ids,
@@ -1529,18 +1550,19 @@ async def role_bind_users(
 ) -> list[CreateUserResult]:
     return await executor.query(
         """\
-        WITH
+        with
+            module freeauth,
             user_ids := <array<uuid>>$user_ids,
             role_ids := <array<uuid>>$role_ids
-        SELECT (
-            UPDATE User FILTER .id in array_unpack(user_ids)
-            SET {
+        select (
+            update User filter .id in array_unpack(user_ids)
+            set {
                 roles += (
-                    SELECT Role
-                    FILTER
-                        .id IN array_unpack(role_ids) AND
+                    select Role
+                    filter
+                        .id IN array_unpack(role_ids) and
                         (
-                            NOT EXISTS .org_type OR
+                            not exists .org_type or
                             .org_type ?= User.org_type
                         )
                 )
@@ -1552,7 +1574,7 @@ async def role_bind_users(
             mobile,
             org_type: { code, name },
             departments := (
-                SELECT .directly_organizations { code, name }
+                select .directly_organizations { code, name }
             ),
             roles: { code, name },
             is_deleted,
@@ -1573,15 +1595,16 @@ async def role_unbind_users(
 ) -> list[CreateUserResult]:
     return await executor.query(
         """\
-        WITH
+        with
+            module freeauth,
             user_ids := <array<uuid>>$user_ids,
             role_ids := <array<uuid>>$role_ids
-        SELECT (
-            UPDATE User FILTER .id in array_unpack(user_ids)
-            SET {
+        select (
+            update User filter .id in array_unpack(user_ids)
+            set {
                 roles -= (
-                    SELECT Role
-                    FILTER .id IN array_unpack(role_ids)
+                    select Role
+                    filter .id in array_unpack(role_ids)
                 )
             }
         ) {
@@ -1591,7 +1614,7 @@ async def role_unbind_users(
             mobile,
             org_type: { code, name },
             departments := (
-                SELECT .directly_organizations { code, name }
+                select .directly_organizations { code, name }
             ),
             roles: { code, name },
             is_deleted,
@@ -1609,10 +1632,10 @@ async def update_application_secret(
     *,
     id: uuid.UUID,
     hashed_secret: str,
-) -> DeleteApplicationResult | None:
+) -> UpdateApplicationSecretResult | None:
     return await executor.query_single(
         """\
-        update Application filter .id = <uuid>$id set {
+        update freeauth::Application filter .id = <uuid>$id set {
             hashed_secret := <str>$hashed_secret
         };\
         """,
@@ -1632,7 +1655,7 @@ async def update_application_status(
         with
             is_deleted := <bool>$is_deleted
         select (
-            update Application
+            update freeauth::Application
             filter .id in array_unpack(<array<uuid>>$ids)
             set {
                 deleted_at := datetime_of_transaction() if is_deleted else {}
@@ -1657,41 +1680,42 @@ async def update_department(
 ) -> CreateDepartmentResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
+            module freeauth,
             id := <optional uuid>$id,
             current_code := <optional str>$current_code,
             enterprise_id := <optional uuid>$enterprise_id,
             parent := (
-                SELECT Organization FILTER .id = <uuid>$parent_id
+                select Organization filter .id = <uuid>$parent_id
             ),
-            parent_is_enterprise := EXISTS parent[is Enterprise],
+            parent_is_enterprise := exists parent[is Enterprise],
             enterprise := assert_single((
-                SELECT Enterprise FILTER .id = (
-                    parent[is Enterprise].id IF parent_is_enterprise ELSE
+                select Enterprise filter .id = (
+                    parent[is Enterprise].id if parent_is_enterprise else
                     parent[is Department].enterprise.id
                 )
             )),
             department := assert_single((
-                SELECT Department
-                FILTER
+                select Department
+                filter
                     (.id = id) ??
                     (
-                        .code ?= current_code AND
+                        .code ?= current_code and
                         .enterprise.id = enterprise_id
                     ) ??
                     false
             ))
-        SELECT (
-            UPDATE department
-            SET {
+        select (
+            update department
+            set {
                 name := <str>$name,
                 code := <optional str>$code,
                 description := <optional str>$description,
                 enterprise := enterprise,
                 parent := parent,
                 ancestors := (
-                    SELECT DISTINCT (
-                        SELECT .parent UNION .parent.ancestors
+                    select distinct (
+                        select .parent union .parent.ancestors
                     )
                 )
             }
@@ -1736,25 +1760,26 @@ async def update_enterprise(
 ) -> CreateEnterpriseResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
+            module freeauth,
             id := <optional uuid>$id,
             current_code := <optional str>$current_code,
             org_type_id := <optional uuid>$org_type_id,
             org_type_code := <optional str>$org_type_code,
             enterprise := assert_single((
-                SELECT Enterprise
-                FILTER
+                select Enterprise
+                filter
                     (.id = id) ??
-                    (.code ?= current_code AND .org_type.id = org_type_id) ??
+                    (.code ?= current_code and .org_type.id = org_type_id) ??
                     (
-                        .code ?= current_code AND
+                        .code ?= current_code and
                         .org_type.code = org_type_code
                     ) ??
                     false
             ))
-        SELECT (
+        select (
             UPDATE enterprise
-            SET {
+            set {
                 name := <str>$name,
                 code := <optional str>$code,
                 tax_id := <optional str>$tax_id,
@@ -1799,7 +1824,8 @@ async def update_org_type(
 ) -> CreateOrgTypeResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
+            module freeauth,
             id := <optional uuid>$id,
             current_code := <optional str>$current_code,
             name := <optional str>$name,
@@ -1807,19 +1833,19 @@ async def update_org_type(
             description := <optional str>$description,
             is_deleted := <optional bool>$is_deleted,
             org_type := assert_single((
-                SELECT OrganizationType
-                FILTER (.id = id) ?? (.code = code)
+                select OrganizationType
+                filter (.id = id) ?? (.code = code)
             ))
-        SELECT (
-            UPDATE org_type
-            SET {
+        select (
+            update org_type
+            set {
                 name := name ?? .name,
                 code := code ?? .code,
                 description := description ?? .description,
                 deleted_at := (
-                    .deleted_at IF NOT EXISTS is_deleted ELSE
+                    .deleted_at if not exists is_deleted else
                     datetime_of_transaction()
-                    IF is_deleted AND NOT .is_protected ELSE {}
+                    if is_deleted and not .is_protected else {}
                 )
             }
         ) { name, code, description, is_deleted, is_protected };\
@@ -1841,13 +1867,13 @@ async def update_org_type_status(
 ) -> list[UpdateOrgTypeStatusResult]:
     return await executor.query(
         """\
-        WITH
+        with
             is_deleted := <bool>$is_deleted
-        SELECT (
-            UPDATE OrganizationType
-            FILTER .id in array_unpack(<array<uuid>>$ids) AND NOT .is_protected
-            SET {
-                deleted_at := datetime_of_transaction() IF is_deleted ELSE {}
+        select (
+            update freeauth::OrganizationType
+            filter .id in array_unpack(<array<uuid>>$ids) and not .is_protected
+            set {
+                deleted_at := datetime_of_transaction() if is_deleted else {}
             }
         ) { name, code, is_deleted };\
         """,
@@ -1870,6 +1896,7 @@ async def update_permission(
     return await executor.query_single(
         """\
         with
+            module freeauth,
             id := <optional uuid>$id,
             current_code := <optional str>$current_code,
             is_deleted := <optional bool>$is_deleted,
@@ -1898,8 +1925,8 @@ async def update_permission(
                     )
                 ),
                 deleted_at := (
-                    .deleted_at IF NOT EXISTS is_deleted ELSE
-                    datetime_of_transaction() IF is_deleted ELSE {}
+                    .deleted_at if not exists is_deleted else
+                    datetime_of_transaction() if is_deleted else {}
                 )
             }
         ) {
@@ -1935,7 +1962,7 @@ async def update_permission_status(
             ids := <array<uuid>>$ids,
             is_deleted := <bool>$is_deleted
         select (
-            update Permission filter .id in array_unpack(ids)
+            update freeauth::Permission filter .id in array_unpack(ids)
             set {
                 deleted_at := datetime_of_transaction() if is_deleted else {}
             }
@@ -1985,26 +2012,27 @@ async def update_role(
 ) -> CreateRoleResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
+            module freeauth,
             id := <optional uuid>$id,
             current_code := <optional str>$current_code,
             is_deleted := <optional bool>$is_deleted,
             role := assert_single((
-                SELECT Role
-                FILTER
+                select Role
+                filter
                     (.id = id) ??
                     (.code_upper ?= str_upper(current_code)) ??
                     false
             ))
-        SELECT (
-            UPDATE role
-            SET {
+        select (
+            update role
+            set {
                 name := <str>$name,
                 code := <optional str>$code,
                 description := <optional str>$description,
                 deleted_at := (
-                    .deleted_at IF NOT EXISTS is_deleted ELSE
-                    datetime_of_transaction() IF is_deleted ELSE {}
+                    .deleted_at if not exists is_deleted else
+                    datetime_of_transaction() if is_deleted else {}
                 )
             }
         ) {
@@ -2036,12 +2064,12 @@ async def update_role_status(
 ) -> list[UpdateRoleStatusResult]:
     return await executor.query(
         """\
-        SELECT (
-            UPDATE Role
-            FILTER .id in array_unpack(<array<uuid>>$ids)
-            SET {
+        select (
+            update freeauth::Role
+            filter .id in array_unpack(<array<uuid>>$ids)
+            set {
                 deleted_at := (
-                    datetime_of_transaction() IF <bool>$is_deleted ELSE {}
+                    datetime_of_transaction() if <bool>$is_deleted else {}
                 )
             }
         ) { name, code, is_deleted };\
@@ -2062,14 +2090,14 @@ async def update_user(
 ) -> CreateUserResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
             name := <str>$name,
             username := <str>$username,
             email := <optional str>$email,
             mobile := <optional str>$mobile
-        SELECT (
-            UPDATE User FILTER .id = <uuid>$id
-            SET {
+        select (
+            update freeauth::User filter .id = <uuid>$id
+            set {
                 name := name,
                 username := username,
                 email := email,
@@ -2082,7 +2110,7 @@ async def update_user(
             mobile,
             org_type: { code, name },
             departments := (
-                SELECT .directly_organizations { code, name }
+                select .directly_organizations { code, name }
             ),
             roles: { code, name },
             is_deleted,
@@ -2108,6 +2136,7 @@ async def update_user_organization(
     return await executor.query_single(
         """\
         with
+            module freeauth,
             user := ( select User filter .id = <uuid>$id ),
             org_type_id := <optional uuid>$org_type_id,
             org_type := (
@@ -2163,18 +2192,19 @@ async def update_user_roles(
 ) -> CreateUserResult | None:
     return await executor.query_single(
         """\
-        WITH
+        with
+            module freeauth,
             user_id := <uuid>$id,
             role_ids := <optional array<uuid>>$role_ids
-        SELECT (
-            UPDATE User FILTER .id = user_id
-            SET {
+        select (
+            update User filter .id = user_id
+            set {
                 roles := (
-                    SELECT Role
-                    FILTER
-                        .id IN array_unpack(role_ids) AND
+                    select Role
+                    filter
+                        .id in array_unpack(role_ids) and
                         (
-                            NOT EXISTS .org_type OR
+                            not exists .org_type or
                             .org_type ?= User.org_type
                         )
                 )
@@ -2186,7 +2216,7 @@ async def update_user_roles(
             mobile,
             org_type: { code, name },
             departments := (
-                SELECT .directly_organizations { code, name }
+                select .directly_organizations { code, name }
             ),
             roles: { code, name },
             is_deleted,
@@ -2207,18 +2237,18 @@ async def update_user_status(
 ) -> list[UpdateUserStatusResult]:
     return await executor.query(
         """\
-        WITH
+        with
             user_ids := <array<uuid>>$user_ids,
             is_deleted := <bool>$is_deleted
-        SELECT (
-            UPDATE User FILTER .id in array_unpack(user_ids)
-            SET {
+        select (
+            update freeauth::User filter .id in array_unpack(user_ids)
+            set {
                 deleted_at := datetime_of_transaction() if is_deleted else {}
             }
         ) {
             name,
             is_deleted
-        } ORDER BY .created_at DESC;\
+        } order by .created_at desc;\
         """,
         user_ids=user_ids,
         is_deleted=is_deleted,

@@ -1,9 +1,9 @@
-WITH
+with
     name := <str>$name,
     code := <str>$code,
     description := <optional str>$description
-SELECT (
-    INSERT OrganizationType {
+select (
+    insert freeauth::OrganizationType {
         name := name,
         code := code,
         description := description

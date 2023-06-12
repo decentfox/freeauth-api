@@ -1,4 +1,4 @@
-module default {
+module freeauth {
     type OrganizationType extending Organization, SoftDeletable {
         property description -> str;
         required property is_protected -> bool {

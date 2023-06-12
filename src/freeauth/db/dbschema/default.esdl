@@ -1,4 +1,4 @@
-module default {
+module freeauth {
     abstract type TimeStamped {
         required property created_at -> datetime {
             readonly := true;

@@ -1,12 +1,13 @@
-WITH
+with
+    module freeauth,
     org_type := (
-        SELECT OrganizationType FILTER .id = <uuid>$org_type_id
+        select OrganizationType filter .id = <uuid>$org_type_id
     )
-FOR _ IN (
-    SELECT true FILTER EXISTS org_type
-) UNION (
-    SELECT (
-        INSERT Enterprise {
+for _ in (
+    select true filter exists org_type
+) union (
+    select (
+        insert Enterprise {
             name := <str>$name,
             code := <optional str>$code,
             tax_id := <optional str>$tax_id,
@@ -15,7 +16,7 @@ FOR _ IN (
             contact_address := <optional str>$contact_address,
             contact_phone_num := <optional str>$contact_phone_num,
             org_type := org_type,
-            ancestors := ( SELECT org_type )
+            ancestors := ( select org_type )
         }
     ) {
         name,

@@ -1,4 +1,5 @@
 with
+    module freeauth,
     perm_codes := str_upper(array_unpack(<array<str>>$perm_codes)),
     wildcard_perm := (
         select Permission

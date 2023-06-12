@@ -1,1 +1,1 @@
-select LoginSetting { key, value } order by .key;
+select freeauth::LoginSetting { key, value } order by .key;

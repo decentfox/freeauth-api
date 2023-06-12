@@ -1,13 +1,14 @@
 with
+    module freeauth,
     account := <str>$account,
-    code_type := <auth::CodeType>$code_type,
-    verify_type := <auth::VerifyType>$verify_type,
+    code_type := <CodeType>$code_type,
+    verify_type := <VerifyType>$verify_type,
     code := <str>$code,
     ttl := <int16>$ttl,
     max_attempts := <optional int64>$max_attempts,
     attempts_ttl := <optional int16>$attempts_ttl,
     sent_records := (
-        select auth::VerifyRecord
+        select VerifyRecord
         filter (
             exists max_attempts
             and .account = account
@@ -24,7 +25,7 @@ for _ in (
         (count(sent_records) < max_attempts) ?? true
 ) union (
     select (
-        insert auth::VerifyRecord {
+        insert VerifyRecord {
             account := account,
             code_type := code_type,
             verify_type := verify_type,

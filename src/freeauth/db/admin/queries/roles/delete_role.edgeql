@@ -1,1 +1,1 @@
-DELETE Role FILTER .id in array_unpack(<array<uuid>>$ids);
+delete freeauth::Role filter .id in array_unpack(<array<uuid>>$ids);

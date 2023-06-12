@@ -1,38 +1,39 @@
-WITH
+with
+    module freeauth,
     id := <optional uuid>$id,
     current_code := <optional str>$current_code,
     enterprise_id := <optional uuid>$enterprise_id,
     parent := (
-        SELECT Organization FILTER .id = <uuid>$parent_id
+        select Organization filter .id = <uuid>$parent_id
     ),
-    parent_is_enterprise := EXISTS parent[is Enterprise],
+    parent_is_enterprise := exists parent[is Enterprise],
     enterprise := assert_single((
-        SELECT Enterprise FILTER .id = (
-            parent[is Enterprise].id IF parent_is_enterprise ELSE
+        select Enterprise filter .id = (
+            parent[is Enterprise].id if parent_is_enterprise else
             parent[is Department].enterprise.id
         )
     )),
     department := assert_single((
-        SELECT Department
-        FILTER
+        select Department
+        filter
             (.id = id) ??
             (
-                .code ?= current_code AND
+                .code ?= current_code and
                 .enterprise.id = enterprise_id
             ) ??
             false
     ))
-SELECT (
-    UPDATE department
-    SET {
+select (
+    update department
+    set {
         name := <str>$name,
         code := <optional str>$code,
         description := <optional str>$description,
         enterprise := enterprise,
         parent := parent,
         ancestors := (
-            SELECT DISTINCT (
-                SELECT .parent UNION .parent.ancestors
+            select distinct (
+                select .parent union .parent.ancestors
             )
         )
     }

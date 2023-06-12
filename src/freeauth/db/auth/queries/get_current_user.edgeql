@@ -1,4 +1,5 @@
 with
+    module freeauth,
     user := global current_user,
     perms := (
         select user.permissions

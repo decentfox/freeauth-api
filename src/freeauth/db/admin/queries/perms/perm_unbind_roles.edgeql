@@ -1,4 +1,5 @@
 with
+    module freeauth,
     role_ids := <array<uuid>>$role_ids,
     permission_ids := <array<uuid>>$permission_ids
 select (

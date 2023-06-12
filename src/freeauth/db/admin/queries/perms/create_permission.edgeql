@@ -1,4 +1,5 @@
 with
+    module freeauth,
     name := <str>$name,
     code := <str>$code,
     description := <optional str>$description,

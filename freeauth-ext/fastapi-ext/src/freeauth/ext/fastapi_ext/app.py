@@ -48,7 +48,7 @@ class FreeAuthApp:
         self.app = app
 
         self.app.add_event_handler("startup", self.setup_edgedb)
-        self.app.add_event_handler("startup", self.migrate_perms)
+        self.app.add_event_handler("startup", self.init_app_data)
         self.app.add_event_handler("shutdown", self.shutdown_edgedb)
 
     async def setup_edgedb(self) -> None:
@@ -57,14 +57,23 @@ class FreeAuthApp:
             database=self.settings.edgedb_database,
         )
         await client.ensure_connected()
-        self.db = client.with_globals(
+        self.db = client.with_default_module("freeauth").with_globals(
             current_app_id=self.settings.freeauth_app_id
         )
 
     async def shutdown_edgedb(self) -> None:
         await self.db.aclose()
 
-    async def migrate_perms(self) -> None:
+    async def init_app_data(self) -> None:
+        # create default organization type
+        await self.db.query_single("""\
+            insert OrganizationType {
+                name := '内部组织',
+                code := 'INNER',
+                is_protected := true
+            } unless conflict;\
+        """)
+        # migrate permissions
         perm_codes = [perm.code for perm in self.security.permissions]
         if perm_codes:
             await add_missing_permissions(self.db, perm_codes=perm_codes)

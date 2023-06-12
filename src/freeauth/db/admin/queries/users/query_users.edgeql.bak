@@ -1,4 +1,5 @@
 WITH
+    module freeauth,
     q := <optional str>$q,
     name_filter := <optional json>$name,
     username_filter := <optional json>$username,

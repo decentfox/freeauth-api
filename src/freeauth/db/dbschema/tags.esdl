@@ -1,4 +1,4 @@
-module default {
+module freeauth {
     abstract type Tag extending TimeStamped {
         required property name -> str;
         property rank -> int16;

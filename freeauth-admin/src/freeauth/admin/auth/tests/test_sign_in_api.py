@@ -9,9 +9,9 @@ from jose import jwt
 
 from freeauth.conf.settings import get_settings
 from freeauth.db.auth.auth_qry_async_edgeql import (
-    AuthAuditStatusCode,
-    AuthCodeType,
-    AuthVerifyType,
+    FreeauthAuditStatusCode,
+    FreeauthCodeType,
+    FreeauthVerifyType,
 )
 from freeauth.security.utils import gen_random_string
 
@@ -82,8 +82,8 @@ def test_send_sign_in_code(test_client: TestClient):
     resp_data = resp.json()
     assert resp.status_code == HTTPStatus.OK, resp_data
     assert resp_data["account"] == user.mobile
-    assert resp_data["code_type"] == AuthCodeType.SMS.value
-    assert resp_data["verify_type"] == AuthVerifyType.SIGNIN.value
+    assert resp_data["code_type"] == FreeauthCodeType.SMS.value
+    assert resp_data["verify_type"] == FreeauthVerifyType.SIGNIN.value
 
 
 @pytest.mark.parametrize(
@@ -220,8 +220,8 @@ def test_sign_in_with_code(test_client: TestClient, bo_client: TestClient):
     assert len(rv["rows"]) == 1
     assert rv["rows"][0]["event_type"] == AuthAuditEventType.SIGNIN.value
     assert (
-        AuthAuditStatusCode(rv["rows"][0]["status_code"])
-        == AuthAuditStatusCode.OK
+        FreeauthAuditStatusCode(rv["rows"][0]["status_code"])
+        == FreeauthAuditStatusCode.OK
     )
     assert rv["rows"][0]["is_succeed"]
     assert rv["rows"][0]["user"]["email"] == account

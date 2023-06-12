@@ -3,7 +3,7 @@ with
     mobile := <optional str>$mobile,
     email := <optional str>$email
 select
-    User { id, is_deleted }
+    freeauth::User { id, is_deleted }
 filter (
     .username ?= username if exists username else
     .mobile ?= mobile if exists mobile else

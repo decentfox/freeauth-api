@@ -1,4 +1,4 @@
-module auth {
+module freeauth {
     scalar type CodeType extending enum<SMS, Email>;
     scalar type VerifyType extending enum<SignIn, SignUp>;
     scalar type AuditEventType extending enum<SignIn, SignOut, SignUp, ResetPwd>;
@@ -16,7 +16,7 @@ module auth {
         CODE_EXPIRED,
     >;
 
-    type VerifyRecord extending default::TimeStamped {
+    type VerifyRecord extending TimeStamped {
         required property account -> str {
             readonly := true;
         };
@@ -40,8 +40,8 @@ module auth {
         index on ((.account, .code_type, .verify_type, .consumable));
     }
 
-    type Token extending default::TimeStamped {
-        required link user -> default::User {
+    type Token extending TimeStamped {
+        required link user -> User {
             on target delete delete source;
         };
         required property access_token -> str {
@@ -51,8 +51,8 @@ module auth {
         property is_revoked := exists .revoked_at;
     }
 
-    type AuditLog extending default::TimeStamped {
-        required link user -> default::User {
+    type AuditLog extending TimeStamped {
+        required link user -> User {
             on target delete delete source;
         };
         required property client_ip -> str {

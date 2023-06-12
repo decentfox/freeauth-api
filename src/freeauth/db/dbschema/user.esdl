@@ -1,4 +1,4 @@
-module default {
+module freeauth {
     global current_user_id -> uuid;
     global current_user := (
         select User filter .id = global current_user_id

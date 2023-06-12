@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException
 
 from freeauth.conf.login_settings import LoginSettings
 from freeauth.db.auth.auth_qry_async_edgeql import (
-    AuthCodeType,
+    FreeauthCodeType,
     GetUserByAccountResult,
     get_user_by_account,
 )
@@ -49,20 +49,27 @@ async def verify_new_account_when_send_code(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail={"code_type": "系统不支持注册，如您已有账号，请直接登录"},
         )
-    if body.code_type == AuthCodeType.SMS and "mobile" not in signup_modes:
+    if body.code_type == FreeauthCodeType.SMS and "mobile" not in signup_modes:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail={"code_type": "不支持手机号和验证码注册"},
         )
-    if body.code_type == AuthCodeType.EMAIL and "email" not in signup_modes:
+    if (
+        body.code_type == FreeauthCodeType.EMAIL
+        and "email" not in signup_modes
+    ):
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail={"code_type": "不支持邮箱和验证码注册"},
         )
     await verify_signup_account(
         auth_app.db,
-        mobile=body.account if body.code_type == AuthCodeType.SMS else None,
-        email=body.account if body.code_type == AuthCodeType.EMAIL else None,
+        mobile=(
+            body.account if body.code_type == FreeauthCodeType.SMS else None
+        ),
+        email=(
+            body.account if body.code_type == FreeauthCodeType.EMAIL else None
+        ),
     )
 
 
@@ -71,8 +78,12 @@ async def verify_account_when_sign_up(
 ):
     await verify_signup_account(
         auth_app.db,
-        mobile=body.account if body.code_type == AuthCodeType.SMS else None,
-        email=body.account if body.code_type == AuthCodeType.EMAIL else None,
+        mobile=(
+            body.account if body.code_type == FreeauthCodeType.SMS else None
+        ),
+        email=(
+            body.account if body.code_type == FreeauthCodeType.EMAIL else None
+        ),
     )
 
 

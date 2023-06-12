@@ -50,7 +50,7 @@ class LoginSettings(BaseSettings):
     signin_code_sending_max_attempts: int = 5
     signin_code_sending_interval: int = 60
     pwd_signin_modes: list[str] = [
-        # "username",  # 支持用户名登录
+        "username",  # 支持用户名登录
         # "mobile",  # 支持手机号登录
         # "email",  # 支持邮箱登录
     ]  # 密码登录方式，`[]` 代表不支持密码登录

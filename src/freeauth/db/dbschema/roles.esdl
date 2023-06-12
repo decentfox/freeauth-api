@@ -1,4 +1,4 @@
-module default {
+module freeauth {
     type Role extending TimeStamped, SoftDeletable {
         required property name -> str;
         property code -> str;

@@ -1,6 +1,6 @@
-SELECT OrganizationType {
+select freeauth::OrganizationType {
     name, code, description, is_deleted, is_protected
-} ORDER BY
-    .is_deleted THEN
-    .is_protected DESC THEN
+} order by
+    .is_deleted then
+    .is_protected desc then
     .code;

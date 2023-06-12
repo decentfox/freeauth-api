@@ -1,4 +1,5 @@
-WITH
+with
+    module freeauth,
     id := <optional uuid>$id,
     current_code := <optional str>$current_code,
     name := <optional str>$name,
@@ -6,19 +7,19 @@ WITH
     description := <optional str>$description,
     is_deleted := <optional bool>$is_deleted,
     org_type := assert_single((
-        SELECT OrganizationType
-        FILTER (.id = id) ?? (.code = code)
+        select OrganizationType
+        filter (.id = id) ?? (.code = code)
     ))
-SELECT (
-    UPDATE org_type
-    SET {
+select (
+    update org_type
+    set {
         name := name ?? .name,
         code := code ?? .code,
         description := description ?? .description,
         deleted_at := (
-            .deleted_at IF NOT EXISTS is_deleted ELSE
+            .deleted_at if not exists is_deleted else
             datetime_of_transaction()
-            IF is_deleted AND NOT .is_protected ELSE {}
+            if is_deleted and not .is_protected else {}
         )
     }
 ) { name, code, description, is_deleted, is_protected };
