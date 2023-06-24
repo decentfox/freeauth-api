@@ -100,3 +100,31 @@ class PermissionQueryBody(QueryBody):
         title="所属应用 ID",
         description="支持过滤指定应用下的权限",
     )
+
+
+@dataclass(config=BaseModelConfig)
+class PermissionTagDeleteBody:
+    ids: list[uuid.UUID] = Field(
+        ...,
+        title="权限标签 ID 列表",
+        description="待删除的权限标签 ID 列表",
+    )
+
+
+@dataclass(config=BaseModelConfig)
+class PermissionTagUpdateBody:
+    name: str = Field(
+        ...,
+        title="名称",
+        description="权限标签名称",
+        min_length=1,
+    )
+
+
+@dataclass(config=BaseModelConfig)
+class PermissionTagReorderBody:
+    ids: list[uuid.UUID] = Field(
+        ...,
+        title="权限标签 ID 列表",
+        description="重新排序后的权限标签 ID 列表",
+    )

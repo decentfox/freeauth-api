@@ -5,12 +5,14 @@
 #     'src/freeauth/db/admin/queries/orgs/create_enterprise.edgeql'
 #     'src/freeauth/db/admin/queries/orgs/create_org_type.edgeql'
 #     'src/freeauth/db/admin/queries/perms/create_permission.edgeql'
+#     'src/freeauth/db/admin/queries/perms/create_permission_tag.edgeql'
 #     'src/freeauth/db/admin/queries/roles/create_role.edgeql'
 #     'src/freeauth/db/admin/queries/users/create_user.edgeql'
 #     'src/freeauth/db/admin/queries/apps/delete_application.edgeql'
 #     'src/freeauth/db/admin/queries/orgs/delete_org_type.edgeql'
 #     'src/freeauth/db/admin/queries/orgs/delete_organization.edgeql'
 #     'src/freeauth/db/admin/queries/perms/delete_permission.edgeql'
+#     'src/freeauth/db/admin/queries/perms/delete_permission_tag.edgeql'
 #     'src/freeauth/db/admin/queries/roles/delete_role.edgeql'
 #     'src/freeauth/db/admin/queries/users/delete_user.edgeql'
 #     'src/freeauth/db/admin/queries/orgs/get_department_by_id_or_code.edgeql'
@@ -28,6 +30,7 @@
 #     'src/freeauth/db/admin/queries/orgs/query_org_types.edgeql'
 #     'src/freeauth/db/admin/queries/perms/query_permission_tags.edgeql'
 #     'src/freeauth/db/admin/queries/perms/query_permissions.edgeql'
+#     'src/freeauth/db/admin/queries/perms/reorder_permission_tags.edgeql'
 #     'src/freeauth/db/admin/queries/users/resign_user.edgeql'
 #     'src/freeauth/db/admin/queries/roles/role_bind_users.edgeql'
 #     'src/freeauth/db/admin/queries/roles/role_unbind_users.edgeql'
@@ -39,6 +42,7 @@
 #     'src/freeauth/db/admin/queries/orgs/update_org_type_status.edgeql'
 #     'src/freeauth/db/admin/queries/perms/update_permission.edgeql'
 #     'src/freeauth/db/admin/queries/perms/update_permission_status.edgeql'
+#     'src/freeauth/db/admin/queries/perms/update_permission_tag.edgeql'
 #     'src/freeauth/db/admin/queries/roles/update_role.edgeql'
 #     'src/freeauth/db/admin/queries/roles/update_role_status.edgeql'
 #     'src/freeauth/db/admin/queries/users/update_user.edgeql'
@@ -157,6 +161,14 @@ class CreatePermissionResultTagsItem(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class CreatePermissionTagResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    rank: int | None
+    created_at: datetime.datetime
+
+
+@dataclasses.dataclass
 class CreateRoleResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
@@ -217,6 +229,11 @@ class DeleteOrgTypeResult(NoPydanticValidation):
 
 @dataclasses.dataclass
 class DeleteOrganizationResult(NoPydanticValidation):
+    id: uuid.UUID
+
+
+@dataclasses.dataclass
+class DeletePermissionTagResult(NoPydanticValidation):
     id: uuid.UUID
 
 
@@ -649,6 +666,29 @@ async def create_permission(
     )
 
 
+async def create_permission_tag(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    name: str,
+) -> CreatePermissionTagResult:
+    return await executor.query_single(
+        """\
+        with
+            name := <str>$name,
+        select (
+            insert PermissionTag {
+                name := name,
+            }
+        ) {
+            name,
+            rank,
+            created_at
+        }\
+        """,
+        name=name,
+    )
+
+
 async def create_role(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -815,6 +855,19 @@ async def delete_permission(
     return await executor.query(
         """\
         delete Permission filter .id in array_unpack(<array<uuid>>$ids);\
+        """,
+        ids=ids,
+    )
+
+
+async def delete_permission_tag(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    ids: list[uuid.UUID],
+) -> list[DeletePermissionTagResult]:
+    return await executor.query(
+        """\
+        delete PermissionTag filter .id in array_unpack(<array<uuid>>$ids);\
         """,
         ids=ids,
     )
@@ -1417,6 +1470,31 @@ async def query_permissions(
     )
 
 
+async def reorder_permission_tags(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    ids: list[uuid.UUID],
+) -> list[CreatePermissionTagResult]:
+    return await executor.query(
+        """\
+        select (
+            for tag in enumerate(array_unpack(<array<uuid>>$ids))
+            union (
+                update PermissionTag filter .id = tag.1
+                set {
+                    rank := tag.0 + 1
+                }
+            )
+        ) {
+            name,
+            rank,
+            created_at
+        }\
+        """,
+        ids=ids,
+    )
+
+
 async def resign_user(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -1865,6 +1943,33 @@ async def update_permission_status(
         """,
         ids=ids,
         is_deleted=is_deleted,
+    )
+
+
+async def update_permission_tag(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    id: uuid.UUID,
+    name: str,
+) -> CreatePermissionTagResult | None:
+    return await executor.query_single(
+        """\
+        with
+            id := <uuid>$id,
+            name := <str>$name,
+        select (
+            update PermissionTag filter .id = id
+            set {
+                name := name
+            }
+        ) { 
+            name,
+            rank,
+            created_at
+        };\
+        """,
+        id=id,
+        name=name,
     )
 
 

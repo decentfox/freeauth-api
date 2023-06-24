@@ -9,20 +9,26 @@ from fastapi import Depends, HTTPException, Query
 from freeauth.db.admin.admin_qry_async_edgeql import (
     AddMissingPermissionsResult,
     CreatePermissionResult,
+    CreatePermissionTagResult,
     CreateRoleResult,
+    DeletePermissionTagResult,
     GetPermissionByIdOrCodeResult,
     GetPermissionByIdOrCodeResultTagsItem,
     QueryPermissionsResult,
     UpdatePermissionStatusResult,
     create_permission,
+    create_permission_tag,
     delete_permission,
+    delete_permission_tag,
     get_permission_by_id_or_code,
     perm_bind_roles,
     perm_unbind_roles,
     query_permission_tags,
     query_permissions,
+    reorder_permission_tags,
     update_permission,
     update_permission_status,
+    update_permission_tag,
 )
 
 from ..app import auth_app, router
@@ -33,6 +39,9 @@ from .dataclasses import (
     PermissionPutBody,
     PermissionQueryBody,
     PermissionStatusBody,
+    PermissionTagDeleteBody,
+    PermissionTagReorderBody,
+    PermissionTagUpdateBody,
     PermRoleBody,
 )
 from .dependencies import parse_permission_id_or_code
@@ -388,7 +397,7 @@ async def get_users_in_permission(
     "/permission_tags",
     tags=["权限管理"],
     summary="获取权限标签",
-    description="获取指定权限的所有标签",
+    description="获取权限相关的所有标签",
     dependencies=[
         Depends(auth_app.perm_accepted("manage:perms", "manage:roles"))
     ],
@@ -428,3 +437,80 @@ async def query_permissions_filter_by_role(
         tag_ids=tag_ids,
         role_id=role_id,
     )
+
+
+@router.post(
+    "/permission_tags",
+    status_code=HTTPStatus.CREATED,
+    tags=["权限管理"],
+    summary="创建权限标签",
+    description="创建权限标签",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
+)
+async def post_permission_tag(
+    body: PermissionTagUpdateBody,
+) -> CreatePermissionTagResult:
+    try:
+        role = await create_permission_tag(
+            auth_app.db,
+            name=body.name,
+        )
+    except edgedb.errors.ConstraintViolationError:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail={"name": f"{body.name} 已被使用"},
+        )
+    return role
+
+
+@router.delete(
+    "/permission_tags",
+    tags=["权限管理"],
+    summary="删除权限标签",
+    description="批量删除权限标签",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
+)
+async def delete_permission_tags(
+    body: PermissionTagDeleteBody,
+) -> list[DeletePermissionTagResult]:
+    return await delete_permission_tag(auth_app.db, ids=body.ids)
+
+
+@router.put(
+    "/permission_tags/{id}",
+    tags=["权限管理"],
+    summary="更新权限标签",
+    description="更新指定权限标签的名称",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
+)
+async def put_permission_tag(
+    body: PermissionTagUpdateBody,
+    id: uuid.UUID,
+) -> CreatePermissionTagResult:
+    try:
+        permission_tag: CreatePermissionTagResult | None = (
+            await update_permission_tag(auth_app.db, name=body.name, id=id)
+        )
+        if not permission_tag:
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND, detail="标签不存在"
+            )
+    except edgedb.errors.ConstraintViolationError:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail={"name": f"{body.name} 已被使用"},
+        )
+    return permission_tag
+
+
+@router.post(
+    "/permission_tags/reorder",
+    tags=["权限管理"],
+    summary="更新权限标签排序",
+    description="更新权限标签排序",
+    dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
+)
+async def reorder_tags(
+    body: PermissionTagReorderBody,
+) -> list[CreatePermissionTagResult]:
+    return await reorder_permission_tags(auth_app.db, ids=body.ids)
