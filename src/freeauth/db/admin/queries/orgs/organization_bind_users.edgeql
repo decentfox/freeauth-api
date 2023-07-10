@@ -1,31 +1,32 @@
-WITH
+with
+    module freeauth,
     user_ids := <array<uuid>>$user_ids,
     organization_ids := <array<uuid>>$organization_ids,
     org_type := (
-        SELECT OrganizationType FILTER (
+        select OrganizationType filter (
             .id = <uuid>$org_type_id
         )
     ),
     organizations := (
-        SELECT Organization
-        FILTER
-            ( Organization IS NOT OrganizationType ) AND
+        select Organization
+        filter
+            ( Organization is not OrganizationType ) and
             (
-                false IF NOT EXISTS org_type ELSE
+                false if not exists org_type else
                 (
-                    .id IN array_unpack(organization_ids) AND
-                    org_type IN .ancestors
+                    .id in array_unpack(organization_ids) and
+                    org_type in .ancestors
                 )
             )
     )
-SELECT (
-    UPDATE User FILTER
-        .id in array_unpack(user_ids) AND
+select (
+    update User filter
+        .id in array_unpack(user_ids) and
         (
-            NOT EXISTS .org_type OR
+            not exists .org_type or
             .org_type ?= org_type
         )
-    SET {
+    set {
         org_type := org_type,
         directly_organizations += organizations
     }
@@ -36,7 +37,7 @@ SELECT (
     mobile,
     org_type: { code, name },
     departments := (
-        SELECT .directly_organizations { code, name }
+        select .directly_organizations { code, name }
     ),
     roles: { code, name },
     is_deleted,

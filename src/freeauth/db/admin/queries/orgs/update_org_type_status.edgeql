@@ -1,9 +1,9 @@
-WITH
+with
     is_deleted := <bool>$is_deleted
-SELECT (
-    UPDATE OrganizationType
-    FILTER .id in array_unpack(<array<uuid>>$ids) AND NOT .is_protected
-    SET {
-        deleted_at := datetime_of_transaction() IF is_deleted ELSE {}
+select (
+    update freeauth::OrganizationType
+    filter .id in array_unpack(<array<uuid>>$ids) and not .is_protected
+    set {
+        deleted_at := datetime_of_transaction() if is_deleted else {}
     }
 ) { name, code, is_deleted };

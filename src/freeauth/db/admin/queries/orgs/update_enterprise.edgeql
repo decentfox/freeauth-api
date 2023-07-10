@@ -1,22 +1,23 @@
-WITH
+with
+    module freeauth,
     id := <optional uuid>$id,
     current_code := <optional str>$current_code,
     org_type_id := <optional uuid>$org_type_id,
     org_type_code := <optional str>$org_type_code,
     enterprise := assert_single((
-        SELECT Enterprise
-        FILTER
+        select Enterprise
+        filter
             (.id = id) ??
-            (.code ?= current_code AND .org_type.id = org_type_id) ??
+            (.code ?= current_code and .org_type.id = org_type_id) ??
             (
-                .code ?= current_code AND
+                .code ?= current_code and
                 .org_type.code = org_type_code
             ) ??
             false
     ))
-SELECT (
+select (
     UPDATE enterprise
-    SET {
+    set {
         name := <str>$name,
         code := <optional str>$code,
         tax_id := <optional str>$tax_id,

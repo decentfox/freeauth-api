@@ -1,4 +1,5 @@
-WITH
+with
+    module freeauth,
     name := <optional str>$name,
     username := <optional str>$username,
     email := <optional str>$email,
@@ -7,19 +8,19 @@ WITH
     reset_pwd_on_first_login := <bool>$reset_pwd_on_first_login,
     organization_ids := <optional array<uuid>>$organization_ids,
     org_type := (
-        SELECT OrganizationType FILTER (
+        select OrganizationType filter (
             .id = <optional uuid>$org_type_id
         )
     ),
     organizations := (
-        SELECT Organization
-        FILTER
-            ( Organization IS NOT OrganizationType ) AND
+        select Organization
+        filter
+            ( Organization is not OrganizationType ) and
             (
-                false IF NOT EXISTS org_type ELSE
+                false if not exists org_type else
                 (
-                    .id IN array_unpack(organization_ids) AND
-                    org_type IN .ancestors
+                    .id in array_unpack(organization_ids) and
+                    org_type in .ancestors
                 )
             )
     )
@@ -41,7 +42,7 @@ select (
     mobile,
     org_type: { code, name },
     departments := (
-        SELECT .directly_organizations { code, name }
+        select .directly_organizations { code, name }
     ),
     roles: { code, name },
     is_deleted,

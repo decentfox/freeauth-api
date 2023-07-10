@@ -6,7 +6,7 @@ from ..app import auth_app, router
 from ..dataclasses import PaginatedData, QueryBody
 
 FILTER_TYPE_MAPPING = {
-    "event_type": "auth::AuditEventType",
+    "event_type": "AuditEventType",
     "created_at": "datetime",
     "is_succeed": "bool",
 }
@@ -30,7 +30,7 @@ async def query_audit_logs(
             per_page := <optional int64>$per_page ?? 20,
             q := <optional str>$q,
             audit_logs := (
-                SELECT auth::AuditLog
+                SELECT AuditLog
                 FILTER (
                     true IF not EXISTS q ELSE
                     .raw_ua ?? '' ILIKE q OR

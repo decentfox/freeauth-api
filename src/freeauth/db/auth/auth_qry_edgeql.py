@@ -36,14 +36,36 @@ class NoPydanticValidation:
         return []
 
 
-class AuthAuditEventType(enum.Enum):
+@dataclasses.dataclass
+class CreateAuditLogResult(NoPydanticValidation):
+    id: uuid.UUID
+    client_ip: str
+    os: str | None
+    device: str | None
+    browser: str | None
+    status_code: FreeauthAuditStatusCode
+    is_succeed: bool
+    event_type: FreeauthAuditEventType
+    created_at: datetime.datetime
+    user: CreateAuditLogResultUser
+
+
+@dataclasses.dataclass
+class CreateAuditLogResultUser(NoPydanticValidation):
+    id: uuid.UUID
+    username: str | None
+    mobile: str | None
+    email: str | None
+
+
+class FreeauthAuditEventType(enum.Enum):
     SIGNIN = "SignIn"
     SIGNOUT = "SignOut"
     SIGNUP = "SignUp"
     RESETPWD = "ResetPwd"
 
 
-class AuthAuditStatusCode(enum.Enum):
+class FreeauthAuditStatusCode(enum.Enum):
     OK = "OK"
     ACCOUNT_ALREADY_EXISTS = "ACCOUNT_ALREADY_EXISTS"
     ACCOUNT_NOT_EXISTS = "ACCOUNT_NOT_EXISTS"
@@ -56,36 +78,14 @@ class AuthAuditStatusCode(enum.Enum):
     CODE_EXPIRED = "CODE_EXPIRED"
 
 
-class AuthCodeType(enum.Enum):
+class FreeauthCodeType(enum.Enum):
     SMS = "SMS"
     EMAIL = "Email"
 
 
-class AuthVerifyType(enum.Enum):
+class FreeauthVerifyType(enum.Enum):
     SIGNIN = "SignIn"
     SIGNUP = "SignUp"
-
-
-@dataclasses.dataclass
-class CreateAuditLogResult(NoPydanticValidation):
-    id: uuid.UUID
-    client_ip: str
-    os: str | None
-    device: str | None
-    browser: str | None
-    status_code: AuthAuditStatusCode
-    is_succeed: bool
-    event_type: AuthAuditEventType
-    created_at: datetime.datetime
-    user: CreateAuditLogResultUser
-
-
-@dataclasses.dataclass
-class CreateAuditLogResultUser(NoPydanticValidation):
-    id: uuid.UUID
-    username: str | None
-    mobile: str | None
-    email: str | None
 
 
 @dataclasses.dataclass
@@ -156,8 +156,8 @@ class SendCodeResult(NoPydanticValidation):
     id: uuid.UUID
     created_at: datetime.datetime
     account: str
-    code_type: AuthCodeType
-    verify_type: AuthVerifyType
+    code_type: FreeauthCodeType
+    verify_type: FreeauthVerifyType
     expired_at: datetime.datetime
     ttl: int
 
@@ -188,7 +188,7 @@ class UpsertLoginSettingResult(NoPydanticValidation):
 
 
 class ValidateCodeResult(typing.NamedTuple):
-    status_code: AuthAuditStatusCode
+    status_code: FreeauthAuditStatusCode
 
 
 @dataclasses.dataclass
@@ -204,15 +204,15 @@ def create_audit_log(
     *,
     user_id: uuid.UUID,
     client_info: str,
-    status_code: AuthAuditStatusCode,
-    event_type: AuthAuditEventType,
+    status_code: FreeauthAuditStatusCode,
+    event_type: FreeauthAuditEventType,
 ) -> CreateAuditLogResult:
     return executor.query_single(
         """\
         with
-            module auth,
+            module freeauth,
             user := (
-                select default::User filter .id = <uuid>$user_id
+                select User filter .id = <uuid>$user_id
             ),
             client_info := (
                 <tuple<client_ip: str, user_agent: json>><json>$client_info
@@ -258,6 +258,7 @@ def get_current_user(
     return executor.query_single(
         """\
         with
+            module freeauth,
             user := global current_user,
             perms := (
                 select user.permissions
@@ -288,7 +289,7 @@ def get_login_setting(
 ) -> list[GetLoginSettingResult]:
     return executor.query(
         """\
-        select LoginSetting { key, value } order by .key;\
+        select freeauth::LoginSetting { key, value } order by .key;\
         """,
     )
 
@@ -300,7 +301,7 @@ def get_login_setting_by_key(
 ) -> GetLoginSettingResult | None:
     return executor.query_single(
         """\
-        select LoginSetting { key, value } filter .key = <str>$key;\
+        select freeauth::LoginSetting { key, value } filter .key = <str>$key;\
         """,
         key=key,
     )
@@ -315,7 +316,7 @@ def get_user_by_access_token(
         """\
         with
             token := (
-                select auth::Token
+                select freeauth::Token
                 filter
                     .access_token = <str>$access_token
                     and .is_revoked = false
@@ -340,7 +341,7 @@ def get_user_by_account(
             mobile := <optional str>$mobile,
             email := <optional str>$email
         select
-            User { id, is_deleted }
+            freeauth::User { id, is_deleted }
         filter (
             .username ?= username if exists username else
             .mobile ?= mobile if exists mobile else
@@ -362,6 +363,7 @@ def has_any_permission(
     return executor.query_single(
         """\
         with
+            module freeauth,
             perm_codes := str_upper(array_unpack(<array<str>>$perm_codes)),
             wildcard_perm := (
                 select Permission
@@ -392,12 +394,12 @@ def reset_pwd(
     return executor.query_single(
         """\
         with
-            module auth,
+            module freeauth,
             client_info := (
                 <tuple<client_ip: str, user_agent: json>><json>$client_info
             ),
             user := (
-                update default::User
+                update User
                 filter
                     .id = <uuid>$id and not .is_deleted
                 set {
@@ -429,8 +431,8 @@ def send_code(
     executor: edgedb.Executor,
     *,
     account: str,
-    code_type: AuthCodeType,
-    verify_type: AuthVerifyType,
+    code_type: FreeauthCodeType,
+    verify_type: FreeauthVerifyType,
     code: str,
     ttl: int,
     max_attempts: int | None = None,
@@ -439,15 +441,16 @@ def send_code(
     return executor.query_single(
         """\
         with
+            module freeauth,
             account := <str>$account,
-            code_type := <auth::CodeType>$code_type,
-            verify_type := <auth::VerifyType>$verify_type,
+            code_type := <CodeType>$code_type,
+            verify_type := <VerifyType>$verify_type,
             code := <str>$code,
             ttl := <int16>$ttl,
             max_attempts := <optional int64>$max_attempts,
             attempts_ttl := <optional int16>$attempts_ttl,
             sent_records := (
-                select auth::VerifyRecord
+                select VerifyRecord
                 filter (
                     exists max_attempts
                     and .account = account
@@ -464,7 +467,7 @@ def send_code(
                 (count(sent_records) < max_attempts) ?? true
         ) union (
             select (
-                insert auth::VerifyRecord {
+                insert VerifyRecord {
                     account := account,
                     code_type := code_type,
                     verify_type := verify_type,
@@ -504,6 +507,7 @@ def sign_in(
     return executor.query_single(
         """\
         with
+            module freeauth,
             client_info := (
                 <tuple<client_ip: str, user_agent: json>><json>$client_info
             ),
@@ -513,16 +517,16 @@ def sign_in(
                 set { last_login_at := datetime_of_transaction() }
             ),
             token := (
-                insert auth::Token {
+                insert Token {
                     access_token := <str>$access_token,
                     user := user
                 }
             ),
             audit_log := (
-                insert auth::AuditLog {
+                insert AuditLog {
                     client_ip := client_info.client_ip,
-                    event_type := auth::AuditEventType.SignIn,
-                    status_code := auth::AuditStatusCode.OK,
+                    event_type := AuditEventType.SignIn,
+                    status_code := AuditStatusCode.OK,
                     raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
@@ -558,7 +562,7 @@ def sign_out(
 ) -> SignOutResult | None:
     return executor.query_single(
         """\
-        update auth::Token
+        update freeauth::Token
         filter
             .access_token = <str>$access_token
             and .is_revoked = false
@@ -583,6 +587,7 @@ def sign_up(
     return executor.query_single(
         """\
         with
+            module freeauth,
             name := <optional str>$name,
             username := <str>$username,
             email := <optional str>$email,
@@ -601,10 +606,10 @@ def sign_up(
                 }
             ),
             audit_log := (
-                insert auth::AuditLog {
+                insert AuditLog {
                     client_ip := client_info.client_ip,
-                    event_type := auth::AuditEventType.SignUp,
-                    status_code := auth::AuditStatusCode.OK,
+                    event_type := AuditEventType.SignUp,
+                    status_code := AuditStatusCode.OK,
                     raw_ua := <str>client_info.user_agent['raw_ua'],
                     os := <str>client_info.user_agent['os'],
                     device := <str>client_info.user_agent['device'],
@@ -645,11 +650,11 @@ def upsert_login_setting(
         """\
         for x in json_object_unpack(<json>$configs)
         union (
-            insert LoginSetting {
+            insert freeauth::LoginSetting {
                 key := x.0,
                 value := to_str(x.1)
             } unless conflict on (.key) else (
-                update LoginSetting set { value := to_str(x.1)}
+                update freeauth::LoginSetting set { value := to_str(x.1)}
             )
         );\
         """,
@@ -661,15 +666,15 @@ def validate_code(
     executor: edgedb.Executor,
     *,
     account: str,
-    code_type: AuthCodeType,
-    verify_type: AuthVerifyType,
+    code_type: FreeauthCodeType,
+    verify_type: FreeauthVerifyType,
     code: str,
     max_attempts: int | None = None,
 ) -> ValidateCodeResult:
     return executor.query_single(
         """\
         with
-            module auth,
+            module freeauth,
             account := <str>$account,
             code_type := <CodeType>$code_type,
             verify_type := <VerifyType>$verify_type,
@@ -740,13 +745,13 @@ def validate_pwd(
     return executor.query_single(
         """\
         with
-            module auth,
+            module freeauth,
             username := <optional str>$username,
             mobile := <optional str>$mobile,
             email := <optional str>$email,
             interval := <optional int64>$interval,
             user := assert_single((
-                select default::User
+                select User
                 filter
                     (exists username and .username ?= username) or
                     (exists mobile and .mobile ?= mobile) or

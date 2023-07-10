@@ -1,6 +1,6 @@
 with
     token := (
-        select auth::Token
+        select freeauth::Token
         filter
             .access_token = <str>$access_token
             and .is_revoked = false

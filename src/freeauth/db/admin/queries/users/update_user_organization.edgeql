@@ -1,4 +1,5 @@
 with
+    module freeauth,
     user := ( select User filter .id = <uuid>$id ),
     org_type_id := <optional uuid>$org_type_id,
     org_type := (

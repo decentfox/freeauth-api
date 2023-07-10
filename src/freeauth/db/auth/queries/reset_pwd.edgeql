@@ -1,10 +1,10 @@
 with
-    module auth,
+    module freeauth,
     client_info := (
         <tuple<client_ip: str, user_agent: json>><json>$client_info
     ),
     user := (
-        update default::User
+        update User
         filter
             .id = <uuid>$id and not .is_deleted
         set {

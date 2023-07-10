@@ -1,9 +1,9 @@
-WITH
+with
     id := <optional uuid>$id,
     code := <optional str>$code
-SELECT assert_single(
+select assert_single(
     (
-        SELECT Role {
+        select freeauth::Role {
             name,
             code,
             description,
@@ -14,6 +14,6 @@ SELECT assert_single(
             is_deleted,
             created_at
         }
-        FILTER (.id = id) ?? (.code_upper = str_upper(code))
+        filter (.id = id) ?? (.code_upper = str_upper(code))
     )
 );

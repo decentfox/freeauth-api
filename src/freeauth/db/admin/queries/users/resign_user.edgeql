@@ -1,12 +1,12 @@
-SELECT (
-    WITH is_deleted := <optional bool>$is_deleted,
-    UPDATE User FILTER .id in array_unpack(<array<uuid>>$user_ids)
-    SET {
+select (
+    with is_deleted := <optional bool>$is_deleted,
+    update freeauth::User filter .id in array_unpack(<array<uuid>>$user_ids)
+    set {
         directly_organizations := {},
         org_type := {},
         roles := {},
         deleted_at := (
-            datetime_of_transaction() IF is_deleted ELSE .deleted_at
+            datetime_of_transaction() if is_deleted else .deleted_at
         )
     }
-) { name } ORDER BY .created_at DESC;
+) { name } order by .created_at desc;

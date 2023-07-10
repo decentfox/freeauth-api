@@ -1,3 +1,5 @@
+with
+    module freeauth
 for code in array_unpack(<array<str>>$perm_codes)
 union (
     insert Permission {

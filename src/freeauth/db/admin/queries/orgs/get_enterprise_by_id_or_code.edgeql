@@ -1,11 +1,11 @@
-WITH
+with
     id := <optional uuid>$id,
     code := <optional str>$code,
     org_type_id := <optional uuid>$org_type_id,
     org_type_code := <optional str>$org_type_code
-SELECT assert_single(
+select assert_single(
     (
-        SELECT Enterprise {
+        select freeauth::Enterprise {
             name,
             code,
             tax_id,
@@ -14,9 +14,9 @@ SELECT assert_single(
             contact_address,
             contact_phone_num
         }
-        FILTER
+        filter
             (.id = id) ??
-            (.code ?= code AND .org_type.id = org_type_id) ??
-            (.code ?= code AND .org_type.code = org_type_code)
+            (.code ?= code and .org_type.id = org_type_id) ??
+            (.code ?= code and .org_type.code = org_type_code)
     )
 );

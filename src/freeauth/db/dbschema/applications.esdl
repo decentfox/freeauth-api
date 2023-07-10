@@ -1,4 +1,4 @@
-module default {
+module freeauth {
     global current_app_id -> uuid;
     global current_app := (
         select Application filter .id = global current_app_id

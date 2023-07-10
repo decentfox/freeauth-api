@@ -1,4 +1,5 @@
 with
+    module freeauth,
     client_info := (
         <tuple<client_ip: str, user_agent: json>><json>$client_info
     ),
@@ -8,16 +9,16 @@ with
         set { last_login_at := datetime_of_transaction() }
     ),
     token := (
-        insert auth::Token {
+        insert Token {
             access_token := <str>$access_token,
             user := user
         }
     ),
     audit_log := (
-        insert auth::AuditLog {
+        insert AuditLog {
             client_ip := client_info.client_ip,
-            event_type := auth::AuditEventType.SignIn,
-            status_code := auth::AuditStatusCode.OK,
+            event_type := AuditEventType.SignIn,
+            status_code := AuditStatusCode.OK,
             raw_ua := <str>client_info.user_agent['raw_ua'],
             os := <str>client_info.user_agent['os'],
             device := <str>client_info.user_agent['device'],

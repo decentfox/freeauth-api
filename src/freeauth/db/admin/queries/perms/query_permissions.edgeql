@@ -1,4 +1,5 @@
 with
+    module freeauth,
     page := <optional int64>$page ?? 1,
     per_page := <optional int64>$per_page ?? 20,
     q := <optional str>$q,

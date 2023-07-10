@@ -1,10 +1,10 @@
-WITH
+with
     id := <optional uuid>$id,
     code := <optional str>$code,
     enterprise_id := <optional uuid>$enterprise_id
-SELECT assert_single(
+select assert_single(
     (
-        SELECT Department {
+        select freeauth::Department {
             name,
             code,
             description,
@@ -17,8 +17,8 @@ SELECT assert_single(
                 code,
             }
         }
-        FILTER
+        filter
             (.id = id) ??
-            (.code ?= code AND .enterprise.id = enterprise_id)
+            (.code ?= code and .enterprise.id = enterprise_id)
     )
 );

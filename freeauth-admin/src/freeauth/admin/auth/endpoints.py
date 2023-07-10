@@ -10,10 +10,10 @@ from fastapi import Depends, HTTPException, Response
 from freeauth.conf.login_settings import LoginSettings
 from freeauth.conf.settings import get_settings
 from freeauth.db.auth.auth_qry_async_edgeql import (
-    AuthAuditEventType,
-    AuthAuditStatusCode,
-    AuthCodeType,
-    AuthVerifyType,
+    FreeauthAuditEventType,
+    FreeauthAuditStatusCode,
+    FreeauthCodeType,
+    FreeauthVerifyType,
     GetCurrentUserResult,
     GetUserByAccessTokenResult,
     GetUserByAccountResult,
@@ -59,14 +59,14 @@ from .dependencies import (
 
 async def send_auth_code(
     account: str,
-    verify_type: AuthVerifyType,
+    verify_type: FreeauthVerifyType,
     ttl: int | None,
     max_attempts: int | None,
     attempts_ttl: int | None,
 ) -> SendCodeResult:
-    code_type = AuthCodeType.EMAIL
+    code_type = FreeauthCodeType.EMAIL
     if re.match(MOBILE_REGEX, account):
-        code_type = AuthCodeType.SMS
+        code_type = FreeauthCodeType.SMS
 
     settings = get_settings()
     if account in settings.demo_accounts:
@@ -103,15 +103,15 @@ async def send_auth_code(
 
 async def validate_auth_code(
     account: str,
-    verify_type: AuthVerifyType,
+    verify_type: FreeauthVerifyType,
     code: str,
     max_attempts: int | None,
     user: GetUserByAccountResult | None,
     client_info: dict,
 ):
-    code_type = AuthCodeType.EMAIL
+    code_type = FreeauthCodeType.EMAIL
     if re.match(MOBILE_REGEX, account):
-        code_type = AuthCodeType.SMS
+        code_type = FreeauthCodeType.SMS
     rv: ValidateCodeResult = await validate_code(
         auth_app.db,
         account=account,
@@ -120,15 +120,15 @@ async def validate_auth_code(
         code=code,
         max_attempts=max_attempts,
     )
-    status_code = AuthAuditStatusCode(str(rv.status_code))
-    if status_code != AuthAuditStatusCode.OK:
+    status_code = FreeauthAuditStatusCode(str(rv.status_code))
+    if status_code != FreeauthAuditStatusCode.OK:
         if user:
             await create_audit_log(
                 auth_app.db,
                 user_id=user.id,
                 client_info=json.dumps(client_info),
                 status_code=status_code,
-                event_type=AuthAuditEventType.SIGNIN,
+                event_type=FreeauthAuditEventType.SIGNIN,
             )
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -150,7 +150,7 @@ async def send_signup_code(
     sending_limit_enabled = settings.signup_code_sending_limit_enabled
     return await send_auth_code(
         account=body.account,
-        verify_type=AuthVerifyType.SIGNUP,
+        verify_type=FreeauthVerifyType.SIGNUP,
         ttl=(
             settings.signup_code_validating_interval
             if settings.signup_code_validating_limit_enabled
@@ -184,7 +184,7 @@ async def sign_up_with_code(
 ) -> SignInResult | None:
     await validate_auth_code(
         account=body.account,
-        verify_type=AuthVerifyType.SIGNUP,
+        verify_type=FreeauthVerifyType.SIGNUP,
         code=body.code,
         max_attempts=(
             settings.signup_code_validating_max_attempts
@@ -194,7 +194,7 @@ async def sign_up_with_code(
         user=None,
         client_info=client_info,
     )
-    code_type: AuthCodeType = body.code_type
+    code_type: FreeauthCodeType = body.code_type
     username: str = gen_random_string(8)
     password: str = gen_random_string(12, secret=True)
     client_info: str = json.dumps(client_info)
@@ -202,8 +202,8 @@ async def sign_up_with_code(
         auth_app.db,
         name=username,
         username=username,
-        mobile=body.account if code_type == AuthCodeType.SMS else None,
-        email=body.account if code_type == AuthCodeType.EMAIL else None,
+        mobile=body.account if code_type == FreeauthCodeType.SMS else None,
+        email=body.account if code_type == FreeauthCodeType.EMAIL else None,
         hashed_password=get_password_hash(password),
         client_info=client_info,
     )
@@ -230,7 +230,7 @@ async def send_signin_code(
     sending_limit_enabled = settings.signin_code_sending_limit_enabled
     return await send_auth_code(
         account=body.account,
-        verify_type=AuthVerifyType.SIGNIN,
+        verify_type=FreeauthVerifyType.SIGNIN,
         ttl=(
             settings.signin_code_validating_interval
             if settings.signin_code_validating_limit_enabled
@@ -266,7 +266,7 @@ async def sign_in_with_code(
 ) -> SignInResult | None:
     await validate_auth_code(
         account=body.account,
-        verify_type=AuthVerifyType.SIGNIN,
+        verify_type=FreeauthVerifyType.SIGNIN,
         code=body.code,
         max_attempts=(
             settings.signin_code_validating_max_attempts
@@ -320,26 +320,26 @@ async def sign_in_with_pwd(
             status_code=HTTPStatus.NOT_FOUND,
             detail={
                 "account": AUDIT_STATUS_CODE_MAPPING[
-                    AuthAuditStatusCode.ACCOUNT_NOT_EXISTS
+                    FreeauthAuditStatusCode.ACCOUNT_NOT_EXISTS
                 ]
             },
         )
     field = "account"
-    status_code: AuthAuditStatusCode | None = None
+    status_code: FreeauthAuditStatusCode | None = None
     if user.is_deleted:
-        status_code = AuthAuditStatusCode.ACCOUNT_DISABLED
+        status_code = FreeauthAuditStatusCode.ACCOUNT_DISABLED
     elif not (
         user.hashed_password
         and verify_password(body.password, user.hashed_password)
     ):
         field = "password"
-        status_code = AuthAuditStatusCode.INVALID_PASSWORD
+        status_code = FreeauthAuditStatusCode.INVALID_PASSWORD
         if (
             settings.signin_pwd_validating_limit_enabled
             and user.recent_failed_attempts
             >= settings.signin_pwd_validating_max_attempts
         ):
-            status_code = AuthAuditStatusCode.PASSWORD_ATTEMPTS_EXCEEDED
+            status_code = FreeauthAuditStatusCode.PASSWORD_ATTEMPTS_EXCEEDED
 
     if status_code:
         await create_audit_log(
@@ -347,7 +347,7 @@ async def sign_in_with_pwd(
             user_id=user.id,
             client_info=json.dumps(client_info),
             status_code=status_code,
-            event_type=AuthAuditEventType.SIGNIN,
+            event_type=FreeauthAuditEventType.SIGNIN,
         )
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -383,8 +383,8 @@ async def reset_user_password(
             auth_app.db,
             user_id=current_user.id,
             client_info=json.dumps(client_info),
-            status_code=AuthAuditStatusCode.ACCOUNT_DISABLED,
-            event_type=AuthAuditEventType.RESETPWD,
+            status_code=FreeauthAuditStatusCode.ACCOUNT_DISABLED,
+            event_type=FreeauthAuditEventType.RESETPWD,
         )
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="您的账号已停用"
@@ -419,8 +419,8 @@ async def post_sign_out(
             auth_app.db,
             user_id=current_user.id,
             client_info=json.dumps(client_info),
-            status_code=AuthAuditStatusCode.OK,
-            event_type=AuthAuditEventType.SIGNOUT,
+            status_code=FreeauthAuditStatusCode.OK,
+            event_type=FreeauthAuditEventType.SIGNOUT,
         )
     settings = get_settings()
     response.delete_cookie(

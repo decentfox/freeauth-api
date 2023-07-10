@@ -1,23 +1,24 @@
-WITH
+with
+    module freeauth,
     id := <optional uuid>$id,
     current_code := <optional str>$current_code,
     is_deleted := <optional bool>$is_deleted,
     role := assert_single((
-        SELECT Role
-        FILTER
+        select Role
+        filter
             (.id = id) ??
             (.code_upper ?= str_upper(current_code)) ??
             false
     ))
-SELECT (
-    UPDATE role
-    SET {
+select (
+    update role
+    set {
         name := <str>$name,
         code := <optional str>$code,
         description := <optional str>$description,
         deleted_at := (
-            .deleted_at IF NOT EXISTS is_deleted ELSE
-            datetime_of_transaction() IF is_deleted ELSE {}
+            .deleted_at if not exists is_deleted else
+            datetime_of_transaction() if is_deleted else {}
         )
     }
 ) {

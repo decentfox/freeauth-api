@@ -1,4 +1,5 @@
 with
+    module freeauth,
     user_ids := <array<uuid>>$user_ids,
     organization_ids := <array<uuid>>$organization_ids,
     organizations := (

@@ -1,5 +1,5 @@
 with
-    module auth,
+    module freeauth,
     account := <str>$account,
     code_type := <CodeType>$code_type,
     verify_type := <VerifyType>$verify_type,

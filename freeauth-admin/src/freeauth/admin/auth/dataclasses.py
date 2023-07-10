@@ -5,7 +5,7 @@ import re
 from pydantic import EmailStr, Field, validator
 from pydantic.dataclasses import dataclass
 
-from freeauth.db.auth.auth_qry_async_edgeql import AuthCodeType
+from freeauth.db.auth.auth_qry_async_edgeql import FreeauthCodeType
 from freeauth.security.utils import MOBILE_REGEX
 
 from ..dataclasses import BaseModelConfig
@@ -13,7 +13,7 @@ from ..dataclasses import BaseModelConfig
 
 @dataclass(config=BaseModelConfig)
 class SignUpSendCodeBody:
-    code_type: AuthCodeType = Field(..., title="验证码类型")
+    code_type: FreeauthCodeType = Field(..., title="验证码类型")
     account: str = Field(
         ...,
         title="注册账号",
@@ -23,10 +23,10 @@ class SignUpSendCodeBody:
     @validator("account")
     def validate_account(cls, v, values):
         code_type = values.get("code_type")
-        if code_type == AuthCodeType.SMS:
+        if code_type == FreeauthCodeType.SMS:
             if not re.match(MOBILE_REGEX, v):
                 raise ValueError("仅支持中国大陆11位手机号")
-        elif code_type == AuthCodeType.EMAIL:
+        elif code_type == FreeauthCodeType.EMAIL:
             try:
                 EmailStr.validate(v)
             except ValueError:

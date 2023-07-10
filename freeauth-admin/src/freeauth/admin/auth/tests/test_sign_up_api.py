@@ -11,9 +11,9 @@ from jose import jwt
 
 from freeauth.conf.settings import get_settings
 from freeauth.db.auth.auth_qry_async_edgeql import (
-    AuthAuditStatusCode,
-    AuthCodeType,
-    AuthVerifyType,
+    FreeauthAuditStatusCode,
+    FreeauthCodeType,
+    FreeauthVerifyType,
     send_code,
     validate_code,
 )
@@ -44,23 +44,23 @@ def test_send_sign_up_code(test_client: TestClient):
 
     data = dict(
         account="user@example.com",
-        code_type=AuthCodeType.EMAIL.value,
+        code_type=FreeauthCodeType.EMAIL.value,
     )
     resp = test_client.post("/v1/sign_up/code", json=data)
     resp_data = resp.json()
     assert resp.status_code == HTTPStatus.OK, resp_data
     assert resp_data["account"] == data["account"]
-    assert resp_data["verify_type"] == AuthVerifyType.SIGNUP.value
+    assert resp_data["verify_type"] == FreeauthVerifyType.SIGNUP.value
 
     data = dict(
         account="13800000000",
-        code_type=AuthCodeType.SMS.value,
+        code_type=FreeauthCodeType.SMS.value,
     )
     resp = test_client.post("/v1/sign_up/code", json=data)
     resp_data = resp.json()
     assert resp.status_code == HTTPStatus.OK, resp_data
     assert resp_data["account"] == data["account"]
-    assert resp_data["verify_type"] == AuthVerifyType.SIGNUP.value
+    assert resp_data["verify_type"] == FreeauthVerifyType.SIGNUP.value
 
     data["account"] = "invalid-account"
     resp = test_client.post("/v1/sign_up/code", json=data)
@@ -68,7 +68,7 @@ def test_send_sign_up_code(test_client: TestClient):
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
     assert error["detail"]["errors"]["account"] == "仅支持中国大陆11位手机号"
 
-    data["code_type"] = AuthCodeType.EMAIL.value
+    data["code_type"] = FreeauthCodeType.EMAIL.value
     resp = test_client.post("/v1/sign_up/code", json=data)
     error = resp.json()
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, error
@@ -88,7 +88,7 @@ def test_send_sign_up_code(test_client: TestClient):
     )
     data = dict(
         account="13800000000",
-        code_type=AuthCodeType.SMS.value,
+        code_type=FreeauthCodeType.SMS.value,
     )
     resp = test_client.post("/v1/sign_up/code", json=data)
     error = resp.json()
@@ -97,7 +97,7 @@ def test_send_sign_up_code(test_client: TestClient):
 
     data = dict(
         account="user@example.com",
-        code_type=AuthCodeType.EMAIL.value,
+        code_type=FreeauthCodeType.EMAIL.value,
     )
     resp = test_client.post("/v1/sign_up/code", json=data)
     error = resp.json()
@@ -109,7 +109,7 @@ def test_send_sign_up_code(test_client: TestClient):
     record = resp.json()
     assert resp.status_code == HTTPStatus.OK, record
     assert record["account"] == data["account"]
-    assert record["verify_type"] == AuthVerifyType.SIGNUP.value
+    assert record["verify_type"] == FreeauthVerifyType.SIGNUP.value
 
 
 @pytest.mark.parametrize(
@@ -138,7 +138,7 @@ def test_send_sign_up_code(test_client: TestClient):
             {
                 "code": "12345678",
                 "account": "user@example.com",
-                "code_type": AuthCodeType.SMS.value,
+                "code_type": FreeauthCodeType.SMS.value,
             },
             {"account": "仅支持中国大陆11位手机号"},
         ),
@@ -146,7 +146,7 @@ def test_send_sign_up_code(test_client: TestClient):
             {
                 "code": "12345678",
                 "account": "13800000000",
-                "code_type": AuthCodeType.EMAIL.value,
+                "code_type": FreeauthCodeType.EMAIL.value,
             },
             {"account": "邮箱格式有误"},
         ),
@@ -154,7 +154,7 @@ def test_send_sign_up_code(test_client: TestClient):
             {
                 "code": "12345678",
                 "account": "13800000001",
-                "code_type": AuthCodeType.SMS.value,
+                "code_type": FreeauthCodeType.SMS.value,
             },
             {"code": "验证码错误或已失效，请重新获取"},
         ),
@@ -162,7 +162,7 @@ def test_send_sign_up_code(test_client: TestClient):
             {
                 "code": "12345678",
                 "account": "13800000000",
-                "code_type": AuthCodeType.SMS.value,
+                "code_type": FreeauthCodeType.SMS.value,
             },
             {"code": "验证码错误，请重新输入"},
         ),
@@ -170,7 +170,7 @@ def test_send_sign_up_code(test_client: TestClient):
             {
                 "code": "888888",
                 "account": "13800000000",
-                "code_type": AuthCodeType.SMS.value,
+                "code_type": FreeauthCodeType.SMS.value,
             },
             {"code": "验证码已失效，请重新获取"},
         ),
@@ -215,7 +215,7 @@ def test_sign_up(test_client: TestClient):
     data: Dict = {
         "account": account,
         "code": "123123",
-        "code_type": AuthCodeType.SMS.value,
+        "code_type": FreeauthCodeType.SMS.value,
     }
     resp = test_client.post("/v1/sign_up/verify", json=data)
     error = resp.json()
@@ -227,13 +227,13 @@ def test_sign_up(test_client: TestClient):
         "/v1/sign_up/code",
         json={
             "account": account,
-            "code_type": AuthCodeType.EMAIL.value,
+            "code_type": FreeauthCodeType.EMAIL.value,
         },
     )
     data: Dict = {
         "account": account,
         "code": "888888",
-        "code_type": AuthCodeType.EMAIL.value,
+        "code_type": FreeauthCodeType.EMAIL.value,
     }
     resp = test_client.post("/v1/sign_up/verify", json=data)
     user = resp.json()
@@ -262,19 +262,19 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     rv = await validate_code(
         edgedb_client,
         account=account,
-        code_type=AuthCodeType.SMS,
-        verify_type=AuthVerifyType.SIGNUP,
+        code_type=FreeauthCodeType.SMS,
+        verify_type=FreeauthVerifyType.SIGNUP,
         code="12345678",
     )
-    status_code = AuthAuditStatusCode(str(rv.status_code))
-    assert status_code == AuthAuditStatusCode.INVALID_CODE
+    status_code = FreeauthAuditStatusCode(str(rv.status_code))
+    assert status_code == FreeauthAuditStatusCode.INVALID_CODE
 
     code: str = gen_random_string(6, letters=string.digits)
     await send_code(
         edgedb_client,
         account=account,
-        code_type=AuthCodeType.SMS,
-        verify_type=AuthVerifyType.SIGNUP,
+        code_type=FreeauthCodeType.SMS,
+        verify_type=FreeauthVerifyType.SIGNUP,
         code=code,
         ttl=300,
         max_attempts=3,
@@ -285,23 +285,25 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
         rv = await validate_code(
             edgedb_client,
             account=account,
-            code_type=AuthCodeType.SMS,
-            verify_type=AuthVerifyType.SIGNUP,
+            code_type=FreeauthCodeType.SMS,
+            verify_type=FreeauthVerifyType.SIGNUP,
             code="12345678",
             max_attempts=3,
         )
-        status_code = AuthAuditStatusCode(str(rv.status_code))
+        status_code = FreeauthAuditStatusCode(str(rv.status_code))
         if i < 2:
-            assert status_code == AuthAuditStatusCode.CODE_INCORRECT
+            assert status_code == FreeauthAuditStatusCode.CODE_INCORRECT
         else:
-            assert status_code == AuthAuditStatusCode.CODE_ATTEMPTS_EXCEEDED
+            assert (
+                status_code == FreeauthAuditStatusCode.CODE_ATTEMPTS_EXCEEDED
+            )
 
     code: str = gen_random_string(6, letters=string.digits)
     await send_code(
         edgedb_client,
         account=account,
-        code_type=AuthCodeType.SMS,
-        verify_type=AuthVerifyType.SIGNIN,
+        code_type=FreeauthCodeType.SMS,
+        verify_type=FreeauthVerifyType.SIGNIN,
         code=code,
         ttl=300,
         max_attempts=3,
@@ -311,21 +313,21 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     rv = await validate_code(
         edgedb_client,
         account=account,
-        code_type=AuthCodeType.SMS,
-        verify_type=AuthVerifyType.SIGNIN,
+        code_type=FreeauthCodeType.SMS,
+        verify_type=FreeauthVerifyType.SIGNIN,
         code="12345678",
         max_attempts=3,
     )
-    status_code = AuthAuditStatusCode(str(rv.status_code))
-    assert status_code == AuthAuditStatusCode.CODE_INCORRECT
+    status_code = FreeauthAuditStatusCode(str(rv.status_code))
+    assert status_code == FreeauthAuditStatusCode.CODE_INCORRECT
 
     rv = await validate_code(
         edgedb_client,
         account=account,
-        code_type=AuthCodeType.SMS,
-        verify_type=AuthVerifyType.SIGNIN,
+        code_type=FreeauthCodeType.SMS,
+        verify_type=FreeauthVerifyType.SIGNIN,
         code=code,
         max_attempts=3,
     )
-    status_code = AuthAuditStatusCode(str(rv.status_code))
-    assert status_code == AuthAuditStatusCode.OK
+    status_code = FreeauthAuditStatusCode(str(rv.status_code))
+    assert status_code == FreeauthAuditStatusCode.OK

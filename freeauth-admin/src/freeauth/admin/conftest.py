@@ -12,7 +12,10 @@ from fastapi.testclient import TestClient
 
 from freeauth import db as freeauth_db
 from freeauth.conf.settings import get_settings
-from freeauth.db.auth.auth_qry_async_edgeql import AuthCodeType, SignInResult
+from freeauth.db.auth.auth_qry_async_edgeql import (
+    FreeauthCodeType,
+    SignInResult,
+)
 from freeauth.ext.fastapi_ext import FreeAuthTestApp
 
 
@@ -122,14 +125,14 @@ def bo_user(test_client, faker) -> SignInResult:
         "/v1/sign_up/code",
         json={
             "account": mobile,
-            "code_type": AuthCodeType.SMS.value,
+            "code_type": FreeauthCodeType.SMS.value,
         },
     )
     resp = test_client.post(
         "/v1/sign_up/verify",
         json={
             "account": mobile,
-            "code_type": AuthCodeType.SMS.value,
+            "code_type": FreeauthCodeType.SMS.value,
             "code": settings.demo_code,
         },
     )

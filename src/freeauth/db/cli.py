@@ -89,10 +89,11 @@ def setup():
     """
     Setting up administrator account.
     """
+    db = client.with_default_module("freeauth")
     print("1. 正在配置应用...\n")
     current_app = None
     if settings.freeauth_app_id:
-        current_app = client.query_single(
+        current_app = db.query_single(
             """\
             select Application { id, name }
             filter .id = <uuid>$id;\
@@ -100,16 +101,31 @@ def setup():
             id=settings.freeauth_app_id,
         )
     if not current_app:
-        current_app = client.query_single("""\
+        current_app = db.query_single("""\
             select assert_single((
                 select Application { id, name }
                 filter .is_protected
             ));\
             """)
-        set_key(
-            settings.Config.env_file, "freeauth_app_id", str(current_app.id)
-        )
-    scoped_db = client.with_globals(current_app_id=current_app.id)
+        if not current_app:
+            secret = gen_random_string(32, secret=True)
+            current_app = admin_qry_edgeql.create_application(
+                db,
+                name="默认应用",
+                description="即对接 FreeAuth 的应用。可更名本应用，也可创建新应用",
+                hashed_secret=get_password_hash(secret),
+            )
+            db.query(
+                """\
+                update Application
+                filter .id = <uuid>$id set {
+                    is_protected := true
+                };\
+            """,
+                id=current_app.id,
+            )
+    set_key(settings.Config.env_file, "freeauth_app_id", str(current_app.id))
+    scoped_db = db.with_globals(current_app_id=current_app.id)
     print("[green][OK][/green] [cyan]应用[/cyan]配置成功!\n")
     print("应用信息：")
     table = Table("应用ID", "应用名称")

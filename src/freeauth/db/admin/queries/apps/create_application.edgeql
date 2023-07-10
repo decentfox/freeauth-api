@@ -1,4 +1,5 @@
 with
+    module freeauth,
     app := (
         insert Application {
             name := <str>$name,

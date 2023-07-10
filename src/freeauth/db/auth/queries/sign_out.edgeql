@@ -1,4 +1,4 @@
-update auth::Token
+update freeauth::Token
 filter
     .access_token = <str>$access_token
     and .is_revoked = false

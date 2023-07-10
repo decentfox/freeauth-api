@@ -20,9 +20,9 @@ class FreeAuthTestApp(FreeAuthApp):
             database=self.settings.edgedb_database,
         )
         await client.ensure_connected()
-        self._edgedb_client = client = client.with_globals(
-            current_app_id=self.settings.freeauth_app_id
-        )
+        self._edgedb_client = client = client.with_default_module(
+            "freeauth"
+        ).with_globals(current_app_id=self.settings.freeauth_app_id)
         async for tx in client.with_retry_options(
             edgedb.RetryOptions(0)
         ).transaction():

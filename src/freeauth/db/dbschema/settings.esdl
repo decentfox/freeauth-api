@@ -1,4 +1,4 @@
-module default {
+module freeauth {
     type LoginSetting {
         required property key -> str {
             constraint exclusive;

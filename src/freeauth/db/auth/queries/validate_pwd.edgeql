@@ -1,11 +1,11 @@
 with
-    module auth,
+    module freeauth,
     username := <optional str>$username,
     mobile := <optional str>$mobile,
     email := <optional str>$email,
     interval := <optional int64>$interval,
     user := assert_single((
-        select default::User
+        select User
         filter
             (exists username and .username ?= username) or
             (exists mobile and .mobile ?= mobile) or

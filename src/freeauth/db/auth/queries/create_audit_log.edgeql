@@ -1,7 +1,7 @@
 with
-    module auth,
+    module freeauth,
     user := (
-        select default::User filter .id = <uuid>$user_id
+        select User filter .id = <uuid>$user_id
     ),
     client_info := (
         <tuple<client_ip: str, user_agent: json>><json>$client_info

@@ -1,4 +1,5 @@
 with
+    module freeauth,
     name := <optional str>$name,
     username := <str>$username,
     email := <optional str>$email,
@@ -17,10 +18,10 @@ with
         }
     ),
     audit_log := (
-        insert auth::AuditLog {
+        insert AuditLog {
             client_ip := client_info.client_ip,
-            event_type := auth::AuditEventType.SignUp,
-            status_code := auth::AuditStatusCode.OK,
+            event_type := AuditEventType.SignUp,
+            status_code := AuditStatusCode.OK,
             raw_ua := <str>client_info.user_agent['raw_ua'],
             os := <str>client_info.user_agent['os'],
             device := <str>client_info.user_agent['device'],
