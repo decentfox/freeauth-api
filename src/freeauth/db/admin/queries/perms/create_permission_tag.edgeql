@@ -1,7 +1,7 @@
 with
     name := <str>$name,
 select (
-    insert PermissionTag {
+    insert freeauth::PermissionTag {
         name := name,
     }
 ) {

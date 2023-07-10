@@ -686,7 +686,7 @@ def create_permission_tag(
         with
             name := <str>$name,
         select (
-            insert PermissionTag {
+            insert freeauth::PermissionTag {
                 name := name,
             }
         ) {
@@ -880,7 +880,7 @@ def delete_permission_tag(
 ) -> list[DeletePermissionTagResult]:
     return executor.query(
         """\
-        delete PermissionTag filter .id in array_unpack(<array<uuid>>$ids);\
+        delete freeauth::PermissionTag filter .id in array_unpack(<array<uuid>>$ids);\
         """,
         ids=ids,
     )
@@ -1501,7 +1501,7 @@ def reorder_permission_tags(
         select (
             for tag in enumerate(array_unpack(<array<uuid>>$ids))
             union (
-                update PermissionTag filter .id = tag.1
+                update freeauth::PermissionTag filter .id = tag.1
                 set {
                     rank := tag.0 + 1
                 }
@@ -1985,11 +1985,11 @@ def update_permission_tag(
             id := <uuid>$id,
             name := <str>$name,
         select (
-            update PermissionTag filter .id = id
+            update freeauth::PermissionTag filter .id = id
             set {
                 name := name
             }
-        ) { 
+        ) {
             name,
             rank,
             created_at
