@@ -8,11 +8,14 @@ from fastapi import Depends, HTTPException, Query
 
 from freeauth.db.admin.admin_qry_async_edgeql import (
     DeleteApplicationResult,
+    GetApplicationByIdResult,
     QueryApplicationOptionsResult,
     UpdateApplicationStatusResult,
     create_application,
     delete_application,
+    get_application_by_id,
     query_application_options,
+    update_application,
     update_application_secret,
     update_application_status,
 )
@@ -175,3 +178,47 @@ async def list_application_options(
     return await query_application_options(
         auth_app.db, q=f"%{q}%" if q else None
     )
+
+
+@router.get(
+    "/applications/{id}",
+    tags=["应用管理"],
+    summary="获取应用信息",
+    description="获取指定应用的信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:apps"))],
+)
+async def get_application(
+    id: uuid.UUID,
+) -> GetApplicationByIdResult:
+    application: GetApplicationByIdResult | None = await get_application_by_id(
+        auth_app.db, id=id
+    )
+    if not application:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="应用不存在"
+        )
+    return application
+
+
+@router.put(
+    "/applications/{id}",
+    tags=["应用管理"],
+    summary="更新应用",
+    description="更新指定应用的信息",
+    dependencies=[Depends(auth_app.perm_accepted("manage:apps"))],
+)
+async def put_application(
+    body: BaseApplicationBody,
+    id: uuid.UUID,
+) -> GetApplicationByIdResult:
+    application: GetApplicationByIdResult | None = await update_application(
+        auth_app.db,
+        id=id,
+        name=body.name,
+        description=body.description,
+    )
+    if not application:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="应用不存在"
+        )
+    return application

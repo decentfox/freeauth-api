@@ -15,6 +15,7 @@
 #     'src/freeauth/db/admin/queries/perms/delete_permission_tag.edgeql'
 #     'src/freeauth/db/admin/queries/roles/delete_role.edgeql'
 #     'src/freeauth/db/admin/queries/users/delete_user.edgeql'
+#     'src/freeauth/db/admin/queries/apps/get_application_by_id.edgeql'
 #     'src/freeauth/db/admin/queries/orgs/get_department_by_id_or_code.edgeql'
 #     'src/freeauth/db/admin/queries/orgs/get_enterprise_by_id_or_code.edgeql'
 #     'src/freeauth/db/admin/queries/orgs/get_org_type_by_id_or_code.edgeql'
@@ -34,6 +35,7 @@
 #     'src/freeauth/db/admin/queries/users/resign_user.edgeql'
 #     'src/freeauth/db/admin/queries/roles/role_bind_users.edgeql'
 #     'src/freeauth/db/admin/queries/roles/role_unbind_users.edgeql'
+#     'src/freeauth/db/admin/queries/apps/update_application.edgeql'
 #     'src/freeauth/db/admin/queries/apps/update_application_secret.edgeql'
 #     'src/freeauth/db/admin/queries/apps/update_application_status.edgeql'
 #     'src/freeauth/db/admin/queries/orgs/update_department.edgeql'
@@ -249,6 +251,16 @@ class DeleteUserResult(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class GetApplicationByIdResult(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
+    description: str | None
+    is_deleted: bool
+    is_protected: bool
+    created_at: datetime.datetime
+
+
+@dataclasses.dataclass
 class GetOrganizationNodeResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
@@ -370,11 +382,6 @@ class QueryPermissionsResultRowsItemRolesItem(NoPydanticValidation):
     id: uuid.UUID
     code: str | None
     name: str
-
-
-@dataclasses.dataclass
-class UpdateApplicationSecretResult(NoPydanticValidation):
-    id: uuid.UUID
 
 
 @dataclasses.dataclass
@@ -911,6 +918,32 @@ def delete_user(
         ) { name } order by .created_at desc;\
         """,
         user_ids=user_ids,
+    )
+
+
+def get_application_by_id(
+    executor: edgedb.Executor,
+    *,
+    id: uuid.UUID,
+) -> GetApplicationByIdResult | None:
+    return executor.query_single(
+        """\
+        with
+            id := <uuid>$id,
+        select assert_single(
+            (
+                select freeauth::Application {
+                    name,
+                    description,
+                    is_deleted,
+                    is_protected,
+                    created_at
+                }
+                filter .id = id
+            )
+        );\
+        """,
+        id=id,
     )
 
 
@@ -1627,12 +1660,44 @@ def role_unbind_users(
     )
 
 
+def update_application(
+    executor: edgedb.Executor,
+    *,
+    name: str,
+    description: str | None = None,
+    id: uuid.UUID,
+) -> GetApplicationByIdResult | None:
+    return executor.query_single(
+        """\
+        with
+            name := <str>$name,
+            description := <optional str>$description,
+        select (
+            update freeauth::Application filter .id = <uuid>$id
+            set {
+                name := name,
+                description := description,
+            }
+        ) {
+            name,
+            description,
+            is_deleted,
+            is_protected,
+            created_at
+        };\
+        """,
+        name=name,
+        description=description,
+        id=id,
+    )
+
+
 def update_application_secret(
     executor: edgedb.Executor,
     *,
     id: uuid.UUID,
     hashed_secret: str,
-) -> UpdateApplicationSecretResult | None:
+) -> DeleteApplicationResult | None:
     return executor.query_single(
         """\
         update freeauth::Application filter .id = <uuid>$id set {
