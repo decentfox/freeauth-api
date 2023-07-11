@@ -9,9 +9,7 @@ from fastapi import BackgroundTasks, Depends, HTTPException
 
 from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateUserResult,
-    DeleteUserResult,
     GetUserByIdResult,
-    UpdateUserStatusResult,
     create_user,
     delete_user,
     get_user_by_id,
@@ -104,10 +102,20 @@ async def toggle_user_status(
 ):
     user_ids: List[uuid.UUID] = body.user_ids
     is_deleted: bool = body.is_deleted
-    updated_users: List[UpdateUserStatusResult] = await update_user_status(
+    rv = await update_user_status(
         auth_app.db, user_ids=user_ids, is_deleted=is_deleted
     )
-    return {"users": updated_users}
+    if rv.protected_admin_users:
+        users = "、".join(str(u.name) for u in rv.protected_admin_users)
+        roles = "、".join(r.name for r in rv.protected_admin_roles)
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail=(
+                f"无法变更用户【{users}】的状态，"
+                f"请确保【{roles}】角色至少关联一名正常状态的用户"
+            ),
+        )
+    return {"users": rv.users}
 
 
 @router.delete(
@@ -121,10 +129,17 @@ async def delete_users(
     body: UserDeleteBody,
 ):
     user_ids: List[uuid.UUID] = body.user_ids
-    deleted_users: List[DeleteUserResult] = await delete_user(
-        auth_app.db, user_ids=user_ids
-    )
-    return {"users": deleted_users}
+    rv = await delete_user(auth_app.db, user_ids=user_ids)
+    if rv.protected_admin_users:
+        users = "、".join(str(u.name) for u in rv.protected_admin_users)
+        roles = "、".join(r.name for r in rv.protected_admin_roles)
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail=(
+                f"无法删除用户【{users}】，请确保【{roles}】角色至少关联一名正常状态的用户"
+            ),
+        )
+    return {"users": rv.users}
 
 
 @router.put(
@@ -198,15 +213,24 @@ async def update_member_organizations(
 async def update_member_roles(
     user_id: uuid.UUID,
     body: UserRoleBody,
-) -> CreateUserResult | None:
-    user: CreateUserResult | None = await update_user_roles(
+) -> CreateUserResult:
+    rv = await update_user_roles(
         auth_app.db, id=user_id, role_ids=body.role_ids
     )
-    if not user:
+    if not rv.user:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
         )
-    return user
+    if rv.protected_admin_roles:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail=(
+                f"无法将用户【{rv.user.name}】与"
+                f"【{'、'.join(r.name for r in rv.protected_admin_roles)}】角色解绑，"
+                "请确保管理员角色至少关联一名正常状态的用户"
+            ),
+        )
+    return rv.user
 
 
 @router.post(
@@ -220,12 +244,23 @@ async def update_member_roles(
 )
 async def resign_users(
     body: UserResignationBody,
-) -> list[DeleteUserResult]:
+):
     user_ids: List[uuid.UUID] = body.user_ids
     is_deleted: bool | None = body.is_deleted
-    return await resign_user(
+    rv = await resign_user(
         auth_app.db, user_ids=user_ids, is_deleted=is_deleted
     )
+    if rv.protected_admin_users:
+        users = "、".join(str(u.name) for u in rv.protected_admin_users)
+        roles = "、".join(r.name for r in rv.protected_admin_roles)
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail=(
+                f"无法为用户【{users}】办理离职，"
+                f"请确保【{roles}】角色至少关联一名正常状态的用户"
+            ),
+        )
+    return rv.users
 
 
 @router.get(

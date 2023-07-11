@@ -10,9 +10,7 @@ from . import logger
 
 class MailSettings(ConnectionConfig):
     MAIL_FROM_NAME = "FreeAuth"
-    TEMPLATE_FOLDER: Path = (
-        Path(__file__).resolve().parent.parent / "templates/email"
-    )
+    TEMPLATE_FOLDER: Path = Path(__file__).resolve().parent / "templates/email"
 
     class Config:
         env_file = ".env"

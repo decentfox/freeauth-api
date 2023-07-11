@@ -86,11 +86,9 @@ async def user(
         org_type_id=org_type.id,
         reset_pwd_on_first_login=False,
     )
-    user = await update_user_roles(
-        edgedb_client, id=user.id, role_ids=[role.id]
-    )
-    assert user
-    return user
+    rv = await update_user_roles(edgedb_client, id=user.id, role_ids=[role.id])
+    assert rv.user
+    return rv.user
 
 
 async def create_department_branch(
