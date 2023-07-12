@@ -15,11 +15,7 @@ with
     deleted_roles := user.roles except roles,
     protected_admin_roles := (
         select deleted_roles
-        filter (
-            select Permission
-            filter .application.is_protected
-            and .code = '*'
-        ) in .permissions
+        filter .is_protected
         and not exists (
             ( select .users filter not .is_deleted )
             except user
@@ -45,7 +41,7 @@ select {
         created_at,
         last_login_at
     },
-    protected_admin_roles := array_agg((
+    protected_admin_roles := (
         select protected_admin_roles {
             name,
             code,
@@ -55,7 +51,8 @@ select {
                 name,
             },
             is_deleted,
+            is_protected,
             created_at
         }
-    ))
+    )
 };

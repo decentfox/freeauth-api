@@ -178,6 +178,7 @@ class CreateRoleResult(NoPydanticValidation):
     description: str | None
     org_type: CreateRoleResultOrgType | None
     is_deleted: bool
+    is_protected: bool
     created_at: datetime.datetime
 
 
@@ -323,7 +324,7 @@ class GetUserByIdResult(NoPydanticValidation):
     mobile: str | None
     org_type: CreateRoleResultOrgType | None
     departments: list[GetUserByIdResultDepartmentsItem]
-    roles: list[GetUserByIdResultRolesItem]
+    roles: list[CreateRoleResult]
     is_deleted: bool
     created_at: datetime.datetime
     last_login_at: datetime.datetime | None
@@ -342,16 +343,6 @@ class GetUserByIdResultDepartmentsItem(NoPydanticValidation):
 class GetUserByIdResultDepartmentsItemEnterprise(NoPydanticValidation):
     id: uuid.UUID
     name: str
-
-
-@dataclasses.dataclass
-class GetUserByIdResultRolesItem(NoPydanticValidation):
-    id: uuid.UUID
-    code: str | None
-    name: str
-    description: str | None
-    is_deleted: bool
-    org_type: CreateRoleResultOrgType | None
 
 
 @dataclasses.dataclass
@@ -767,6 +758,7 @@ async def create_role(
                 name,
             },
             is_deleted,
+            is_protected,
             created_at
         };\
         """,
@@ -930,19 +922,8 @@ async def delete_role(
 ) -> list[DeleteRoleResult]:
     return await executor.query(
         """\
-        with
-            module freeauth,
-            wildcard_perm := (
-                select Permission
-                filter .application.is_protected
-                and .code = '*'
-            )
-        delete Role
-        filter .id in array_unpack(<array<uuid>>$ids)
-        and (
-            true if not exists wildcard_perm else
-            wildcard_perm not in .permissions
-        );\
+        delete freeauth::Role
+        filter .id in array_unpack(<array<uuid>>$ids) and not .is_protected;\
         """,
         ids=ids,
     )
@@ -961,11 +942,7 @@ async def delete_user(
             users := ( select User filter .id in array_unpack(user_ids) ),
             protected_admin_roles := (
                 select Role
-                filter (
-                    select Permission
-                    filter .application.is_protected
-                    and .code = '*'
-                ) in .permissions
+                filter .is_protected
                 and not exists (
                     ( select .users filter not .is_deleted )
                     except users
@@ -978,15 +955,15 @@ async def delete_user(
                     and users.roles in protected_admin_roles
             )
         select {
-            users := array_agg((
+            users := (
                 delete users except protected_admin_users
-            ) { name }),
-            protected_admin_users := array_agg((
+            ) { name },
+            protected_admin_users := (
                 select protected_admin_users { name }
-            )),
-            protected_admin_roles := array_agg((
+            ),
+            protected_admin_roles := (
                 select protected_admin_roles { name }
-            ))
+            )
         };\
         """,
         user_ids=user_ids,
@@ -1225,6 +1202,7 @@ async def get_role_by_id_or_code(
                         name,
                     },
                     is_deleted,
+                    is_protected,
                     created_at
                 }
                 filter (.id = id) ?? (.code_upper = str_upper(code))
@@ -1268,12 +1246,13 @@ async def get_user_by_id(
                     }
                 ),
                 roles: {
-                    id,
-                    code,
                     name,
+                    code,
                     description,
+                    org_type: { code, name },
                     is_deleted,
-                    org_type: { code, name }
+                    is_protected,
+                    created_at
                 },
                 is_deleted,
                 created_at,
@@ -1425,6 +1404,7 @@ async def perm_bind_roles(
                 name,
             },
             is_deleted,
+            is_protected,
             created_at
         };\
         """,
@@ -1462,6 +1442,7 @@ async def perm_unbind_roles(
                 name,
             },
             is_deleted,
+            is_protected,
             created_at
         };\
         """,
@@ -1636,11 +1617,7 @@ async def resign_user(
             users := ( select User filter .id in array_unpack(user_ids) ),
             protected_admin_roles := (
                 select Role
-                filter (
-                    select Permission
-                    filter .application.is_protected
-                    and .code = '*'
-                ) in .permissions
+                filter .is_protected
                 and not exists (
                     ( select .users filter not .is_deleted )
                     except users
@@ -1653,7 +1630,7 @@ async def resign_user(
                     and users.roles in protected_admin_roles
             )
         select {
-            users := array_agg((
+            users := (
                 update users except protected_admin_users
                 set {
                     directly_organizations := {},
@@ -1663,13 +1640,13 @@ async def resign_user(
                         datetime_of_transaction() if is_deleted else .deleted_at
                     )
                 }
-            ) { name }),
-            protected_admin_users := array_agg((
+            ) { name },
+            protected_admin_users := (
                 select protected_admin_users { name }
-            )),
-            protected_admin_roles := array_agg((
+            ),
+            protected_admin_roles := (
                 select protected_admin_roles { name }
-            ))
+            )
         };\
         """,
         user_ids=user_ids,
@@ -1738,18 +1715,14 @@ async def role_unbind_users(
             protected_admin_roles := (
                 select Role
                 filter .id in array_unpack(role_ids)
-                and (
-                    select Permission
-                    filter .application.is_protected
-                    and .code = '*'
-                ) in .permissions
+                and .is_protected
                 and not exists (
                     ( select .users filter not .is_deleted )
                     except users
                 )
             )
         select {
-            unbind_users := array_agg((
+            unbind_users := (
                 update users
                 set {
                     roles -= (
@@ -1771,8 +1744,8 @@ async def role_unbind_users(
                 is_deleted,
                 created_at,
                 last_login_at
-            }),
-            protected_admin_roles := array_agg((
+            },
+            protected_admin_roles := (
                 select protected_admin_roles {
                     name,
                     code,
@@ -1782,9 +1755,10 @@ async def role_unbind_users(
                         name,
                     },
                     is_deleted,
+                    is_protected,
                     created_at
                 }
-            ))
+            )
         };\
         """,
         user_ids=user_ids,
@@ -2241,6 +2215,7 @@ async def update_role(
                 name,
             },
             is_deleted,
+            is_protected,
             created_at
         };\
         """,
@@ -2261,20 +2236,9 @@ async def update_role_status(
 ) -> list[UpdateRoleStatusResult]:
     return await executor.query(
         """\
-        with
-            module freeauth,
-            wildcard_perm := (
-                select Permission
-                filter .application.is_protected
-                and .code = '*'
-            )
         select (
-            update Role
-            filter .id in array_unpack(<array<uuid>>$ids)
-            and (
-                true if not exists wildcard_perm else
-                wildcard_perm not in .permissions
-            )
+            update freeauth::Role
+            filter .id in array_unpack(<array<uuid>>$ids) and not .is_protected
             set {
                 deleted_at := (
                     datetime_of_transaction() if <bool>$is_deleted else {}
@@ -2417,11 +2381,7 @@ async def update_user_roles(
             deleted_roles := user.roles except roles,
             protected_admin_roles := (
                 select deleted_roles
-                filter (
-                    select Permission
-                    filter .application.is_protected
-                    and .code = '*'
-                ) in .permissions
+                filter .is_protected
                 and not exists (
                     ( select .users filter not .is_deleted )
                     except user
@@ -2447,7 +2407,7 @@ async def update_user_roles(
                 created_at,
                 last_login_at
             },
-            protected_admin_roles := array_agg((
+            protected_admin_roles := (
                 select protected_admin_roles {
                     name,
                     code,
@@ -2457,9 +2417,10 @@ async def update_user_roles(
                         name,
                     },
                     is_deleted,
+                    is_protected,
                     created_at
                 }
-            ))
+            )
         };\
         """,
         id=id,
@@ -2482,11 +2443,7 @@ async def update_user_status(
             users := ( select User filter .id in array_unpack(user_ids) ),
             protected_admin_roles := (
                 select Role
-                filter (
-                    select Permission
-                    filter .application.is_protected
-                    and .code = '*'
-                ) in .permissions
+                filter .is_protected
                 and not exists (
                     ( select .users filter not .is_deleted )
                     except users
@@ -2499,7 +2456,7 @@ async def update_user_status(
                     and users.roles in protected_admin_roles
             )
         select {
-            users := array_agg((
+            users := (
                 update users except protected_admin_users
                 set {
                     deleted_at := datetime_of_transaction() if is_deleted else {}
@@ -2507,16 +2464,16 @@ async def update_user_status(
             ) {
                 name,
                 is_deleted
-            }),
-            protected_admin_users := array_agg((
+            },
+            protected_admin_users := (
                 select protected_admin_users {
                     name,
                     is_deleted
                 }
-            )),
-            protected_admin_roles := array_agg((
+            ),
+            protected_admin_roles := (
                 select protected_admin_roles { name }
-            ))
+            )
         };\
         """,
         user_ids=user_ids,

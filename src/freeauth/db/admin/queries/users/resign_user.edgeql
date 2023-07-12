@@ -5,11 +5,7 @@ with
     users := ( select User filter .id in array_unpack(user_ids) ),
     protected_admin_roles := (
         select Role
-        filter (
-            select Permission
-            filter .application.is_protected
-            and .code = '*'
-        ) in .permissions
+        filter .is_protected
         and not exists (
             ( select .users filter not .is_deleted )
             except users
@@ -22,7 +18,7 @@ with
             and users.roles in protected_admin_roles
     )
 select {
-    users := array_agg((
+    users := (
         update users except protected_admin_users
         set {
             directly_organizations := {},
@@ -32,11 +28,11 @@ select {
                 datetime_of_transaction() if is_deleted else .deleted_at
             )
         }
-    ) { name }),
-    protected_admin_users := array_agg((
+    ) { name },
+    protected_admin_users := (
         select protected_admin_users { name }
-    )),
-    protected_admin_roles := array_agg((
+    ),
+    protected_admin_roles := (
         select protected_admin_roles { name }
-    ))
+    )
 };

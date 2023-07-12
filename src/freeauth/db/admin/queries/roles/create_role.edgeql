@@ -19,5 +19,6 @@ select (
         name,
     },
     is_deleted,
+    is_protected,
     created_at
 };

@@ -213,6 +213,7 @@ async def get_roles(
                             name,
                         }},
                         is_deleted,
+                        is_protected,
                         created_at
                     }}
                     ORDER BY {body.ordering_expr}
