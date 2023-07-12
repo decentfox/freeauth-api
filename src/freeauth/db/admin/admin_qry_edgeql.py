@@ -49,6 +49,7 @@
 #     'src/freeauth/db/admin/queries/roles/update_role_status.edgeql'
 #     'src/freeauth/db/admin/queries/users/update_user.edgeql'
 #     'src/freeauth/db/admin/queries/users/update_user_organization.edgeql'
+#     'src/freeauth/db/admin/queries/users/update_user_password.edgeql'
 #     'src/freeauth/db/admin/queries/users/update_user_roles.edgeql'
 #     'src/freeauth/db/admin/queries/users/update_user_status.edgeql'
 # WITH:
@@ -419,6 +420,13 @@ class UpdateRoleStatusResult(NoPydanticValidation):
     name: str
     code: str | None
     is_deleted: bool
+
+
+@dataclasses.dataclass
+class UpdateUserPasswordResult(NoPydanticValidation):
+    id: uuid.UUID
+    username: str | None
+    email: str | None
 
 
 @dataclasses.dataclass
@@ -2353,6 +2361,28 @@ def update_user_organization(
         id=id,
         org_type_id=org_type_id,
         organization_ids=organization_ids,
+    )
+
+
+def update_user_password(
+    executor: edgedb.Executor,
+    *,
+    id: uuid.UUID,
+    hashed_password: str,
+) -> UpdateUserPasswordResult | None:
+    return executor.query_single(
+        """\
+        select (
+            update freeauth::User filter .id = <uuid>$id set {
+                hashed_password := <str>$hashed_password
+            }
+        ) {
+            username,
+            email
+        }\
+        """,
+        id=id,
+        hashed_password=hashed_password,
     )
 
 

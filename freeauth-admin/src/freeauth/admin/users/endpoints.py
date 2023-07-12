@@ -6,16 +6,19 @@ from typing import List
 
 import edgedb
 from fastapi import BackgroundTasks, Depends, HTTPException
+from pydantic import EmailStr
 
 from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateUserResult,
     GetUserByIdResult,
+    UpdateUserPasswordResult,
     create_user,
     delete_user,
     get_user_by_id,
     resign_user,
     update_user,
     update_user_organization,
+    update_user_password,
     update_user_roles,
     update_user_status,
 )
@@ -173,6 +176,42 @@ async def put_user(
             status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
         )
     return updated_user
+
+
+@router.put(
+    "/users/{user_id}/reset_pwd",
+    tags=["用管理"],
+    summary="重置用户密码",
+    description="重新生成用户密码并发送邮件",
+    dependencies=[Depends(auth_app.perm_accepted("manage:users"))],
+)
+async def gen_user_password(
+    user_id: uuid.UUID, background_tasks: BackgroundTasks
+) -> UpdateUserPasswordResult | None:
+    password: str = gen_random_string(12, secret=True)
+    user = await update_user_password(
+        auth_app.db,
+        id=user_id,
+        hashed_password=get_password_hash(password),
+    )
+    if not user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
+        )
+    if user and user.email:
+        email = EmailStr(user.email)
+        background_tasks.add_task(
+            send_email,
+            tpl="user_reset_pwd.html",
+            subject="密码已重置",
+            to=email,
+            body=dict(
+                username=user.username,
+                email=user.email,
+                password=password,
+            ),
+        )
+    return user
 
 
 @router.put(
