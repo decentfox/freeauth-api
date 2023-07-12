@@ -93,7 +93,7 @@ Run all the tests with:
 make test
 ```
 
-Reset test DB before run tests (if any schema changes):
+Reset test DB before running tests (if any schema changes):
 
 ```bash
 make testdb
