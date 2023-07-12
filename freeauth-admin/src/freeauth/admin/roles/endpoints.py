@@ -213,6 +213,7 @@ async def get_roles(
                             name,
                         }},
                         is_deleted,
+                        is_protected,
                         created_at
                     }}
                     ORDER BY {body.ordering_expr}
@@ -327,6 +328,16 @@ async def bind_users_to_roles(
 async def unbind_roles_from_users(
     body: RoleUserBody,
 ) -> list[CreateUserResult]:
-    return await role_unbind_users(
+    rv = await role_unbind_users(
         auth_app.db, user_ids=body.user_ids, role_ids=body.role_ids
     )
+    if rv.protected_admin_roles:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail=(
+                f"无法将用户【{'、'.join(str(u.name) for u in rv.unbind_users)}】与"
+                f"【{'、'.join(r.name for r in rv.protected_admin_roles)}】角色解绑，"
+                "请确保管理员角色至少关联一名正常状态的用户"
+            ),
+        )
+    return rv.unbind_users

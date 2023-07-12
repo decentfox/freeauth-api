@@ -111,8 +111,8 @@ def setup():
             secret = gen_random_string(32, secret=True)
             current_app = admin_qry_edgeql.create_application(
                 db,
-                name="默认应用",
-                description="即对接 FreeAuth 的应用。可更名本应用，也可创建新应用",
+                name="FreeAuth",
+                description="FreeAuth 后台管理应用",
                 hashed_secret=get_password_hash(secret),
             )
             db.query(

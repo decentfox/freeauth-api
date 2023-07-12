@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from pydantic import Field, validator
+from pydantic import Field
 from pydantic.dataclasses import dataclass
 
 from ..dataclasses import FilterItem  # noqa
@@ -38,10 +38,6 @@ class BasePermissionBody:
         title="关联标签",
         description="关联标签 ID 或名称列表",
     )
-
-    @validator("code", pre=True)
-    def convert_to_uppercase(cls, v):
-        return v.upper() if v else v
 
 
 @dataclass(config=BaseModelConfig)

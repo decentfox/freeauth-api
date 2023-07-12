@@ -4,6 +4,12 @@ module freeauth {
         property code -> str;
         property code_upper := str_upper(.code);
         property description -> str;
+        property is_protected := any((
+            select Permission
+            filter exists .application
+            and .application.is_protected
+            and .code = '*'
+        ) in .permissions);
 
         link org_type -> OrganizationType {
             on target delete delete source;

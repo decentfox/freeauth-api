@@ -12,6 +12,7 @@ select assert_single(
                 name,
             },
             is_deleted,
+            is_protected,
             created_at
         }
         filter (.id = id) ?? (.code_upper = str_upper(code))

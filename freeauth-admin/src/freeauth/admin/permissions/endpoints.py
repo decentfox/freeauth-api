@@ -307,6 +307,7 @@ async def get_roles_in_permission(
                             name,
                         }},
                         is_deleted,
+                        is_protected,
                         created_at
                     }}
                     ORDER BY {body.ordering_expr}

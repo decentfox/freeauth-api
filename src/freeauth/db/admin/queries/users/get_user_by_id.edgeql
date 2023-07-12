@@ -23,12 +23,13 @@ select
             }
         ),
         roles: {
-            id,
-            code,
             name,
+            code,
             description,
+            org_type: { code, name },
             is_deleted,
-            org_type: { code, name }
+            is_protected,
+            created_at
         },
         is_deleted,
         created_at,

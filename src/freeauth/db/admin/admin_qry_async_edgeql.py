@@ -178,6 +178,7 @@ class CreateRoleResult(NoPydanticValidation):
     description: str | None
     org_type: CreateRoleResultOrgType | None
     is_deleted: bool
+    is_protected: bool
     created_at: datetime.datetime
 
 
@@ -247,6 +248,14 @@ class DeleteRoleResult(NoPydanticValidation):
 @dataclasses.dataclass
 class DeleteUserResult(NoPydanticValidation):
     id: uuid.UUID
+    users: list[DeleteUserResultUsersItem]
+    protected_admin_users: list[DeleteUserResultUsersItem]
+    protected_admin_roles: list[CreatePermissionResultRolesItem]
+
+
+@dataclasses.dataclass
+class DeleteUserResultUsersItem(NoPydanticValidation):
+    id: uuid.UUID
     name: str | None
 
 
@@ -315,7 +324,7 @@ class GetUserByIdResult(NoPydanticValidation):
     mobile: str | None
     org_type: CreateRoleResultOrgType | None
     departments: list[GetUserByIdResultDepartmentsItem]
-    roles: list[GetUserByIdResultRolesItem]
+    roles: list[CreateRoleResult]
     is_deleted: bool
     created_at: datetime.datetime
     last_login_at: datetime.datetime | None
@@ -334,16 +343,6 @@ class GetUserByIdResultDepartmentsItem(NoPydanticValidation):
 class GetUserByIdResultDepartmentsItemEnterprise(NoPydanticValidation):
     id: uuid.UUID
     name: str
-
-
-@dataclasses.dataclass
-class GetUserByIdResultRolesItem(NoPydanticValidation):
-    id: uuid.UUID
-    code: str | None
-    name: str
-    description: str | None
-    is_deleted: bool
-    org_type: CreateRoleResultOrgType | None
 
 
 @dataclasses.dataclass
@@ -385,6 +384,13 @@ class QueryPermissionsResultRowsItemRolesItem(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class RoleUnbindUsersResult(NoPydanticValidation):
+    id: uuid.UUID
+    unbind_users: list[CreateUserResult]
+    protected_admin_roles: list[CreateRoleResult]
+
+
+@dataclasses.dataclass
 class UpdateApplicationStatusResult(NoPydanticValidation):
     id: uuid.UUID
     name: str
@@ -416,7 +422,22 @@ class UpdateRoleStatusResult(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class UpdateUserRolesResult(NoPydanticValidation):
+    id: uuid.UUID
+    user: CreateUserResult | None
+    protected_admin_roles: list[CreateRoleResult]
+
+
+@dataclasses.dataclass
 class UpdateUserStatusResult(NoPydanticValidation):
+    id: uuid.UUID
+    users: list[UpdateUserStatusResultUsersItem]
+    protected_admin_users: list[UpdateUserStatusResultUsersItem]
+    protected_admin_roles: list[CreatePermissionResultRolesItem]
+
+
+@dataclasses.dataclass
+class UpdateUserStatusResultUsersItem(NoPydanticValidation):
     id: uuid.UUID
     name: str | None
     is_deleted: bool
@@ -737,6 +758,7 @@ async def create_role(
                 name,
             },
             is_deleted,
+            is_protected,
             created_at
         };\
         """,
@@ -900,7 +922,8 @@ async def delete_role(
 ) -> list[DeleteRoleResult]:
     return await executor.query(
         """\
-        delete freeauth::Role filter .id in array_unpack(<array<uuid>>$ids);\
+        delete freeauth::Role
+        filter .id in array_unpack(<array<uuid>>$ids) and not .is_protected;\
         """,
         ids=ids,
     )
@@ -910,12 +933,38 @@ async def delete_user(
     executor: edgedb.AsyncIOExecutor,
     *,
     user_ids: list[uuid.UUID],
-) -> list[DeleteUserResult]:
-    return await executor.query(
+) -> DeleteUserResult:
+    return await executor.query_single(
         """\
-        select (
-            delete freeauth::User filter .id in array_unpack(<array<uuid>>$user_ids)
-        ) { name } order by .created_at desc;\
+        with
+            module freeauth,
+            user_ids := <array<uuid>>$user_ids,
+            users := ( select User filter .id in array_unpack(user_ids) ),
+            protected_admin_roles := (
+                select Role
+                filter .is_protected
+                and not exists (
+                    ( select .users filter not .is_deleted )
+                    except users
+                )
+            ),
+            protected_admin_users := (
+                select users
+                filter
+                    exists protected_admin_roles
+                    and users.roles in protected_admin_roles
+            )
+        select {
+            users := (
+                delete users except protected_admin_users
+            ) { name },
+            protected_admin_users := (
+                select protected_admin_users { name }
+            ),
+            protected_admin_roles := (
+                select protected_admin_roles { name }
+            )
+        };\
         """,
         user_ids=user_ids,
     )
@@ -1153,6 +1202,7 @@ async def get_role_by_id_or_code(
                         name,
                     },
                     is_deleted,
+                    is_protected,
                     created_at
                 }
                 filter (.id = id) ?? (.code_upper = str_upper(code))
@@ -1196,12 +1246,13 @@ async def get_user_by_id(
                     }
                 ),
                 roles: {
-                    id,
-                    code,
                     name,
+                    code,
                     description,
+                    org_type: { code, name },
                     is_deleted,
-                    org_type: { code, name }
+                    is_protected,
+                    created_at
                 },
                 is_deleted,
                 created_at,
@@ -1353,6 +1404,7 @@ async def perm_bind_roles(
                 name,
             },
             is_deleted,
+            is_protected,
             created_at
         };\
         """,
@@ -1390,6 +1442,7 @@ async def perm_unbind_roles(
                 name,
             },
             is_deleted,
+            is_protected,
             created_at
         };\
         """,
@@ -1552,26 +1605,52 @@ async def reorder_permission_tags(
 async def resign_user(
     executor: edgedb.AsyncIOExecutor,
     *,
-    is_deleted: bool | None = None,
     user_ids: list[uuid.UUID],
-) -> list[DeleteUserResult]:
-    return await executor.query(
+    is_deleted: bool | None = None,
+) -> DeleteUserResult:
+    return await executor.query_single(
         """\
-        select (
-            with is_deleted := <optional bool>$is_deleted,
-            update freeauth::User filter .id in array_unpack(<array<uuid>>$user_ids)
-            set {
-                directly_organizations := {},
-                org_type := {},
-                roles := {},
-                deleted_at := (
-                    datetime_of_transaction() if is_deleted else .deleted_at
+        with
+            module freeauth,
+            user_ids := <array<uuid>>$user_ids,
+            is_deleted := <optional bool>$is_deleted,
+            users := ( select User filter .id in array_unpack(user_ids) ),
+            protected_admin_roles := (
+                select Role
+                filter .is_protected
+                and not exists (
+                    ( select .users filter not .is_deleted )
+                    except users
                 )
-            }
-        ) { name } order by .created_at desc;\
+            ),
+            protected_admin_users := (
+                select users
+                filter
+                    exists protected_admin_roles
+                    and users.roles in protected_admin_roles
+            )
+        select {
+            users := (
+                update users except protected_admin_users
+                set {
+                    directly_organizations := {},
+                    org_type := {},
+                    roles := {},
+                    deleted_at := (
+                        datetime_of_transaction() if is_deleted else .deleted_at
+                    )
+                }
+            ) { name },
+            protected_admin_users := (
+                select protected_admin_users { name }
+            ),
+            protected_admin_roles := (
+                select protected_admin_roles { name }
+            )
+        };\
         """,
-        is_deleted=is_deleted,
         user_ids=user_ids,
+        is_deleted=is_deleted,
     )
 
 
@@ -1625,34 +1704,61 @@ async def role_unbind_users(
     *,
     user_ids: list[uuid.UUID],
     role_ids: list[uuid.UUID],
-) -> list[CreateUserResult]:
-    return await executor.query(
+) -> RoleUnbindUsersResult:
+    return await executor.query_single(
         """\
         with
             module freeauth,
             user_ids := <array<uuid>>$user_ids,
-            role_ids := <array<uuid>>$role_ids
-        select (
-            update User filter .id in array_unpack(user_ids)
-            set {
-                roles -= (
-                    select Role
-                    filter .id in array_unpack(role_ids)
+            role_ids := <array<uuid>>$role_ids,
+            users := ( select User filter .id in array_unpack(user_ids) ),
+            protected_admin_roles := (
+                select Role
+                filter .id in array_unpack(role_ids)
+                and .is_protected
+                and not exists (
+                    ( select .users filter not .is_deleted )
+                    except users
                 )
-            }
-        ) {
-            name,
-            username,
-            email,
-            mobile,
-            org_type: { code, name },
-            departments := (
-                select .directly_organizations { code, name }
-            ),
-            roles: { code, name },
-            is_deleted,
-            created_at,
-            last_login_at
+            )
+        select {
+            unbind_users := (
+                update users
+                set {
+                    roles -= (
+                        select Role
+                        filter .id in array_unpack(role_ids)
+                        and Role not in protected_admin_roles
+                    )
+                }
+            ) {
+                name,
+                username,
+                email,
+                mobile,
+                org_type: { code, name },
+                departments := (
+                    select .directly_organizations { code, name }
+                ),
+                roles: { code, name },
+                is_deleted,
+                created_at,
+                last_login_at
+            },
+            protected_admin_roles := (
+                select protected_admin_roles {
+                    name,
+                    code,
+                    description,
+                    org_type: {
+                        code,
+                        name,
+                    },
+                    is_deleted,
+                    is_protected,
+                    created_at
+                }
+            )
         };\
         """,
         user_ids=user_ids,
@@ -1721,7 +1827,7 @@ async def update_application_status(
             is_deleted := <bool>$is_deleted
         select (
             update freeauth::Application
-            filter .id in array_unpack(<array<uuid>>$ids)
+            filter .id in array_unpack(<array<uuid>>$ids) and not .is_protected
             set {
                 deleted_at := datetime_of_transaction() if is_deleted else {}
             }
@@ -2109,6 +2215,7 @@ async def update_role(
                 name,
             },
             is_deleted,
+            is_protected,
             created_at
         };\
         """,
@@ -2131,7 +2238,7 @@ async def update_role_status(
         """\
         select (
             update freeauth::Role
-            filter .id in array_unpack(<array<uuid>>$ids)
+            filter .id in array_unpack(<array<uuid>>$ids) and not .is_protected
             set {
                 deleted_at := (
                     datetime_of_transaction() if <bool>$is_deleted else {}
@@ -2254,39 +2361,66 @@ async def update_user_roles(
     *,
     id: uuid.UUID,
     role_ids: list[uuid.UUID] | None = None,
-) -> CreateUserResult | None:
+) -> UpdateUserRolesResult:
     return await executor.query_single(
         """\
         with
             module freeauth,
             user_id := <uuid>$id,
-            role_ids := <optional array<uuid>>$role_ids
-        select (
-            update User filter .id = user_id
-            set {
-                roles := (
-                    select Role
-                    filter
-                        .id in array_unpack(role_ids) and
-                        (
-                            not exists .org_type or
-                            .org_type ?= User.org_type
-                        )
-                )
-            }
-        ) {
-            name,
-            username,
-            email,
-            mobile,
-            org_type: { code, name },
-            departments := (
-                select .directly_organizations { code, name }
+            role_ids := <optional array<uuid>>$role_ids,
+            user := ( select User filter .id = user_id ),
+            roles := (
+                select Role
+                filter
+                    .id in array_unpack(role_ids) and
+                    (
+                        not exists .org_type or
+                        .org_type ?= user.org_type
+                    )
             ),
-            roles: { code, name },
-            is_deleted,
-            created_at,
-            last_login_at
+            deleted_roles := user.roles except roles,
+            protected_admin_roles := (
+                select deleted_roles
+                filter .is_protected
+                and not exists (
+                    ( select .users filter not .is_deleted )
+                    except user
+                )
+            )
+        select {
+            user := (
+                update user
+                set {
+                    roles := roles union protected_admin_roles
+                }
+            ) {
+                name,
+                username,
+                email,
+                mobile,
+                org_type: { code, name },
+                departments := (
+                    select .directly_organizations { code, name }
+                ),
+                roles: { code, name },
+                is_deleted,
+                created_at,
+                last_login_at
+            },
+            protected_admin_roles := (
+                select protected_admin_roles {
+                    name,
+                    code,
+                    description,
+                    org_type: {
+                        code,
+                        name,
+                    },
+                    is_deleted,
+                    is_protected,
+                    created_at
+                }
+            )
         };\
         """,
         id=id,
@@ -2299,21 +2433,48 @@ async def update_user_status(
     *,
     user_ids: list[uuid.UUID],
     is_deleted: bool,
-) -> list[UpdateUserStatusResult]:
-    return await executor.query(
+) -> UpdateUserStatusResult:
+    return await executor.query_single(
         """\
         with
+            module freeauth,
             user_ids := <array<uuid>>$user_ids,
-            is_deleted := <bool>$is_deleted
-        select (
-            update freeauth::User filter .id in array_unpack(user_ids)
-            set {
-                deleted_at := datetime_of_transaction() if is_deleted else {}
-            }
-        ) {
-            name,
-            is_deleted
-        } order by .created_at desc;\
+            is_deleted := <bool>$is_deleted,
+            users := ( select User filter .id in array_unpack(user_ids) ),
+            protected_admin_roles := (
+                select Role
+                filter .is_protected
+                and not exists (
+                    ( select .users filter not .is_deleted )
+                    except users
+                )
+            ),
+            protected_admin_users := (
+                select users
+                filter
+                    exists protected_admin_roles
+                    and users.roles in protected_admin_roles
+            )
+        select {
+            users := (
+                update users except protected_admin_users
+                set {
+                    deleted_at := datetime_of_transaction() if is_deleted else {}
+                }
+            ) {
+                name,
+                is_deleted
+            },
+            protected_admin_users := (
+                select protected_admin_users {
+                    name,
+                    is_deleted
+                }
+            ),
+            protected_admin_roles := (
+                select protected_admin_roles { name }
+            )
+        };\
         """,
         user_ids=user_ids,
         is_deleted=is_deleted,
