@@ -6,7 +6,6 @@ from typing import List
 
 import edgedb
 from fastapi import BackgroundTasks, Depends, HTTPException
-from pydantic import EmailStr
 
 from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateUserResult,
@@ -200,12 +199,11 @@ async def gen_user_password(
             status_code=HTTPStatus.NOT_FOUND, detail="用户不存在"
         )
     if user and user.email:
-        email = EmailStr(user.email)
         background_tasks.add_task(
             send_email,
             tpl="user_reset_pwd.html",
             subject="密码已重置",
-            to=email,
+            to=user.email,
             body=dict(
                 username=user.username,
                 email=user.email,

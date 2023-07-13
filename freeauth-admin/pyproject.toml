@@ -16,6 +16,8 @@ pydantic = {extras = ["dotenv", "email"], version = "^1.10.7"}
 freeauth = {path = "../", develop = true}
 freeauth-fastapi-ext = {path = "../freeauth-ext/fastapi-ext", develop = true}
 fastapi-mail = "^1.2.8"
+tencentcloud-sdk-python = "^3.0.937"
+alibabacloud-dysmsapi20170525 = "^2.0.24"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"

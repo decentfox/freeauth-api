@@ -47,6 +47,22 @@ You could override mail settings in the `.env` file, there are the available opt
 
 Each is explained in https://sabuhish.github.io/fastapi-mail/getting-started/#connectionconfig-class
 
+### Configuring SMS settings
+
+We support the following SMS providers:
+
+ - [Aliyun](https://cn.aliyun.com/product/sms)
+ - [Tencent Cloud](https://cloud.tencent.com/document/product/382)
+
+You could override mail settings in the `.env` file, there are the available options:
+
+ - SMS_PROVIDER: default `None`, the name of the SMS provider, which can be `tencent-cloud` or `aliyun`.
+ - SMS_SECRET_ID: default `None`
+ - SMS_SECRET_KEY: default `None`
+ - SMS_REGION: default `None`, for `tencent-cloud` only, the region where TencentCloud SMS service is located, see [available regions](https://cloud.tencent.com/document/api/382/52071#.E5.9C.B0.E5.9F.9F.E5.88.97.E8.A1.A8).
+ - SMS_APP_ID: default `None`, for `tencent-cloud` only, the `SDKAppID` after adding an application in the TencentCloud console.
+ - SMS_AUTH_CODE_TPL_ID: default `None`, the template code for auth code.
+
 ### Open the EdgeDB UI
 
 ```bash
