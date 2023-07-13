@@ -2474,6 +2474,7 @@ async def update_user_status(
             protected_admin_roles := (
                 select Role
                 filter .is_protected
+                and is_deleted
                 and not exists (
                     ( select .users filter not .is_deleted )
                     except users
