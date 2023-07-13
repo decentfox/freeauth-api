@@ -180,7 +180,7 @@ async def put_user(
 
 @router.put(
     "/users/{user_id}/reset_pwd",
-    tags=["用管理"],
+    tags=["用户管理"],
     summary="重置用户密码",
     description="重新生成用户密码并发送邮件",
     dependencies=[Depends(auth_app.perm_accepted("manage:users"))],
