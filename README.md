@@ -4,7 +4,7 @@
 
 ### Setup environment
 
-1. Install the EdgeDB CLI:
+1. Install the EdgeDB CLI (required EdgeDB 3.0+):
 
 refer to https://www.edgedb.com/docs/intro/cli
 

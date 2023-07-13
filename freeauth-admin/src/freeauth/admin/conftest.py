@@ -10,7 +10,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from freeauth import db as freeauth_db
 from freeauth.conf.settings import get_settings
 from freeauth.db.auth.auth_qry_async_edgeql import (
     FreeauthCodeType,
@@ -41,8 +40,14 @@ def setup_and_teardown():
     os.environ = orig_env
 
 
+@pytest.fixture(scope="session")
+def project_root(pytestconfig):
+    root_dir = pytestconfig.rootdir
+    return root_dir
+
+
 @pytest.fixture(scope="session", autouse=True)
-async def db(setup_and_teardown, request):
+async def db(setup_and_teardown, request, project_root):
     settings = get_settings()
     reset_db = request.config.getoption("--reset-db")
     default_cli = edgedb.create_async_client(database="edgedb")
@@ -59,8 +64,10 @@ async def db(setup_and_teardown, request):
     client = edgedb.create_async_client(database=settings.edgedb_database)
 
     if reset_db or not exists:
-        schema_path = pathlib.Path(freeauth_db.__file__).parent.joinpath(
-            "dbschema", "migrations"
+        schema_path = (
+            pathlib.Path(project_root).resolve().parent
+            / "dbschema"
+            / "migrations"
         )
         for file_or_dir in sorted(schema_path.iterdir()):
             with file_or_dir.open() as f:

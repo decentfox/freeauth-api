@@ -52,14 +52,11 @@ def install():
 
 
 def handle_migration_command(command):
-    schema_dir = Path(__file__).resolve().parent / "dbschema"
     subprocess.call(
         (
             "edgedb",
             "migration",
             command,
-            "--schema-dir",
-            schema_dir,
             "--dsn" if settings.edgedb_dsn else "--instance",
             settings.edgedb_dsn or settings.edgedb_instance,
             "--database",
