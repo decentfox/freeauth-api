@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "freeauth-fastapi-example"
+version = "0.1.0"
+description = ""
+authors = ["DecentFoX Studio <service@decentfox.com>"]
+readme = "README.md"
+packages = [{include = "app"}]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<4.0"
+freeauth-fastapi-ext = {path = "../../freeauth-ext/fastapi-ext", develop = true}
+uvicorn = "^0.22.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.7.0"
+flake8 = "^6.0.0"
+isort = "^5.12.0"
+mypy = "^1.4.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"
+atomic = true
+line_length = 79
+
+[tool.black]
+line_length = 79
+preview = true
+
+[tool.mypy]
+pretty = true

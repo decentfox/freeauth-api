@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import string
 import subprocess
 from pathlib import Path
@@ -49,6 +50,32 @@ def install():
             settings.edgedb_instance,
         )
     )
+
+
+@app.command()
+def sync():
+    """
+    Synchronizing FreeAuth dbschema
+    """
+    dir_ = Path(os.getcwd())
+    target_dir = None
+    for file_or_dir in dir_.iterdir():
+        if not file_or_dir.exists():
+            continue
+        if file_or_dir.is_dir() and file_or_dir.name == "dbschema":
+            target_dir = file_or_dir
+            break
+    if not target_dir:
+        print("Failed to find the dbschema folder")
+
+    source_dir = Path(__file__).resolve().parent / "dbschema"
+    for file_or_dir in source_dir.iterdir():
+        if not file_or_dir.suffix.lower() == ".esdl":
+            continue
+        target_file = Path(target_dir) / f"freeauth_{file_or_dir.name}"
+        if target_file.exists():
+            continue
+        subprocess.call(("ln", file_or_dir, target_file))
 
 
 def handle_migration_command(command):
