@@ -6,11 +6,12 @@
 #     'src/freeauth/db/auth/queries/get_user_by_access_token.edgeql'
 #     'src/freeauth/db/auth/queries/get_user_by_account.edgeql'
 #     'src/freeauth/db/auth/queries/has_any_permission.edgeql'
-#     'src/freeauth/db/auth/queries/reset_pwd.edgeql'
 #     'src/freeauth/db/auth/queries/send_code.edgeql'
 #     'src/freeauth/db/auth/queries/sign_in.edgeql'
 #     'src/freeauth/db/auth/queries/sign_out.edgeql'
 #     'src/freeauth/db/auth/queries/sign_up.edgeql'
+#     'src/freeauth/db/auth/queries/update_profile.edgeql'
+#     'src/freeauth/db/auth/queries/update_pwd.edgeql'
 #     'src/freeauth/db/auth/queries/upsert_login_setting.edgeql'
 #     'src/freeauth/db/auth/queries/validate_code.edgeql'
 #     'src/freeauth/db/auth/queries/validate_pwd.edgeql'
@@ -63,6 +64,7 @@ class FreeauthAuditEventType(enum.Enum):
     SIGNOUT = "SignOut"
     SIGNUP = "SignUp"
     RESETPWD = "ResetPwd"
+    CHANGEPWD = "ChangePwd"
 
 
 class FreeauthAuditStatusCode(enum.Enum):
@@ -110,6 +112,14 @@ class GetCurrentUserResultDepartmentsItem(NoPydanticValidation):
     id: uuid.UUID
     code: str | None
     name: str
+    enterprise: GetCurrentUserResultDepartmentsItemEnterprise | None
+    org_type: GetCurrentUserResultDepartmentsItemEnterprise | None
+
+
+@dataclasses.dataclass
+class GetCurrentUserResultDepartmentsItemEnterprise(NoPydanticValidation):
+    id: uuid.UUID
+    name: str
 
 
 @dataclasses.dataclass
@@ -122,8 +132,13 @@ class GetCurrentUserResultOrgType(NoPydanticValidation):
 @dataclasses.dataclass
 class GetCurrentUserResultRolesItem(NoPydanticValidation):
     id: uuid.UUID
-    code: str | None
     name: str
+    code: str | None
+    description: str | None
+    org_type: GetCurrentUserResultOrgType | None
+    is_deleted: bool
+    is_protected: bool
+    created_at: datetime.datetime
 
 
 @dataclasses.dataclass
@@ -170,11 +185,25 @@ class SignInResult(NoPydanticValidation):
     email: str | None
     mobile: str | None
     org_type: GetCurrentUserResultOrgType | None
-    departments: list[GetCurrentUserResultDepartmentsItem]
-    roles: list[GetCurrentUserResultRolesItem]
+    departments: list[SignInResultDepartmentsItem]
+    roles: list[SignInResultRolesItem]
     is_deleted: bool
     created_at: datetime.datetime
     last_login_at: datetime.datetime | None
+
+
+@dataclasses.dataclass
+class SignInResultDepartmentsItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
+
+
+@dataclasses.dataclass
+class SignInResultRolesItem(NoPydanticValidation):
+    id: uuid.UUID
+    code: str | None
+    name: str
 
 
 @dataclasses.dataclass
@@ -271,9 +300,29 @@ async def get_current_user(
             mobile,
             org_type: { code, name },
             departments := (
-                select .directly_organizations { code, name }
+                select .directly_organizations {
+                    id,
+                    code,
+                    name,
+                    enterprise := assert_single(.ancestors {
+                        id,
+                        name
+                    } filter exists [is Enterprise]),
+                    org_type := assert_single(.ancestors {
+                        id,
+                        name
+                    } filter exists [is OrganizationType])
+                }
             ),
-            roles: { code, name },
+            roles: {
+                name,
+                code,
+                description,
+                org_type: { code, name },
+                is_deleted,
+                is_protected,
+                created_at
+            },
             perms := array_agg(perms.code),
             is_deleted,
             created_at,
@@ -381,49 +430,6 @@ async def has_any_permission(
         });\
         """,
         perm_codes=perm_codes,
-    )
-
-
-async def reset_pwd(
-    executor: edgedb.AsyncIOExecutor,
-    *,
-    client_info: str,
-    id: uuid.UUID,
-    hashed_password: str,
-) -> GetUserByAccountResult | None:
-    return await executor.query_single(
-        """\
-        with
-            module freeauth,
-            client_info := (
-                <tuple<client_ip: str, user_agent: json>><json>$client_info
-            ),
-            user := (
-                update User
-                filter
-                    .id = <uuid>$id and not .is_deleted
-                set {
-                    hashed_password := <str>$hashed_password,
-                    reset_pwd_on_next_login := false,
-                }
-            ),
-            audit_log := (
-                insert AuditLog {
-                    client_ip := client_info.client_ip,
-                    event_type := AuditEventType.ResetPwd,
-                    status_code := AuditStatusCode.OK,
-                    raw_ua := <str>client_info.user_agent['raw_ua'],
-                    os := <str>client_info.user_agent['os'],
-                    device := <str>client_info.user_agent['device'],
-                    browser := <str>client_info.user_agent['browser'],
-                    user := user
-                }
-            )
-        select user { id, is_deleted };\
-        """,
-        client_info=client_info,
-        id=id,
-        hashed_password=hashed_password,
     )
 
 
@@ -638,6 +644,101 @@ async def sign_up(
         mobile=mobile,
         hashed_password=hashed_password,
         client_info=client_info,
+    )
+
+
+async def update_profile(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    client_info: str,
+    id: uuid.UUID,
+    name: str,
+    username: str,
+    email: str | None = None,
+    mobile: str | None = None,
+) -> SignInResult | None:
+    return await executor.query_single(
+        """\
+        with
+            module freeauth,
+            client_info := (
+                <tuple<client_ip: str, user_agent: json>><json>$client_info
+            ),
+            user := (
+                update User
+                filter
+                    .id = <uuid>$id and not .is_deleted
+                set {
+                    name := <str>$name,
+                    username := <str>$username,
+                    email := <optional str>$email,
+                    mobile := <optional str>$mobile
+                }
+            ),
+        select user { 
+            name,
+            username,
+            email,
+            mobile,
+            org_type: { code, name },
+            departments := (
+                select .directly_organizations { code, name }
+            ),
+            roles: { code, name },
+            is_deleted,
+            created_at,
+            last_login_at
+        };\
+        """,
+        client_info=client_info,
+        id=id,
+        name=name,
+        username=username,
+        email=email,
+        mobile=mobile,
+    )
+
+
+async def update_pwd(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    client_info: str,
+    id: uuid.UUID,
+    hashed_password: str,
+) -> GetUserByAccountResult | None:
+    return await executor.query_single(
+        """\
+        with
+            module freeauth,
+            client_info := (
+                <tuple<client_ip: str, user_agent: json>><json>$client_info
+            ),
+            user := (
+                update User
+                filter
+                    .id = <uuid>$id and not .is_deleted
+                set {
+                    hashed_password := <str>$hashed_password,
+                    reset_pwd_on_next_login := false,
+                }
+            ),
+            audit_log := (
+                insert AuditLog {
+                    client_ip := client_info.client_ip,
+                    event_type := AuditEventType.ChangePwd,
+                    status_code := AuditStatusCode.OK,
+                    raw_ua := <str>client_info.user_agent['raw_ua'],
+                    os := <str>client_info.user_agent['os'],
+                    device := <str>client_info.user_agent['device'],
+                    browser := <str>client_info.user_agent['browser'],
+                    user := user
+                }
+            )
+        select user { id, is_deleted };\
+        """,
+        client_info=client_info,
+        id=id,
+        hashed_password=hashed_password,
     )
 
 

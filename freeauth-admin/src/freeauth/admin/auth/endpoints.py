@@ -22,11 +22,12 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     ValidateCodeResult,
     ValidatePwdResult,
     create_audit_log,
-    reset_pwd,
     send_code,
     sign_in,
     sign_out,
     sign_up,
+    update_profile,
+    update_pwd,
     validate_code,
     validate_pwd,
 )
@@ -48,6 +49,7 @@ from .dataclasses import (
     SignInSendCodeBody,
     SignUpBody,
     SignUpSendCodeBody,
+    UpdateProfileBody,
 )
 from .dependencies import (
     verify_account_when_send_code,
@@ -364,12 +366,12 @@ async def sign_in_with_pwd(
 
 
 @router.post(
-    "/reset_pwd",
+    "/change_pwd",
     tags=["认证相关"],
     summary="重置密码",
     description="重置当前用户的登录密码",
 )
-async def reset_user_password(
+async def change_password(
     body: ResetPwdBody,
     client_info: dict = Depends(get_client_info),
     current_user: GetCurrentUserResult = Depends(auth_app.current_user),
@@ -384,16 +386,47 @@ async def reset_user_password(
             user_id=current_user.id,
             client_info=json.dumps(client_info),
             status_code=FreeauthAuditStatusCode.ACCOUNT_DISABLED,
-            event_type=FreeauthAuditEventType.RESETPWD,
+            event_type=FreeauthAuditEventType.CHANGEPWD,
         )
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="您的账号已停用"
         )
-    await reset_pwd(
+    await update_pwd(
         auth_app.db,
         id=current_user.id,
         hashed_password=get_password_hash(body.password),
         client_info=json.dumps(client_info),
+    )
+    return "ok"
+
+
+@router.post(
+    "/update_profile",
+    tags=["认证相关"],
+    summary="更新个人信息",
+    description="更新当前用户的个人信息",
+)
+async def update_my_profile(
+    body: UpdateProfileBody,
+    client_info: dict = Depends(get_client_info),
+    current_user: GetCurrentUserResult = Depends(auth_app.current_user),
+):
+    if not current_user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="账号不存在"
+        )
+    if current_user.is_deleted:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="您的账号已停用"
+        )
+    await update_profile(
+        auth_app.db,
+        id=current_user.id,
+        client_info=json.dumps(client_info),
+        name=body.name,
+        username=body.username,
+        email=body.email,
+        mobile=body.mobile,
     )
     return "ok"
 
