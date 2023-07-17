@@ -5,7 +5,8 @@ import re
 import string
 from http import HTTPStatus
 
-from fastapi import Depends, HTTPException, Response
+from fastapi import BackgroundTasks, Depends, HTTPException, Response
+from pydantic import EmailStr
 
 from freeauth.conf.login_settings import LoginSettings
 from freeauth.conf.settings import get_settings
@@ -42,6 +43,7 @@ from freeauth.security.utils import (
 from .. import logger
 from ..app import auth_app, router
 from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
+from ..tasks import send_email
 from .dataclasses import (
     ResetPwdBody,
     SignInCodeBody,
@@ -65,6 +67,7 @@ async def send_auth_code(
     ttl: int | None,
     max_attempts: int | None,
     attempts_ttl: int | None,
+    background_tasks: BackgroundTasks,
 ) -> SendCodeResult:
     code_type = FreeauthCodeType.EMAIL
     if re.match(MOBILE_REGEX, account):
@@ -98,8 +101,28 @@ async def send_auth_code(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail={"code": "验证码获取次数超限，请稍后再次获取"},
         )
+    if code_type == FreeauthCodeType.EMAIL:
+        email = EmailStr(account)
+        background_tasks.add_task(
+            send_email,
+            tpl=(
+                "send_signup_code.html"
+                if verify_type == FreeauthVerifyType.SIGNUP
+                else "send_signin_code.html"
+            ),
+            subject=(
+                "注册验证码"
+                if verify_type == FreeauthVerifyType.SIGNUP
+                else "登录验证码"
+            ),
+            to=email,
+            body=dict(
+                code=code,
+                ttl=ttl or settings.verify_code_ttl,
+            ),
+        )
+    # TODO elif code_type.value == FreeauthAuditEventType.SMS:
 
-    # TODO: send sms or email
     return rv
 
 
@@ -147,6 +170,7 @@ async def validate_auth_code(
 )
 async def send_signup_code(
     body: SignUpSendCodeBody,
+    background_tasks: BackgroundTasks,
     settings: LoginSettings = Depends(auth_app.login_settings),
 ) -> SendCodeResult:
     sending_limit_enabled = settings.signup_code_sending_limit_enabled
@@ -168,6 +192,7 @@ async def send_signup_code(
             if sending_limit_enabled
             else None
         ),
+        background_tasks=background_tasks,
     )
 
 
@@ -227,6 +252,7 @@ async def sign_up_with_code(
 )
 async def send_signin_code(
     body: SignInSendCodeBody,
+    background_tasks: BackgroundTasks,
     settings: LoginSettings = Depends(auth_app.login_settings),
 ) -> SendCodeResult:
     sending_limit_enabled = settings.signin_code_sending_limit_enabled
@@ -248,6 +274,7 @@ async def send_signin_code(
             if sending_limit_enabled
             else None
         ),
+        background_tasks=background_tasks,
     )
 
 
