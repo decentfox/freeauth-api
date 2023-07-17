@@ -207,6 +207,7 @@ async def sign_up_with_code(
         mobile=body.account if code_type == FreeauthCodeType.SMS else None,
         email=body.account if code_type == FreeauthCodeType.EMAIL else None,
         hashed_password=get_password_hash(password),
+        reset_pwd_on_next_login=settings.change_pwd_after_first_login_enabled,
         client_info=client_info,
     )
     token = await auth_app.create_access_token(response, user.id)

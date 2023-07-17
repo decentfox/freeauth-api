@@ -193,7 +193,7 @@ class FreeAuthApp:
                 raise HTTPException(
                     status_code=HTTPStatus.UNAUTHORIZED,
                     detail=dict(
-                        reset_pwd_on_next_login="首次登录之前请更改密码"
+                        reset_pwd_on_next_login="首次登录时需重新设置密码"
                     ),
                 )
 
