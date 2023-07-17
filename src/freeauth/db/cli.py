@@ -18,14 +18,6 @@ from .admin import admin_qry_edgeql
 
 app = typer.Typer(help="FreeAuth CLI")
 
-migration_app = typer.Typer(
-    name="migration", help="FreeAuth db migration manager."
-)
-app.add_typer(migration_app)
-
-admin_app = typer.Typer(name="admin", help="FreeAuth admin CLI manager.")
-app.add_typer(admin_app)
-
 settings = get_settings()
 client = edgedb.create_client(
     dsn=settings.edgedb_dsn or settings.edgedb_instance,
@@ -33,23 +25,24 @@ client = edgedb.create_client(
 )
 
 
-@app.command()
-def install():
-    """
-    Initialize FreeAuth EdgeDB project (override EDGEDB_INSTANCE in .env
-    file or environment variable).
-    """
-    subprocess.call(
-        (
-            "edgedb",
-            "project",
-            "init",
-            "--project-dir",
-            Path(__file__).resolve().parent,
-            "--server-instance",
-            settings.edgedb_instance,
-        )
-    )
+def find_edgedb_project_dir():
+    dir_ = os.getcwd()
+    dev = os.stat(dir_).st_dev
+
+    while True:
+        toml = os.path.join(dir_, "edgedb.toml")
+        if not os.path.isfile(toml):
+            parent = os.path.dirname(dir_)
+            if parent == dir_:
+                break
+            parent_dev = os.stat(parent).st_dev
+            if parent_dev != dev:
+                break
+            dir_ = parent
+            dev = parent_dev
+            continue
+        return dir_
+    print("no `edgedb.toml` found")
 
 
 @app.command()
@@ -57,16 +50,20 @@ def sync():
     """
     Synchronizing FreeAuth dbschema
     """
-    dir_ = Path(os.getcwd())
+    dir_ = find_edgedb_project_dir()
+    if not dir_:
+        return
+
     target_dir = None
-    for file_or_dir in dir_.iterdir():
+    for file_or_dir in Path(dir_).iterdir():
         if not file_or_dir.exists():
             continue
         if file_or_dir.is_dir() and file_or_dir.name == "dbschema":
             target_dir = file_or_dir
             break
     if not target_dir:
-        print("Failed to find the dbschema folder")
+        print("no `dbschema` folder found")
+        return
 
     source_dir = Path(__file__).resolve().parent / "dbschema"
     for file_or_dir in source_dir.iterdir():
@@ -78,37 +75,7 @@ def sync():
         subprocess.call(("ln", file_or_dir, target_file))
 
 
-def handle_migration_command(command):
-    subprocess.call(
-        (
-            "edgedb",
-            "migration",
-            command,
-            "--dsn" if settings.edgedb_dsn else "--instance",
-            settings.edgedb_dsn or settings.edgedb_instance,
-            "--database",
-            settings.edgedb_database,
-        )
-    )
-
-
-@migration_app.command(name="create")
-def create_migration():
-    """
-    Create a migration script.
-    """
-    handle_migration_command("create")
-
-
-@migration_app.command(name="apply")
-def apply_migration():
-    """
-    Bring current database to the latest or a specified revision.
-    """
-    handle_migration_command("apply")
-
-
-@admin_app.command()
+@app.command()
 def setup():
     """
     Setting up administrator account.
@@ -162,7 +129,7 @@ def setup():
             id,
             name,
             code,
-            users: { id, username }
+            users: { id, name, username, is_deleted }
         } filter (
             select Permission
             filter .application = global current_app
@@ -199,7 +166,7 @@ def setup():
                 id,
                 name,
                 code,
-                users: { id, username }
+                users: { id, name, username, is_deleted }
             };\
             """,
             id=current_role.id,
@@ -210,30 +177,48 @@ def setup():
     table.add_row(current_role.name, current_role.code)
     print(table)
 
-    print("\n3. 正在创建系统管理员账号...\n")
-    username = gen_random_string(6, letters=string.ascii_lowercase)
-    password = gen_random_string(12, secret=True)
-    while True:
-        try:
-            user = admin_qry_edgeql.create_user(
-                scoped_db,
-                name=f"{current_app.name}管理员",
-                username=username,
-                hashed_password=get_password_hash(password),
-                reset_pwd_on_first_login=True,
+    print("\n3. 正在查询系统管理员账号...\n")
+    if current_role.users:
+        print("已为您找到以下系统管理员账号：\n")
+        table = Table("用户名", "姓名", "状态")
+        for user in current_role.users:
+            table.add_row(
+                user.username,
+                user.name,
+                "已停用" if user.is_deleted else "正常",
             )
-        except edgedb.errors.ConstraintViolationError:
-            username = gen_random_string(6, letters=string.ascii_lowercase)
-        else:
-            break
-    admin_qry_edgeql.role_bind_users(
-        scoped_db, user_ids=[user.id], role_ids=[current_role.id]
-    )
-    print("[green][OK][/green] [cyan]管理员账号[/cyan]创建成功!\n")
-    print("登录信息：")
-    table = Table("用户名", "密码")
-    table.add_row(user.username, password)
-    print(table)
+        print(table)
+    else:
+        print("首次配置，尚未创建系统管理员账号\n")
+
+    confirm = not bool(current_role.users)
+    if not confirm:
+        confirm = typer.confirm("需要继续创建管理员账号吗？")
+    if confirm:
+        print("\n4. 正在创建系统管理员账号...\n")
+        username = gen_random_string(6, letters=string.ascii_lowercase)
+        password = gen_random_string(12, secret=True)
+        while True:
+            try:
+                user = admin_qry_edgeql.create_user(
+                    scoped_db,
+                    name=f"{current_app.name}管理员",
+                    username=username,
+                    hashed_password=get_password_hash(password),
+                    reset_pwd_on_first_login=True,
+                )
+            except edgedb.errors.ConstraintViolationError:
+                username = gen_random_string(6, letters=string.ascii_lowercase)
+            else:
+                break
+        admin_qry_edgeql.role_bind_users(
+            scoped_db, user_ids=[user.id], role_ids=[current_role.id]
+        )
+        print("[green][OK][/green] [cyan]管理员账号[/cyan]创建成功!\n")
+        print("登录信息：")
+        table = Table("用户名", "密码")
+        table.add_row(user.username, password)
+        print(table)
 
 
 if __name__ == "__main__":

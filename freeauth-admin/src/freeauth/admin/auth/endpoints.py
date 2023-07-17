@@ -19,8 +19,8 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     GetUserByAccountResult,
     SendCodeResult,
     SignInResult,
+    ValidateAccountResult,
     ValidateCodeResult,
-    ValidatePwdResult,
     create_audit_log,
     send_code,
     sign_in,
@@ -28,8 +28,8 @@ from freeauth.db.auth.auth_qry_async_edgeql import (
     sign_up,
     update_profile,
     update_pwd,
+    validate_account,
     validate_code,
-    validate_pwd,
 )
 from freeauth.ext.fastapi_ext.utils import get_client_info
 from freeauth.security.utils import (
@@ -305,7 +305,7 @@ async def sign_in_with_pwd(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail={"account": "系统不支持密码登录，请使用其他登录方式"},
         )
-    user: ValidatePwdResult | None = await validate_pwd(
+    user: ValidateAccountResult | None = await validate_account(
         auth_app.db,
         username=body.account if "username" in pwd_signin_modes else None,
         mobile=body.account if "mobile" in pwd_signin_modes else None,

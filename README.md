@@ -1,23 +1,13 @@
-# FreeAuth Admin FastAPI http server
+# freeAuth-api
 
 ## Development
 
 ### Setup environment
 
-1. Install the EdgeDB CLI (required EdgeDB 3.0+):
-
-refer to https://www.edgedb.com/docs/intro/cli
-
-#### Linux or macOS
+Install the EdgeDB CLI (required EdgeDB 3.0+), prep environment, install dependencies, and initial project:
 
 ```bash
-curl https://sh.edgedb.com --proto '=https' -sSf1 | sh
-```
-
-2. Create a virtual environment and install the development dependencies:
-
-```bash
-make install
+make setup
 ```
 
 During the first installation, you will enter an interactive session to initialize the EdgeDB project:
@@ -40,16 +30,27 @@ Do you want to use existing instance "FreeAuth" for the project? [y/n]
 make dev
 ```
 
-### Setup administrator account
+### Configuring mail settings
 
-```bash
-poetry run freeauth-db admin setup
-```
+After executing the `make setup` command, you will have a `.env` file under `freeauth-admin` folder.
+
+You could override mail settings in the `.env` file, there are the available options:
+
+ - MAIL_FROM_NAME: default `FreeAuth`
+ - MAIL_FROM: default `None`
+ - MAIL_USERNAME: default `None`
+ - MAIL_PASSWORD: default `None`
+ - MAIL_PORT: default `25`
+ - MAIL_SERVER: default `localhost`
+ - MAIL_STARTTLS: default `False`
+ - MAIL_SSL_TLS: default `False`
+
+Each is explained in https://sabuhish.github.io/fastapi-mail/getting-started/#connectionconfig-class
 
 ### Open the EdgeDB UI
 
 ```bash
-edgedb ui -I FreeAuth
+edgedb ui
 ```
 
 ### Automatic API documents
