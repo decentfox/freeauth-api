@@ -1,8 +1,5 @@
 with
     module freeauth,
-    client_info := (
-        <tuple<client_ip: str, user_agent: json>><json>$client_info
-    ),
     user := (
         update User
         filter

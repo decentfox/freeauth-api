@@ -408,7 +408,6 @@ async def change_password(
 )
 async def update_my_profile(
     body: UpdateProfileBody,
-    client_info: dict = Depends(get_client_info),
     current_user: GetCurrentUserResult = Depends(auth_app.current_user),
 ):
     if not current_user:
@@ -422,7 +421,6 @@ async def update_my_profile(
     await update_profile(
         auth_app.db,
         id=current_user.id,
-        client_info=json.dumps(client_info),
         name=body.name,
         username=body.username,
         email=body.email,

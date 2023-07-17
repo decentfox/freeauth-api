@@ -650,7 +650,6 @@ def sign_up(
 def update_profile(
     executor: edgedb.Executor,
     *,
-    client_info: str,
     id: uuid.UUID,
     name: str,
     username: str,
@@ -661,9 +660,6 @@ def update_profile(
         """\
         with
             module freeauth,
-            client_info := (
-                <tuple<client_ip: str, user_agent: json>><json>$client_info
-            ),
             user := (
                 update User
                 filter
@@ -690,7 +686,6 @@ def update_profile(
             last_login_at
         };\
         """,
-        client_info=client_info,
         id=id,
         name=name,
         username=username,
