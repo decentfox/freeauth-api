@@ -25,10 +25,13 @@ build-backend = "poetry.core.masonry.api"
 profile = "black"
 atomic = true
 line_length = 79
+extend_skip_glob = ["*_edgeql.py"]
 
 [tool.black]
 line_length = 79
 preview = true
+extend-exclude = "_edgeql\\.py$"
 
 [tool.mypy]
 pretty = true
+exclude = [".*_edgeql.py"]
