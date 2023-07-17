@@ -15,23 +15,6 @@ dep-install: ## Install latest versions of prod dependencies.
 	@echo "=========================="
 	@poetry install
 	@poetry run pre-commit install
-	@(source $$(poetry env info --path)/bin/activate && \
-	cd freeauth-admin && \
-	make install)
-
-.PHONY: install-edgedb
-install-edgedb: ## Install the EdgeDB CLI.
-	@echo
-	@echo "Installing EdgeDB..."
-	@echo "===================="
-	@which edgedb > /dev/null 2>&1 || (curl --proto '=https' --tlsv1.2 -sSf https://sh.edgedb.com | sh -s -- -y)
-
-.PHONY: init-project
-init-project: ## Initial a new or existing FreeAuth DB project.
-	@echo
-	@echo "Initializing EdgeDB project..."
-	@echo "=============================="
-	@-edgedb project init --project-dir . 2> /dev/null
 
 .PHONY: db
 db: ## Create a db migration.
@@ -58,25 +41,17 @@ genqlapi: up ## Generate query APIs.
 		done \
 	done
 
-.PHONY: sync-freeauth
-sync-freeauth: up ## Sync FreeAuth dbschema.
-	@echo
-	@echo "Synchronizing FreeAuth dbschema..."
-	@echo "=============================="
-	@poetry run freeauth-db sync
-	@-edgedb migration create --non-interactive 2> /dev/null
-	@edgedb migration apply
-
 .PHONY: setup-admin
 setup-admin: ## Setup administrator account.
 	@(source $$(poetry env info --path)/bin/activate && \
 	cd freeauth-admin && \
-	make setup)
+	make setup-admin)
 
 .PHONY: setup
-setup: install-edgedb dep-install init-project sync-freeauth setup-admin ## Setup environment, run first-time setup.
-	@echo
-	@echo "${Green}All set!${NC} Run \`make dev\` to start a uvicorn dev server on port 5001."
+setup: dep-install ## Setup environment, run first-time setup.
+	@(source $$(poetry env info --path)/bin/activate && \
+	cd freeauth-admin && \
+	make setup)
 
 .PHONY: dev
 dev: ## Run FreeAuth admin server in dev mode.
