@@ -12,9 +12,29 @@ select user {
     mobile,
     org_type: { code, name },
     departments := (
-        select .directly_organizations { code, name }
+        select .directly_organizations {
+            id,
+            code,
+            name,
+            enterprise := assert_single(.ancestors {
+                id,
+                name
+            } filter exists [is Enterprise]),
+            org_type := assert_single(.ancestors {
+                id,
+                name
+            } filter exists [is OrganizationType])
+        }
     ),
-    roles: { code, name },
+    roles: {
+        name,
+        code,
+        description,
+        org_type: { code, name },
+        is_deleted,
+        is_protected,
+        created_at
+    },
     perms := array_agg(perms.code),
     is_deleted,
     created_at,

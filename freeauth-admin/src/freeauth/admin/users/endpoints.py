@@ -11,14 +11,14 @@ from pydantic import EmailStr
 from freeauth.db.admin.admin_qry_async_edgeql import (
     CreateUserResult,
     GetUserByIdResult,
-    UpdateUserPasswordResult,
+    ResetUserPasswordResult,
     create_user,
     delete_user,
     get_user_by_id,
+    reset_user_password,
     resign_user,
     update_user,
     update_user_organization,
-    update_user_password,
     update_user_roles,
     update_user_status,
 )
@@ -187,12 +187,13 @@ async def put_user(
 )
 async def gen_user_password(
     user_id: uuid.UUID, background_tasks: BackgroundTasks
-) -> UpdateUserPasswordResult | None:
+) -> ResetUserPasswordResult | None:
     password: str = gen_random_string(12, secret=True)
-    user = await update_user_password(
+    user = await reset_user_password(
         auth_app.db,
         id=user_id,
         hashed_password=get_password_hash(password),
+        reset_pwd_on_next_login=True,
     )
     if not user:
         raise HTTPException(

@@ -15,7 +15,7 @@ with
     audit_log := (
         insert AuditLog {
             client_ip := client_info.client_ip,
-            event_type := AuditEventType.ResetPwd,
+            event_type := AuditEventType.ChangePwd,
             status_code := AuditStatusCode.OK,
             raw_ua := <str>client_info.user_agent['raw_ua'],
             os := <str>client_info.user_agent['os'],

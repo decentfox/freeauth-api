@@ -32,6 +32,7 @@
 #     'src/freeauth/db/admin/queries/perms/query_permission_tags.edgeql'
 #     'src/freeauth/db/admin/queries/perms/query_permissions.edgeql'
 #     'src/freeauth/db/admin/queries/perms/reorder_permission_tags.edgeql'
+#     'src/freeauth/db/admin/queries/users/reset_user_password.edgeql'
 #     'src/freeauth/db/admin/queries/users/resign_user.edgeql'
 #     'src/freeauth/db/admin/queries/roles/role_bind_users.edgeql'
 #     'src/freeauth/db/admin/queries/roles/role_unbind_users.edgeql'
@@ -49,7 +50,6 @@
 #     'src/freeauth/db/admin/queries/roles/update_role_status.edgeql'
 #     'src/freeauth/db/admin/queries/users/update_user.edgeql'
 #     'src/freeauth/db/admin/queries/users/update_user_organization.edgeql'
-#     'src/freeauth/db/admin/queries/users/update_user_password.edgeql'
 #     'src/freeauth/db/admin/queries/users/update_user_roles.edgeql'
 #     'src/freeauth/db/admin/queries/users/update_user_status.edgeql'
 # WITH:
@@ -385,6 +385,13 @@ class QueryPermissionsResultRowsItemRolesItem(NoPydanticValidation):
 
 
 @dataclasses.dataclass
+class ResetUserPasswordResult(NoPydanticValidation):
+    id: uuid.UUID
+    username: str | None
+    email: str | None
+
+
+@dataclasses.dataclass
 class RoleUnbindUsersResult(NoPydanticValidation):
     id: uuid.UUID
     unbind_users: list[CreateUserResult]
@@ -420,13 +427,6 @@ class UpdateRoleStatusResult(NoPydanticValidation):
     name: str
     code: str | None
     is_deleted: bool
-
-
-@dataclasses.dataclass
-class UpdateUserPasswordResult(NoPydanticValidation):
-    id: uuid.UUID
-    username: str | None
-    email: str | None
 
 
 @dataclasses.dataclass
@@ -1610,6 +1610,31 @@ async def reorder_permission_tags(
     )
 
 
+async def reset_user_password(
+    executor: edgedb.AsyncIOExecutor,
+    *,
+    id: uuid.UUID,
+    reset_pwd_on_next_login: bool,
+    hashed_password: str,
+) -> ResetUserPasswordResult | None:
+    return await executor.query_single(
+        """\
+        select (
+            update freeauth::User filter .id = <uuid>$id set {
+                reset_pwd_on_next_login := <bool>$reset_pwd_on_next_login,
+                hashed_password := <str>$hashed_password
+            }
+        ) {
+            username,
+            email
+        }\
+        """,
+        id=id,
+        reset_pwd_on_next_login=reset_pwd_on_next_login,
+        hashed_password=hashed_password,
+    )
+
+
 async def resign_user(
     executor: edgedb.AsyncIOExecutor,
     *,
@@ -2361,28 +2386,6 @@ async def update_user_organization(
         id=id,
         org_type_id=org_type_id,
         organization_ids=organization_ids,
-    )
-
-
-async def update_user_password(
-    executor: edgedb.AsyncIOExecutor,
-    *,
-    id: uuid.UUID,
-    hashed_password: str,
-) -> UpdateUserPasswordResult | None:
-    return await executor.query_single(
-        """\
-        select (
-            update freeauth::User filter .id = <uuid>$id set {
-                hashed_password := <str>$hashed_password
-            }
-        ) {
-            username,
-            email
-        }\
-        """,
-        id=id,
-        hashed_password=hashed_password,
     )
 
 

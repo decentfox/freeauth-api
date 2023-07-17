@@ -9,6 +9,7 @@ from freeauth.db.auth.auth_qry_async_edgeql import FreeauthCodeType
 from freeauth.security.utils import MOBILE_REGEX
 
 from ..dataclasses import BaseModelConfig
+from ..validators import MobileStr, UsernameStr
 
 
 @dataclass(config=BaseModelConfig)
@@ -93,3 +94,33 @@ class ResetPwdBody:
         title="新登录密码",
         description="新登录密码",
     )
+
+
+@dataclass(config=BaseModelConfig)
+class UpdateProfileBody:
+    name: str = Field(
+        ...,
+        title="姓名",
+        description="用户姓名",
+        min_length=1,
+        max_length=50,
+    )
+    username: UsernameStr = Field(
+        ...,
+        title="用户名",
+        description="登录用户名",
+    )
+    email: EmailStr | None = Field(
+        None, description="邮箱，可接收登录验证邮件", title="邮箱"
+    )
+    mobile: MobileStr | None = Field(
+        None,
+        title="手机号",
+        description="仅支持中国大陆11位手机号码，可接收短信验证邮件",
+    )
+
+    @validator("*", pre=True)
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
