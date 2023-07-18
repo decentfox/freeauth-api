@@ -588,6 +588,7 @@ def sign_up(
     email: str | None = None,
     mobile: str | None = None,
     hashed_password: str,
+    reset_pwd_on_next_login: bool,
     client_info: str,
 ) -> SignInResult:
     return executor.query_single(
@@ -599,6 +600,7 @@ def sign_up(
             email := <optional str>$email,
             mobile := <optional str>$mobile,
             hashed_password := <str>$hashed_password,
+            reset_pwd_on_next_login := <bool>$reset_pwd_on_next_login,
             client_info := (
                 <tuple<client_ip: str, user_agent: json>><json>$client_info
             ),
@@ -608,7 +610,8 @@ def sign_up(
                     username := username,
                     email := email,
                     mobile := mobile,
-                    hashed_password := hashed_password
+                    hashed_password := hashed_password,
+                    reset_pwd_on_next_login := reset_pwd_on_next_login
                 }
             ),
             audit_log := (
@@ -643,6 +646,7 @@ def sign_up(
         email=email,
         mobile=mobile,
         hashed_password=hashed_password,
+        reset_pwd_on_next_login=reset_pwd_on_next_login,
         client_info=client_info,
     )
 

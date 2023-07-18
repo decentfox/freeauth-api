@@ -59,6 +59,7 @@ def example_app(app, auth_app, test_client, faker):
             mobile=faker.phone_number(),
             email=faker.email(),
             hashed_password="",
+            reset_pwd_on_next_login=False,
             client_info=ci,
         )
         token = await auth_app.create_access_token(response, user.id)
