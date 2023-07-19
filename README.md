@@ -34,7 +34,7 @@ make dev
 
 After executing the `make setup` command, you will have a `.env` file under `freeauth-admin` folder.
 
-You could override mail settings in the `.env` file, there are the available options:
+You could overwrite mail-related settings in the `.env` file, which includes:
 
  - MAIL_FROM_NAME: default `FreeAuth`
  - MAIL_FROM: default `None`
@@ -54,7 +54,7 @@ We support the following SMS providers:
  - [Aliyun](https://cn.aliyun.com/product/sms)
  - [Tencent Cloud](https://cloud.tencent.com/document/product/382)
 
-You could override mail settings in the `.env` file, there are the available options:
+You could overwrite SMS-related settings in the `.env` file, which includes:
 
  - SMS_PROVIDER: default `None`, the name of the SMS provider, which can be `tencent-cloud` or `aliyun`.
  - SMS_SECRET_ID: default `None`
