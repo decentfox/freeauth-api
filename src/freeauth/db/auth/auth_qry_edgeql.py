@@ -13,10 +13,10 @@
 #     'src/freeauth/db/auth/queries/update_profile.edgeql'
 #     'src/freeauth/db/auth/queries/update_pwd.edgeql'
 #     'src/freeauth/db/auth/queries/upsert_login_setting.edgeql'
+#     'src/freeauth/db/auth/queries/validate_account.edgeql'
 #     'src/freeauth/db/auth/queries/validate_code.edgeql'
-#     'src/freeauth/db/auth/queries/validate_pwd.edgeql'
 # WITH:
-#     $ edgedb-py -I FreeAuth --target blocking --dir src/freeauth/db/auth --file src/freeauth/db/auth/auth_qry_edgeql.py
+#     $ edgedb-py --target blocking --dir src/freeauth/db/auth --file src/freeauth/db/auth/auth_qry_edgeql.py
 
 
 from __future__ import annotations
@@ -216,16 +216,16 @@ class UpsertLoginSettingResult(NoPydanticValidation):
     id: uuid.UUID
 
 
-class ValidateCodeResult(typing.NamedTuple):
-    status_code: FreeauthAuditStatusCode
-
-
 @dataclasses.dataclass
-class ValidatePwdResult(NoPydanticValidation):
+class ValidateAccountResult(NoPydanticValidation):
     id: uuid.UUID
     hashed_password: str | None
     is_deleted: bool
     recent_failed_attempts: int
+
+
+class ValidateCodeResult(typing.NamedTuple):
+    status_code: FreeauthAuditStatusCode
 
 
 def create_audit_log(
@@ -762,6 +762,69 @@ def upsert_login_setting(
     )
 
 
+def validate_account(
+    executor: edgedb.Executor,
+    *,
+    username: str | None = None,
+    mobile: str | None = None,
+    email: str | None = None,
+    interval: int | None = None,
+) -> ValidateAccountResult | None:
+    return executor.query_single(
+        """\
+        with
+            module freeauth,
+            username := <optional str>$username,
+            mobile := <optional str>$mobile,
+            email := <optional str>$email,
+            interval := <optional int64>$interval,
+            user := assert_single((
+                select User
+                filter
+                    (exists username and .username ?= username) or
+                    (exists mobile and .mobile ?= mobile) or
+                    (exists email and .email ?= email)
+            )),
+            recent_success_attempt := (
+                select AuditLog
+                filter
+                    .user = user
+                    and .event_type = AuditEventType.SignIn
+                    and .status_code = AuditStatusCode.OK
+                    and .created_at >= (
+                        datetime_of_statement() -
+                        cal::to_relative_duration(minutes := interval)
+                    )
+                limit 1
+            ),
+            recent_failed_attempts := (
+                select AuditLog
+                filter
+                    .user = user
+                    and .event_type = AuditEventType.SignIn
+                    and .status_code = AuditStatusCode.INVALID_PASSWORD
+                    and (
+                        .created_at >= recent_success_attempt.created_at
+                        if exists recent_success_attempt else
+                        .created_at >= (
+                            datetime_of_statement() -
+                            cal::to_relative_duration(minutes := interval)
+                        )
+                    )
+            )
+        select user {
+            hashed_password,
+            is_deleted,
+            recent_failed_attempts := count(recent_failed_attempts)
+        };\
+        """,
+        username=username,
+        mobile=mobile,
+        email=email,
+        interval=interval,
+    )
+
+
 def validate_code(
     executor: edgedb.Executor,
     *,
@@ -831,67 +894,4 @@ def validate_code(
         verify_type=verify_type,
         code=code,
         max_attempts=max_attempts,
-    )
-
-
-def validate_pwd(
-    executor: edgedb.Executor,
-    *,
-    username: str | None = None,
-    mobile: str | None = None,
-    email: str | None = None,
-    interval: int | None = None,
-) -> ValidatePwdResult | None:
-    return executor.query_single(
-        """\
-        with
-            module freeauth,
-            username := <optional str>$username,
-            mobile := <optional str>$mobile,
-            email := <optional str>$email,
-            interval := <optional int64>$interval,
-            user := assert_single((
-                select User
-                filter
-                    (exists username and .username ?= username) or
-                    (exists mobile and .mobile ?= mobile) or
-                    (exists email and .email ?= email)
-            )),
-            recent_success_attempt := (
-                select AuditLog
-                filter
-                    .user = user
-                    and .event_type = AuditEventType.SignIn
-                    and .status_code = AuditStatusCode.OK
-                    and .created_at >= (
-                        datetime_of_statement() -
-                        cal::to_relative_duration(minutes := interval)
-                    )
-                limit 1
-            ),
-            recent_failed_attempts := (
-                select AuditLog
-                filter
-                    .user = user
-                    and .event_type = AuditEventType.SignIn
-                    and .status_code = AuditStatusCode.INVALID_PASSWORD
-                    and (
-                        .created_at >= recent_success_attempt.created_at
-                        if exists recent_success_attempt else
-                        .created_at >= (
-                            datetime_of_statement() -
-                            cal::to_relative_duration(minutes := interval)
-                        )
-                    )
-            )
-        select user {
-            hashed_password,
-            is_deleted,
-            recent_failed_attempts := count(recent_failed_attempts)
-        };\
-        """,
-        username=username,
-        mobile=mobile,
-        email=email,
-        interval=interval,
     )

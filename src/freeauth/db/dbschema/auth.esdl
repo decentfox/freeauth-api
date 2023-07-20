@@ -79,5 +79,6 @@ module freeauth {
         };
 
         index on (.event_type);
+        index on (.status_code);
     }
 }

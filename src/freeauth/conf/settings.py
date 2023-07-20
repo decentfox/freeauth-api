@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     debug: bool = False
     testing: bool = False
 
-    edgedb_instance: str = "FreeAuth"
+    edgedb_instance: str | None
     edgedb_dsn: str | None
     edgedb_database: str = "edgedb"
 

@@ -9,7 +9,14 @@ from . import logger
 
 
 class MailSettings(ConnectionConfig):
-    MAIL_FROM_NAME = "FreeAuth"
+    MAIL_FROM_NAME: str = "FreeAuth"
+    MAIL_FROM: EmailStr | None = None
+    MAIL_USERNAME: str | None = None
+    MAIL_PASSWORD: str | None = None
+    MAIL_PORT: int = 25
+    MAIL_SERVER: str = "localhost"
+    MAIL_STARTTLS: bool = False
+    MAIL_SSL_TLS: bool = False
     TEMPLATE_FOLDER: Path = Path(__file__).resolve().parent / "templates/email"
 
     class Config:

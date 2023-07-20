@@ -53,7 +53,7 @@
 #     'src/freeauth/db/admin/queries/users/update_user_roles.edgeql'
 #     'src/freeauth/db/admin/queries/users/update_user_status.edgeql'
 # WITH:
-#     $ edgedb-py -I FreeAuth --target blocking --dir src/freeauth/db/admin --file src/freeauth/db/admin/admin_qry_edgeql.py
+#     $ edgedb-py --target blocking --dir src/freeauth/db/admin --file src/freeauth/db/admin/admin_qry_edgeql.py
 
 
 from __future__ import annotations

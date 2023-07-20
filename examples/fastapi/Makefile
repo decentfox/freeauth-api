@@ -24,7 +24,7 @@ init-project: ## Initial a new or existing FreeAuth DB project.
 	@echo
 	@echo "Initializing EdgeDB project..."
 	@echo "=============================="
-	@-edgedb project init 2> /dev/null
+	@-edgedb project init --project-dir . 2> /dev/null
 
 .PHONY: db
 db: ## Create a db migration.
@@ -63,7 +63,11 @@ setup: install-edgedb dep-install init-project sync-freeauth setup-admin ## Setu
 
 .PHONY: dev
 dev: dep-install up ## Run FreeAuth admin server in dev mode.
-	@poetry run uvicorn freeauth.admin.asgi:app --reload --host 0.0.0.0 --port 5001
+	@poetry run uvicorn app.asgi:fast_api --reload --host 0.0.0.0 --port 5001
+
+.PHONY: genqlapi
+genqlapi: up ## Generate query APIs.
+	@poetry run edgedb-py --dir app
 
 .PHONY: lint
 lint: isort black flake mypy ## Apply all the linters.
@@ -100,17 +104,6 @@ mypy: ## Apply mypy.
 	@echo "================="
 	@echo
 	@poetry run mypy --ignore-missing-imports .
-
-.PHONY: test
-test: ## Run unit tests.
-	@echo
-	@poetry run pytest -s
-
-.PHONY: testdb
-testdb: ## Reset test DB before running tests (if any schema changes).
-	@echo
-	@echo "Resetting test database..."
-	@poetry run pytest --reset-db
 
 .PHONY: resetdb
 resetdb: ## Restore current DB from a dumped file.
