@@ -78,6 +78,10 @@ def get_app():
 
     auth_app.init_app(app)
 
+    from . import tasks
+
+    tasks.init_app()
+
     @app.get("/ping", include_in_schema=False)
     async def health_check() -> dict[str, str]:
         return {"status": "Ok"}

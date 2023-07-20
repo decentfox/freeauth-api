@@ -6,7 +6,6 @@ import string
 from http import HTTPStatus
 
 from fastapi import BackgroundTasks, Depends, HTTPException, Response
-from pydantic import EmailStr
 
 from freeauth.conf.login_settings import LoginSettings
 from freeauth.conf.settings import get_settings
@@ -43,7 +42,7 @@ from freeauth.security.utils import (
 from .. import logger
 from ..app import auth_app, router
 from ..audit_logs.dataclasses import AUDIT_STATUS_CODE_MAPPING
-from ..tasks import send_email
+from ..tasks import send_email, sms_provider
 from .dataclasses import (
     ResetPwdBody,
     SignInCodeBody,
@@ -102,7 +101,6 @@ async def send_auth_code(
             detail={"code": "验证码获取次数超限，请稍后再次获取"},
         )
     if code_type == FreeauthCodeType.EMAIL:
-        email = EmailStr(account)
         background_tasks.add_task(
             send_email,
             tpl=(
@@ -115,14 +113,19 @@ async def send_auth_code(
                 if verify_type == FreeauthVerifyType.SIGNUP
                 else "登录验证码"
             ),
-            to=email,
+            to=account,
             body=dict(
                 code=code,
                 ttl=ttl or settings.verify_code_ttl,
             ),
         )
-    # TODO elif code_type.value == FreeauthAuditEventType.SMS:
-
+    elif code_type == FreeauthCodeType.SMS and sms_provider:
+        background_tasks.add_task(
+            sms_provider.send_auth_code,
+            account,
+            code,
+            ttl or settings.verify_code_ttl,
+        )
     return rv
 
 
