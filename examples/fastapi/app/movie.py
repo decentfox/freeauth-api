@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from http import HTTPStatus
+
+import edgedb
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from fastapi import Depends
-
-from .asgi import auth_app, router
+from .asgi import auth_app, get_edgedb_client, router
 from .queries.create_director_async_edgeql import (
     CreateDirectorResult,
     create_director,
@@ -23,12 +25,19 @@ class MovieRequestData(BaseModel):
 )
 async def post_movie(
     body: MovieRequestData,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateMovieResult:
-    return await create_movie(
-        auth_app.db,
-        title=body.title,
-        director_name=body.director,
-    )
+    try:
+        movie = await create_movie(
+            client,
+            title=body.title,
+            director_name=body.director,
+        )
+    except edgedb.errors.MissingRequiredError:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Director not found"
+        )
+    return movie
 
 
 class DirectorRequestData(BaseModel):
@@ -41,8 +50,9 @@ class DirectorRequestData(BaseModel):
 )
 async def post_director(
     body: DirectorRequestData,
+    client: edgedb.AsyncIOClient = Depends(get_edgedb_client),
 ) -> CreateDirectorResult:
     return await create_director(
-        auth_app.db,
+        client,
         name=body.name,
     )
