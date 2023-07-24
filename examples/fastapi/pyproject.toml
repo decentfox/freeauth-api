@@ -26,6 +26,7 @@ profile = "black"
 atomic = true
 line_length = 79
 extend_skip_glob = ["*_edgeql.py"]
+known_third_party = ["fastapi"]
 
 [tool.black]
 line_length = 79
