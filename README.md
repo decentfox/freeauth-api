@@ -17,6 +17,8 @@ Specify the name of EdgeDB instance to use with this project [default: FreeAuth]
 > FreeAuth
 ```
 
+Note: Instance name must follow the pattern defined by the regular expression: `^[a-zA-Z_0-9]+(-[a-zA-Z_0-9]+)*$`.
+
 If you already have a FreeAuth instance in your local environment, you can choose to use the same FreeAuth instance in your project:
 
 ```bash

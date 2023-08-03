@@ -1,5 +1,10 @@
 path := ./
 
+RED=\033[0;31m
+GREEN=\033[0;32m
+YELLOW=\033[0;33m
+RESET=\033[0m
+
 define Comment
 	- Run `make help` to see all the available options.
 endef
@@ -24,6 +29,7 @@ init-project: ## Initial a new or existing FreeAuth DB project.
 	@echo
 	@echo "Initializing EdgeDB project..."
 	@echo "=============================="
+	@echo "$(YELLOW)This step may take a few minutes, please be patient.$(RESET)"
 	@-edgedb project init 2> /dev/null
 
 .PHONY: db
@@ -59,7 +65,7 @@ setup-admin: ## Setup administrator account.
 .PHONY: setup
 setup: install-edgedb dep-install init-project sync-freeauth setup-admin ## Setup environment, run first-time setup.
 	@echo
-	@echo "${Green}All set!${NC} Run \`make dev\` to start a uvicorn dev server on port 5001."
+	@echo "$(GREEN)All set!$(RESET) Run \`make dev\` to start a uvicorn dev server on port 5001."
 
 .PHONY: dev
 dev: dep-install up ## Run FreeAuth admin server in dev mode.
