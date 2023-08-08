@@ -207,7 +207,7 @@ async def get_permissions(
                         code,
                         description,
                         roles: {{ id, name }},
-                        application: {{ name }},
+                        application: {{ name, is_protected }},
                         tags: {{ name }},
                         is_deleted,
                         created_at

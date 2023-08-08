@@ -446,7 +446,7 @@ async def get_permissions_in_user(
                     code,
                     description,
                     roles: {{ id, code, name }},
-                    application: {{ name }},
+                    application: {{ name, is_protected }},
                     tags: {{ name }},
                     is_deleted,
                 }}

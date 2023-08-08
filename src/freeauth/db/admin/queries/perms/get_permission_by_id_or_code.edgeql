@@ -13,9 +13,10 @@ select assert_single(
                 code,
                 description,
                 is_deleted,
-                created_at
+                created_at,
+                is_protected
             },
-            application: { id, name },
+            application: { id, name, is_protected },
             tags: { id, name },
             is_deleted,
             created_at

@@ -31,7 +31,7 @@ select (
     code,
     description,
     roles: { name },
-    application: { name },
+    application: { name, is_protected },
     tags: { name },
     is_deleted,
     created_at

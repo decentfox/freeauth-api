@@ -149,6 +149,7 @@ class CreatePermissionResult(NoPydanticValidation):
 class CreatePermissionResultApplication(NoPydanticValidation):
     id: uuid.UUID
     name: str
+    is_protected: bool
 
 
 @dataclasses.dataclass
@@ -298,6 +299,7 @@ class GetPermissionByIdOrCodeResult(NoPydanticValidation):
 class GetPermissionByIdOrCodeResultApplication(NoPydanticValidation):
     id: uuid.UUID
     name: str
+    is_protected: bool
 
 
 @dataclasses.dataclass
@@ -308,6 +310,7 @@ class GetPermissionByIdOrCodeResultRolesItem(NoPydanticValidation):
     description: str | None
     is_deleted: bool
     created_at: datetime.datetime
+    is_protected: bool
 
 
 @dataclasses.dataclass
@@ -528,14 +531,8 @@ async def create_department(
                 select Organization filter .id = <uuid>$parent_id
             ),
             enterprise := assert_single((
-                select Enterprise filter (
-                    .id = (
-                        # https://github.com/edgedb/edgedb/issues/5474
-                        # parent[is Enterprise].id ??
-                        parent[is Enterprise].id if exists parent[is Enterprise] else
-                        parent[is Department].enterprise.id
-                    )
-                )
+                select Enterprise
+                filter .id = parent[is Enterprise].id ?? parent[is Department].enterprise.id
             ))
         for _ in (
             select true filter exists parent
@@ -698,7 +695,7 @@ async def create_permission(
             code,
             description,
             roles: { name },
-            application: { name },
+            application: { name, is_protected },
             tags: { name },
             is_deleted,
             created_at
@@ -1172,9 +1169,10 @@ async def get_permission_by_id_or_code(
                         code,
                         description,
                         is_deleted,
-                        created_at
+                        created_at,
+                        is_protected
                     },
-                    application: { id, name },
+                    application: { id, name, is_protected },
                     tags: { id, name },
                     is_deleted,
                     created_at
@@ -1567,7 +1565,7 @@ async def query_permissions(
                     code,
                     description,
                     roles: { id, code, name },
-                    application: { name },
+                    application: { name, is_protected },
                     tags: { name },
                     is_deleted,
                 }
@@ -2138,7 +2136,7 @@ async def update_permission(
             code,
             description,
             roles: { name },
-            application: { name },
+            application: { name, is_protected },
             tags: { name },
             is_deleted,
             created_at

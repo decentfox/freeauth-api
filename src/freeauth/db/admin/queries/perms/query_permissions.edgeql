@@ -41,7 +41,7 @@ select {
             code,
             description,
             roles: { id, code, name },
-            application: { name },
+            application: { name, is_protected },
             tags: { name },
             is_deleted,
         }
