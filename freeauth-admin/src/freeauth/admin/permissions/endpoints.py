@@ -6,6 +6,7 @@ from http import HTTPStatus
 import edgedb
 from fastapi import Depends, HTTPException, Query
 
+from freeauth.conf.settings import get_settings
 from freeauth.db.admin.admin_qry_async_edgeql import (
     AddMissingPermissionsResult,
     CreatePermissionResult,
@@ -37,7 +38,6 @@ from .dataclasses import (
     BasePermissionBody,
     PermissionDeleteBody,
     PermissionPutBody,
-    PermissionQueryBody,
     PermissionStatusBody,
     PermissionTagDeleteBody,
     PermissionTagReorderBody,
@@ -60,13 +60,15 @@ FILTER_TYPE_MAPPING = {"created_at": "datetime", "is_deleted": "bool"}
 async def post_permission(
     body: BasePermissionBody,
 ) -> CreatePermissionResult:
+    settings = get_settings()
+    assert settings.freeauth_app_id
     try:
         permission = await create_permission(
             auth_app.db,
             name=body.name,
             code=body.code,
             description=body.description,
-            application_id=body.application_id,
+            application_id=settings.freeauth_app_id,
             tags=body.tags,
         )
     except edgedb.errors.ConstraintViolationError:
@@ -171,9 +173,10 @@ async def put_permission(
     dependencies=[Depends(auth_app.perm_accepted("manage:perms"))],
 )
 async def get_permissions(
-    body: PermissionQueryBody,
+    body: QueryBody,
 ) -> PaginatedData:
     filtering_expr = body.get_filtering_expr(FILTER_TYPE_MAPPING)
+    settings = get_settings()
     result = await auth_app.db.query_single_json(
         f"""\
             WITH
@@ -221,7 +224,7 @@ async def get_permissions(
         q=f"%{body.q}%" if body.q else None,
         page=body.page,
         per_page=body.per_page,
-        application_id=body.application_id,
+        application_id=settings.freeauth_app_id,
     )
     return PaginatedData.parse_raw(result)
 
@@ -425,16 +428,16 @@ async def query_permissions_filter_by_role(
     page: int | None = None,
     per_page: int | None = None,
     q: str | None = None,
-    application_id: uuid.UUID | None = None,
     tag_ids: list[uuid.UUID] | None = Query(None),
     role_id: uuid.UUID | None = None,
 ) -> QueryPermissionsResult:
+    settings = get_settings()
     return await query_permissions(
         auth_app.db,
         page=page,
         per_page=per_page,
         q=q,
-        application_id=application_id,
+        application_id=settings.freeauth_app_id,
         tag_ids=tag_ids,
         role_id=role_id,
     )

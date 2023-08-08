@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from functools import lru_cache
 
 from pydantic import BaseSettings
@@ -14,7 +15,7 @@ class Settings(BaseSettings):
     edgedb_dsn: str | None
     edgedb_database: str = "edgedb"
 
-    freeauth_app_id: str | None
+    freeauth_app_id: uuid.UUID | None
 
     jwt_algorithm: str = "HS256"
     jwt_token_ttl: int = 1440  # 分钟，默认为一天

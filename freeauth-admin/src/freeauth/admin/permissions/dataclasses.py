@@ -5,8 +5,7 @@ import uuid
 from pydantic import Field
 from pydantic.dataclasses import dataclass
 
-from ..dataclasses import FilterItem  # noqa
-from ..dataclasses import BaseModelConfig, QueryBody
+from ..dataclasses import BaseModelConfig
 
 
 @dataclass(config=BaseModelConfig)
@@ -27,11 +26,6 @@ class BasePermissionBody:
         None,
         title="描述",
         description="权限描述",
-    )
-    application_id: uuid.UUID = Field(
-        ...,
-        title="所属应用",
-        description="所属应用 ID",
     )
     tags: list[str] = Field(
         None,
@@ -86,15 +80,6 @@ class PermRoleBody:
         title="权限 ID",
         description="待添加/移除的权限 ID 列表",
         min_items=1,
-    )
-
-
-@dataclass(config=BaseModelConfig)
-class PermissionQueryBody(QueryBody):
-    application_id: uuid.UUID | None = Field(
-        None,
-        title="所属应用 ID",
-        description="支持过滤指定应用下的权限",
     )
 
 
