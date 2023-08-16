@@ -273,9 +273,10 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     rv = await validate_code(
         edgedb_client,
         account=account,
-        code_type=FreeauthCodeType.SMS,
-        verify_type=FreeauthVerifyType.SIGNUP,
+        code_type=FreeauthCodeType.SMS.value,  # type: ignore
+        verify_type=FreeauthVerifyType.SIGNUP.value,  # type: ignore
         code="12345678",
+        max_attempts=None,
     )
     status_code = FreeauthAuditStatusCode(str(rv.status_code))
     assert status_code == FreeauthAuditStatusCode.INVALID_CODE
@@ -284,8 +285,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     await send_code(
         edgedb_client,
         account=account,
-        code_type=FreeauthCodeType.SMS,
-        verify_type=FreeauthVerifyType.SIGNUP,
+        code_type=FreeauthCodeType.SMS.value,  # type: ignore
+        verify_type=FreeauthVerifyType.SIGNUP.value,  # type: ignore
         code=code,
         ttl=300,
         max_attempts=3,
@@ -296,8 +297,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
         rv = await validate_code(
             edgedb_client,
             account=account,
-            code_type=FreeauthCodeType.SMS,
-            verify_type=FreeauthVerifyType.SIGNUP,
+            code_type=FreeauthCodeType.SMS.value,  # type: ignore
+            verify_type=FreeauthVerifyType.SIGNUP.value,  # type: ignore
             code="12345678",
             max_attempts=3,
         )
@@ -313,8 +314,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     await send_code(
         edgedb_client,
         account=account,
-        code_type=FreeauthCodeType.SMS,
-        verify_type=FreeauthVerifyType.SIGNIN,
+        code_type=FreeauthCodeType.SMS.value,  # type: ignore
+        verify_type=FreeauthVerifyType.SIGNIN.value,  # type: ignore
         code=code,
         ttl=300,
         max_attempts=3,
@@ -324,8 +325,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     rv = await validate_code(
         edgedb_client,
         account=account,
-        code_type=FreeauthCodeType.SMS,
-        verify_type=FreeauthVerifyType.SIGNIN,
+        code_type=FreeauthCodeType.SMS.value,  # type: ignore
+        verify_type=FreeauthVerifyType.SIGNIN.value,  # type: ignore
         code="12345678",
         max_attempts=3,
     )
@@ -335,8 +336,8 @@ async def test_validate_code(edgedb_client: edgedb.AsyncIOClient):
     rv = await validate_code(
         edgedb_client,
         account=account,
-        code_type=FreeauthCodeType.SMS,
-        verify_type=FreeauthVerifyType.SIGNIN,
+        code_type=FreeauthCodeType.SMS.value,  # type: ignore
+        verify_type=FreeauthVerifyType.SIGNIN.value,  # type: ignore
         code=code,
         max_attempts=3,
     )

@@ -3,4 +3,6 @@ max-line-length = 79
 exclude =
     .venv,
     .mypy_cache,
-    .pytest_cache
+    .pytest_cache,
+    _regexes.py,
+    user_agent_parser.py

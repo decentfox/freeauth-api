@@ -480,7 +480,7 @@ def create_application(
     executor: edgedb.Executor,
     *,
     name: str,
-    description: str | None = None,
+    description: str | None,
     hashed_secret: str,
 ) -> CreateApplicationResult:
     return executor.query_single(
@@ -520,8 +520,8 @@ def create_department(
     *,
     parent_id: uuid.UUID,
     name: str,
-    code: str | None = None,
-    description: str | None = None,
+    code: str | None,
+    description: str | None,
 ) -> CreateDepartmentResult | None:
     return executor.query_single(
         """\
@@ -573,12 +573,12 @@ def create_enterprise(
     *,
     org_type_id: uuid.UUID,
     name: str,
-    code: str | None = None,
-    tax_id: str | None = None,
-    issuing_bank: str | None = None,
-    bank_account_number: str | None = None,
-    contact_address: str | None = None,
-    contact_phone_num: str | None = None,
+    code: str | None,
+    tax_id: str | None,
+    issuing_bank: str | None,
+    bank_account_number: str | None,
+    contact_address: str | None,
+    contact_phone_num: str | None,
 ) -> CreateEnterpriseResult | None:
     return executor.query_single(
         """\
@@ -629,7 +629,7 @@ def create_org_type(
     *,
     name: str,
     code: str,
-    description: str | None = None,
+    description: str | None,
 ) -> CreateOrgTypeResult:
     return executor.query_single(
         """\
@@ -656,9 +656,9 @@ def create_permission(
     *,
     name: str,
     code: str,
-    description: str | None = None,
+    description: str | None,
     application_id: uuid.UUID,
-    tags: list[str] | None = None,
+    tags: list[str] | None,
 ) -> CreatePermissionResult:
     return executor.query_single(
         """\
@@ -736,9 +736,9 @@ def create_role(
     executor: edgedb.Executor,
     *,
     name: str,
-    code: str | None = None,
-    description: str | None = None,
-    org_type_id: uuid.UUID | None = None,
+    code: str | None,
+    description: str | None,
+    org_type_id: uuid.UUID | None,
 ) -> CreateRoleResult:
     return executor.query_single(
         """\
@@ -777,14 +777,14 @@ def create_role(
 def create_user(
     executor: edgedb.Executor,
     *,
-    name: str | None = None,
-    username: str | None = None,
-    email: str | None = None,
-    mobile: str | None = None,
-    hashed_password: str | None = None,
+    name: str | None,
+    username: str | None,
+    email: str | None,
+    mobile: str | None,
+    hashed_password: str | None,
     reset_pwd_on_first_login: bool,
-    organization_ids: list[uuid.UUID] | None = None,
-    org_type_id: uuid.UUID | None = None,
+    organization_ids: list[uuid.UUID] | None,
+    org_type_id: uuid.UUID | None,
 ) -> CreateUserResult:
     return executor.query_single(
         """\
@@ -1004,9 +1004,9 @@ def get_application_by_id(
 def get_department_by_id_or_code(
     executor: edgedb.Executor,
     *,
-    id: uuid.UUID | None = None,
-    code: str | None = None,
-    enterprise_id: uuid.UUID | None = None,
+    id: uuid.UUID | None,
+    code: str | None,
+    enterprise_id: uuid.UUID | None,
 ) -> CreateDepartmentResult | None:
     return executor.query_single(
         """\
@@ -1044,10 +1044,10 @@ def get_department_by_id_or_code(
 def get_enterprise_by_id_or_code(
     executor: edgedb.Executor,
     *,
-    id: uuid.UUID | None = None,
-    code: str | None = None,
-    org_type_id: uuid.UUID | None = None,
-    org_type_code: str | None = None,
+    id: uuid.UUID | None,
+    code: str | None,
+    org_type_id: uuid.UUID | None,
+    org_type_code: str | None,
 ) -> CreateEnterpriseResult | None:
     return executor.query_single(
         """\
@@ -1084,8 +1084,8 @@ def get_enterprise_by_id_or_code(
 def get_org_type_by_id_or_code(
     executor: edgedb.Executor,
     *,
-    id: uuid.UUID | None = None,
-    code: str | None = None,
+    id: uuid.UUID | None,
+    code: str | None,
 ) -> CreateOrgTypeResult | None:
     return executor.query_single(
         """\
@@ -1113,9 +1113,9 @@ def get_org_type_by_id_or_code(
 def get_organization_node(
     executor: edgedb.Executor,
     *,
-    org_type_id: uuid.UUID | None = None,
-    org_type_code: str | None = None,
-    parent_id: uuid.UUID | None = None,
+    org_type_id: uuid.UUID | None,
+    org_type_code: str | None,
+    parent_id: uuid.UUID | None,
 ) -> list[GetOrganizationNodeResult]:
     return executor.query(
         """\
@@ -1149,8 +1149,8 @@ def get_organization_node(
 def get_permission_by_id_or_code(
     executor: edgedb.Executor,
     *,
-    id: uuid.UUID | None = None,
-    code: str | None = None,
+    id: uuid.UUID | None,
+    code: str | None,
 ) -> GetPermissionByIdOrCodeResult | None:
     return executor.query_single(
         """\
@@ -1189,8 +1189,8 @@ def get_permission_by_id_or_code(
 def get_role_by_id_or_code(
     executor: edgedb.Executor,
     *,
-    id: uuid.UUID | None = None,
-    code: str | None = None,
+    id: uuid.UUID | None,
+    code: str | None,
 ) -> CreateRoleResult | None:
     return executor.query_single(
         """\
@@ -1460,7 +1460,7 @@ def perm_unbind_roles(
 def query_application_options(
     executor: edgedb.Executor,
     *,
-    q: str | None = None,
+    q: str | None,
 ) -> list[QueryApplicationOptionsResult]:
     return executor.query(
         """\
@@ -1513,12 +1513,12 @@ def query_permission_tags(
 def query_permissions(
     executor: edgedb.Executor,
     *,
-    page: int | None = None,
-    per_page: int | None = None,
-    q: str | None = None,
-    application_id: uuid.UUID | None = None,
-    tag_ids: list[uuid.UUID] | None = None,
-    role_id: uuid.UUID | None = None,
+    page: int | None,
+    per_page: int | None,
+    q: str | None,
+    application_id: uuid.UUID | None,
+    tag_ids: list[uuid.UUID] | None,
+    role_id: uuid.UUID | None,
 ) -> QueryPermissionsResult:
     return executor.query_single(
         """\
@@ -1637,7 +1637,7 @@ def resign_user(
     executor: edgedb.Executor,
     *,
     user_ids: list[uuid.UUID],
-    is_deleted: bool | None = None,
+    is_deleted: bool | None,
 ) -> DeleteUserResult:
     return executor.query_single(
         """\
@@ -1801,7 +1801,7 @@ def update_application(
     executor: edgedb.Executor,
     *,
     name: str,
-    description: str | None = None,
+    description: str | None,
     id: uuid.UUID,
 ) -> GetApplicationByIdResult | None:
     return executor.query_single(
@@ -1872,13 +1872,13 @@ def update_application_status(
 def update_department(
     executor: edgedb.Executor,
     *,
-    id: uuid.UUID | None = None,
-    current_code: str | None = None,
-    enterprise_id: uuid.UUID | None = None,
+    id: uuid.UUID | None,
+    current_code: str | None,
+    enterprise_id: uuid.UUID | None,
     parent_id: uuid.UUID,
     name: str,
-    code: str | None = None,
-    description: str | None = None,
+    code: str | None,
+    description: str | None,
 ) -> CreateDepartmentResult | None:
     return executor.query_single(
         """\
@@ -1948,17 +1948,17 @@ def update_department(
 def update_enterprise(
     executor: edgedb.Executor,
     *,
-    id: uuid.UUID | None = None,
-    current_code: str | None = None,
-    org_type_id: uuid.UUID | None = None,
-    org_type_code: str | None = None,
+    id: uuid.UUID | None,
+    current_code: str | None,
+    org_type_id: uuid.UUID | None,
+    org_type_code: str | None,
     name: str,
-    code: str | None = None,
-    tax_id: str | None = None,
-    issuing_bank: str | None = None,
-    bank_account_number: str | None = None,
-    contact_address: str | None = None,
-    contact_phone_num: str | None = None,
+    code: str | None,
+    tax_id: str | None,
+    issuing_bank: str | None,
+    bank_account_number: str | None,
+    contact_address: str | None,
+    contact_phone_num: str | None,
 ) -> CreateEnterpriseResult | None:
     return executor.query_single(
         """\
@@ -2017,12 +2017,12 @@ def update_enterprise(
 def update_org_type(
     executor: edgedb.Executor,
     *,
-    id: uuid.UUID | None = None,
-    current_code: str | None = None,
-    name: str | None = None,
-    code: str | None = None,
-    description: str | None = None,
-    is_deleted: bool | None = None,
+    id: uuid.UUID | None,
+    current_code: str | None,
+    name: str | None,
+    code: str | None,
+    description: str | None,
+    is_deleted: bool | None,
 ) -> CreateOrgTypeResult | None:
     return executor.query_single(
         """\
@@ -2087,13 +2087,13 @@ def update_org_type_status(
 def update_permission(
     executor: edgedb.Executor,
     *,
-    id: uuid.UUID | None = None,
-    current_code: str | None = None,
-    is_deleted: bool | None = None,
-    tags: list[str] | None = None,
+    id: uuid.UUID | None,
+    current_code: str | None,
+    is_deleted: bool | None,
+    tags: list[str] | None,
     name: str,
     code: str,
-    description: str | None = None,
+    description: str | None,
 ) -> CreatePermissionResult | None:
     return executor.query_single(
         """\
@@ -2205,12 +2205,12 @@ def update_permission_tag(
 def update_role(
     executor: edgedb.Executor,
     *,
-    id: uuid.UUID | None = None,
-    current_code: str | None = None,
-    is_deleted: bool | None = None,
+    id: uuid.UUID | None,
+    current_code: str | None,
+    is_deleted: bool | None,
     name: str,
-    code: str | None = None,
-    description: str | None = None,
+    code: str | None,
+    description: str | None,
 ) -> CreateRoleResult | None:
     return executor.query_single(
         """\
@@ -2287,8 +2287,8 @@ def update_user(
     *,
     name: str,
     username: str,
-    email: str | None = None,
-    mobile: str | None = None,
+    email: str | None,
+    mobile: str | None,
     id: uuid.UUID,
 ) -> CreateUserResult | None:
     return executor.query_single(
@@ -2333,7 +2333,7 @@ def update_user_organization(
     executor: edgedb.Executor,
     *,
     id: uuid.UUID,
-    org_type_id: uuid.UUID | None = None,
+    org_type_id: uuid.UUID | None,
     organization_ids: list[uuid.UUID],
 ) -> CreateUserResult | None:
     return executor.query_single(
@@ -2391,7 +2391,7 @@ def update_user_roles(
     executor: edgedb.Executor,
     *,
     id: uuid.UUID,
-    role_ids: list[uuid.UUID] | None = None,
+    role_ids: list[uuid.UUID] | None,
 ) -> UpdateUserRolesResult:
     return executor.query_single(
         """\

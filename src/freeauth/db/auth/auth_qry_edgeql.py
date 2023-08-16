@@ -379,9 +379,9 @@ def get_user_by_access_token(
 def get_user_by_account(
     executor: edgedb.Executor,
     *,
-    username: str | None = None,
-    mobile: str | None = None,
-    email: str | None = None,
+    username: str | None,
+    mobile: str | None,
+    email: str | None,
 ) -> GetUserByAccountResult | None:
     return executor.query_single(
         """\
@@ -441,8 +441,8 @@ def send_code(
     verify_type: FreeauthVerifyType,
     code: str,
     ttl: int,
-    max_attempts: int | None = None,
-    attempts_ttl: int | None = None,
+    max_attempts: int | None,
+    attempts_ttl: int | None,
 ) -> SendCodeResult | None:
     return executor.query_single(
         """\
@@ -583,10 +583,10 @@ def sign_out(
 def sign_up(
     executor: edgedb.Executor,
     *,
-    name: str | None = None,
+    name: str | None,
     username: str,
-    email: str | None = None,
-    mobile: str | None = None,
+    email: str | None,
+    mobile: str | None,
     hashed_password: str,
     reset_pwd_on_next_login: bool,
     client_info: str,
@@ -657,8 +657,8 @@ def update_profile(
     id: uuid.UUID,
     name: str,
     username: str,
-    email: str | None = None,
-    mobile: str | None = None,
+    email: str | None,
+    mobile: str | None,
 ) -> SignInResult | None:
     return executor.query_single(
         """\
@@ -765,10 +765,10 @@ def upsert_login_setting(
 def validate_account(
     executor: edgedb.Executor,
     *,
-    username: str | None = None,
-    mobile: str | None = None,
-    email: str | None = None,
-    interval: int | None = None,
+    username: str | None,
+    mobile: str | None,
+    email: str | None,
+    interval: int | None,
 ) -> ValidateAccountResult | None:
     return executor.query_single(
         """\
@@ -832,7 +832,7 @@ def validate_code(
     code_type: FreeauthCodeType,
     verify_type: FreeauthVerifyType,
     code: str,
-    max_attempts: int | None = None,
+    max_attempts: int | None,
 ) -> ValidateCodeResult:
     return executor.query_single(
         """\

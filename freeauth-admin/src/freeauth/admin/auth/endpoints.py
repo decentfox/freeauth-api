@@ -99,8 +99,8 @@ async def send_auth_code(
     rv = await send_code(
         auth_app.db,
         account=account,
-        code_type=code_type,
-        verify_type=verify_type,
+        code_type=code_type.value,  # type: ignore
+        verify_type=verify_type.value,  # type: ignore
         code=code,
         ttl=(ttl or settings.verify_code_ttl) * 60,
         max_attempts=max_attempts,
@@ -154,8 +154,8 @@ async def validate_auth_code(
     rv: ValidateCodeResult = await validate_code(
         auth_app.db,
         account=account,
-        code_type=code_type,
-        verify_type=verify_type,
+        code_type=code_type.value,  # type: ignore
+        verify_type=verify_type.value,  # type: ignore
         code=code,
         max_attempts=max_attempts,
     )
@@ -166,8 +166,8 @@ async def validate_auth_code(
                 auth_app.db,
                 user_id=user.id,
                 client_info=json.dumps(client_info),
-                status_code=status_code,
-                event_type=FreeauthAuditEventType.SIGNIN,
+                status_code=status_code.value,  # type: ignore
+                event_type=FreeauthAuditEventType.SIGNIN.value,  # type: ignore
             )
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -390,8 +390,8 @@ async def sign_in_with_pwd(
             auth_app.db,
             user_id=user.id,
             client_info=json.dumps(client_info),
-            status_code=status_code,
-            event_type=FreeauthAuditEventType.SIGNIN,
+            status_code=status_code.value,  # type: ignore
+            event_type=FreeauthAuditEventType.SIGNIN.value,  # type: ignore
         )
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -427,8 +427,10 @@ async def change_password(
             auth_app.db,
             user_id=current_user.id,
             client_info=json.dumps(client_info),
-            status_code=FreeauthAuditStatusCode.ACCOUNT_DISABLED,
-            event_type=FreeauthAuditEventType.CHANGEPWD,
+            status_code=(
+                FreeauthAuditStatusCode.ACCOUNT_DISABLED.value  # type: ignore
+            ),
+            event_type=FreeauthAuditEventType.CHANGEPWD.value,  # type: ignore
         )
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="您的账号已停用"
@@ -492,8 +494,8 @@ async def post_sign_out(
             auth_app.db,
             user_id=current_user.id,
             client_info=json.dumps(client_info),
-            status_code=FreeauthAuditStatusCode.OK,
-            event_type=FreeauthAuditEventType.SIGNOUT,
+            status_code=FreeauthAuditStatusCode.OK.value,  # type: ignore
+            event_type=FreeauthAuditEventType.SIGNOUT.value,  # type: ignore
         )
     settings = get_settings()
     response.delete_cookie(

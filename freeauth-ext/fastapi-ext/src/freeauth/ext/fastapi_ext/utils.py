@@ -12,7 +12,8 @@
 from __future__ import annotations
 
 from fastapi import Request
-from user_agents import parse as ua_parse  # type: ignore
+
+from . import user_agent_parser
 
 
 def get_client_info(request: Request) -> dict:
@@ -21,11 +22,11 @@ def get_client_info(request: Request) -> dict:
         raw_ua=raw_ua,
     )
     if raw_ua:
-        ua = ua_parse(raw_ua)
+        ua = user_agent_parser.Parse(raw_ua)  # type: ignore[attr-defined]
         user_agent.update(
-            os=ua.os.family,
-            device=ua.device.family,
-            browser=ua.browser.family,
+            os=ua["os"]["family"],
+            device=ua["device"]["family"],
+            browser=ua["user_agent"]["family"],
         )
     return {
         "client_ip": request.headers.get(

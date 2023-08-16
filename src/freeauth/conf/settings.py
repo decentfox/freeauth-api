@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     edgedb_instance: str | None
     edgedb_dsn: str | None
     edgedb_database: str = "edgedb"
+    edgedb_tls_ca_file: str | None
+    edgedb_tls_ca: str | None
 
     freeauth_app_id: uuid.UUID | None
 

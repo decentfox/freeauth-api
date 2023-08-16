@@ -379,9 +379,9 @@ async def get_user_by_access_token(
 async def get_user_by_account(
     executor: edgedb.AsyncIOExecutor,
     *,
-    username: str | None = None,
-    mobile: str | None = None,
-    email: str | None = None,
+    username: str | None,
+    mobile: str | None,
+    email: str | None,
 ) -> GetUserByAccountResult | None:
     return await executor.query_single(
         """\
@@ -441,8 +441,8 @@ async def send_code(
     verify_type: FreeauthVerifyType,
     code: str,
     ttl: int,
-    max_attempts: int | None = None,
-    attempts_ttl: int | None = None,
+    max_attempts: int | None,
+    attempts_ttl: int | None,
 ) -> SendCodeResult | None:
     return await executor.query_single(
         """\
@@ -583,10 +583,10 @@ async def sign_out(
 async def sign_up(
     executor: edgedb.AsyncIOExecutor,
     *,
-    name: str | None = None,
+    name: str | None,
     username: str,
-    email: str | None = None,
-    mobile: str | None = None,
+    email: str | None,
+    mobile: str | None,
     hashed_password: str,
     reset_pwd_on_next_login: bool,
     client_info: str,
@@ -657,8 +657,8 @@ async def update_profile(
     id: uuid.UUID,
     name: str,
     username: str,
-    email: str | None = None,
-    mobile: str | None = None,
+    email: str | None,
+    mobile: str | None,
 ) -> SignInResult | None:
     return await executor.query_single(
         """\
@@ -765,10 +765,10 @@ async def upsert_login_setting(
 async def validate_account(
     executor: edgedb.AsyncIOExecutor,
     *,
-    username: str | None = None,
-    mobile: str | None = None,
-    email: str | None = None,
-    interval: int | None = None,
+    username: str | None,
+    mobile: str | None,
+    email: str | None,
+    interval: int | None,
 ) -> ValidateAccountResult | None:
     return await executor.query_single(
         """\
@@ -832,7 +832,7 @@ async def validate_code(
     code_type: FreeauthCodeType,
     verify_type: FreeauthVerifyType,
     code: str,
-    max_attempts: int | None = None,
+    max_attempts: int | None,
 ) -> ValidateCodeResult:
     return await executor.query_single(
         """\

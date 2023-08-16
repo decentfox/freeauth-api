@@ -66,6 +66,8 @@ class FreeAuthApp:
         client = edgedb.create_async_client(
             dsn=self.settings.edgedb_dsn or self.settings.edgedb_instance,
             database=self.settings.edgedb_database,
+            tls_ca_file=self.settings.edgedb_tls_ca_file,  # type: ignore
+            tls_ca=self.settings.edgedb_tls_ca,  # type: ignore[arg-type]
         )
         await client.ensure_connected()
         self.db = client.with_default_module("freeauth").with_globals(

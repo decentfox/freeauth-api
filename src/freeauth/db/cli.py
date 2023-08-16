@@ -33,6 +33,8 @@ settings = get_settings()
 client = edgedb.create_client(
     dsn=settings.edgedb_dsn or settings.edgedb_instance,
     database=settings.edgedb_database,
+    tls_ca_file=settings.edgedb_tls_ca_file,  # type: ignore[arg-type]
+    tls_ca=settings.edgedb_tls_ca,  # type: ignore[arg-type]
 )
 
 
@@ -157,6 +159,7 @@ def setup():
                     name="系统管理员",
                     code=role_code.upper(),
                     description="该角色拥有应用程序中的最高权限，可以执行任何操作、访问所有功能",
+                    org_type_id=None,
                 )
             except edgedb.errors.ConstraintViolationError:
                 random_str = gen_random_string(5, letters=string.digits)
@@ -217,6 +220,10 @@ def setup():
                     username=username,
                     hashed_password=get_password_hash(password),
                     reset_pwd_on_first_login=True,
+                    mobile=None,
+                    email=None,
+                    organization_ids=None,
+                    org_type_id=None,
                 )
             except edgedb.errors.ConstraintViolationError:
                 username = gen_random_string(6, letters=string.ascii_lowercase)
