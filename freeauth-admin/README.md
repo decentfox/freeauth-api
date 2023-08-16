@@ -1,4 +1,13 @@
-# FreeAuth Admin FastAPI http server
+<img src="logo.png"/>
+
+<p>
+    <em>Make authentication and authorization easy and free.</em>
+</p>
+
+## Documentation
+
+ * [English](https://freeauth.decentfox.com/)
+ * [简体中文](https://zh.freeauth.decentfox.com/)
 
 ## Development
 
@@ -17,6 +26,8 @@ Specify the name of EdgeDB instance to use with this project [default: FreeAuth]
 > FreeAuth
 ```
 
+Note: Instance name must follow the pattern defined by the regular expression: `^[a-zA-Z_0-9]+(-[a-zA-Z_0-9]+)*$`.
+
 If you already have a FreeAuth instance in your local environment, you can choose to use the same FreeAuth instance in your project:
 
 ```bash
@@ -32,7 +43,7 @@ make dev
 
 ### Configuring mail settings
 
-After executing the `make setup` command, you will have a `.env` file.
+After executing the `make setup` command, you will have a `.env` file under `freeauth-admin` folder.
 
 You could overwrite mail-related settings in the `.env` file, which includes:
 

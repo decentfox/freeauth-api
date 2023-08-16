@@ -1,4 +1,13 @@
-# freeAuth-api
+<img src="logo.png"/>
+
+<p>
+    <em>Make authentication and authorization easy and free.</em>
+</p>
+
+## Documentation
+
+ * [English](https://freeauth.decentfox.com/)
+ * [简体中文](https://zh.freeauth.decentfox.com/)
 
 ## Development
 
