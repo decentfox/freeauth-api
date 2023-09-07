@@ -777,7 +777,7 @@ def validate_account(
             username := <optional str>$username,
             mobile := <optional str>$mobile,
             email := <optional str>$email,
-            interval := <optional int64>$interval,
+            start_dt := datetime_of_statement() - cal::to_relative_duration(minutes := <optional int64>$interval),
             user := assert_single((
                 select User
                 filter
@@ -791,10 +791,8 @@ def validate_account(
                     .user = user
                     and .event_type = AuditEventType.SignIn
                     and .status_code = AuditStatusCode.OK
-                    and .created_at >= (
-                        datetime_of_statement() -
-                        cal::to_relative_duration(minutes := interval)
-                    )
+                    and .created_at >= start_dt
+                order by .created_at desc
                 limit 1
             ),
             recent_failed_attempts := (
@@ -806,10 +804,7 @@ def validate_account(
                     and (
                         .created_at >= recent_success_attempt.created_at
                         if exists recent_success_attempt else
-                        .created_at >= (
-                            datetime_of_statement() -
-                            cal::to_relative_duration(minutes := interval)
-                        )
+                        .created_at >= start_dt
                     )
             )
         select user {
